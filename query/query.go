@@ -13,6 +13,16 @@ type QuerySpec struct {
 	sorted []*Operation
 }
 
+type Edge struct {
+	Parent OperationID `json:"parent"`
+	Child  OperationID `json:"child"`
+}
+
+// ExpressionSpec specifies an expression.
+// Expressions may return any value that the storage supports.
+//TODO flesh this out.
+type ExpressionSpec interface{}
+
 // Walk calls f on each operation exactly once.
 // The function f will be called on an operation only after
 // all of its parents have already been passed to f.
