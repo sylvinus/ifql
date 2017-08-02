@@ -2,12 +2,17 @@ package query_test
 
 import (
 	"encoding/json"
+	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query"
 )
+
+var ignoreUnexportedQuerySpec = cmpopts.IgnoreUnexported(query.QuerySpec{})
 
 func TestQuery_JSON(t *testing.T) {
 	srcData := []byte(`
@@ -46,7 +51,7 @@ func TestQuery_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	expQ := query.QuerySpec{
-		Operations: []query.Operation{
+		Operations: []*query.Operation{
 			{
 				OperationID: "select",
 				Spec: &query.SelectOpSpec{
@@ -72,7 +77,7 @@ func TestQuery_JSON(t *testing.T) {
 			{Parent: "range", Child: "clear"},
 		},
 	}
-	if !cmp.Equal(gotQ, expQ) {
+	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {
 		t.Errorf("unexpected query:\n%s", cmp.Diff(gotQ, expQ))
 	}
 
@@ -84,323 +89,175 @@ func TestQuery_JSON(t *testing.T) {
 	if err := json.Unmarshal(data, &gotQ); err != nil {
 		t.Fatal(err)
 	}
-	if !cmp.Equal(gotQ, expQ) {
+	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {
 		t.Errorf("unexpected query after marshalling:\n%s", cmp.Diff(gotQ, expQ))
 	}
 }
 
-func TestOperation_JSON(t *testing.T) {
-	testCases := map[string]struct {
-		json string
-		op   query.Operation
+func TestQuery_Walk(t *testing.T) {
+	testCases := []struct {
+		query     *query.QuerySpec
+		walkOrder []query.OperationID
+		err       error
 	}{
-		"select": {
-			json: `{
-				"id": "select",
-				"kind": "select",
-				"spec": {
-					"database":"mydb"
-				}
-			}`,
-			op: query.Operation{
-				OperationID: "select",
-				Spec: &query.SelectOpSpec{
-					Database: "mydb",
+		{
+			query: &query.QuerySpec{},
+			err:   errors.New("query has no root nodes"),
+		},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "a", Child: "c"},
 				},
 			},
+			err: errors.New("edge references unknown child operation \"c\""),
 		},
-		"range": {
-			json: `{
-				"id": "range",
-				"kind": "range",
-				"spec": {
-					"start": "-4h",
-					"stop": "now"
-				}
-			}`,
-			op: query.Operation{
-				OperationID: "range",
-				Spec: &query.RangeOpSpec{
-					Start: query.Time{
-						Relative: -4 * time.Hour,
-					},
-					Stop: query.Time{},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "b"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "a", Child: "b"},
 				},
 			},
+			err: errors.New("found duplicate operation ID \"b\""),
 		},
-		"clear": {
-			json: `{
-				"id": "clear",
-				"kind": "clear"
-			}`,
-			op: query.Operation{
-				OperationID: "clear",
-				Spec:        &query.ClearOpSpec{},
-			},
-		},
-		"window": {
-			json: `{
-				"id": "window",
-				"kind": "window",
-				"spec":{
-					"every":"1m",
-					"period":"1h",
-					"every_count": 100,
-					"period_count": 200,
-					"start": "2017-08-01T00:00:00Z"
-				}
-			}`,
-			op: query.Operation{
-				OperationID: "window",
-				Spec: &query.WindowOpSpec{
-					Every:       query.Duration(time.Minute),
-					Period:      query.Duration(time.Hour),
-					EveryCount:  100,
-					PeriodCount: 200,
-					Start: query.Time{
-						Absolute: time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC),
-					},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "b", Child: "c"},
+					{Parent: "c", Child: "b"},
 				},
 			},
+			err: errors.New("found cycle in query"),
 		},
-		//TODO implement full spec unmarshalling for all OpSpecs below
-		"merge": {
-			json: `{
-				"id": "merge",
-				"kind": "merge"
-			}`,
-			op: query.Operation{
-				OperationID: "merge",
-				Spec:        &query.MergeOpSpec{},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+					{OperationID: "d"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "b", Child: "c"},
+					{Parent: "c", Child: "d"},
+					{Parent: "d", Child: "b"},
+				},
+			},
+			err: errors.New("found cycle in query"),
+		},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+					{OperationID: "d"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "b", Child: "c"},
+					{Parent: "c", Child: "d"},
+				},
+			},
+			walkOrder: []query.OperationID{
+				"a", "b", "c", "d",
 			},
 		},
-		"keys": {
-			json: `{
-				"id": "keys",
-				"kind": "keys"
-			}`,
-			op: query.Operation{
-				OperationID: "keys",
-				Spec:        &query.KeysOpSpec{},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+					{OperationID: "d"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "b"},
+					{Parent: "a", Child: "c"},
+					{Parent: "b", Child: "d"},
+					{Parent: "c", Child: "d"},
+				},
+			},
+			walkOrder: []query.OperationID{
+				"a", "c", "b", "d",
 			},
 		},
-		"values": {
-			json: `{
-				"id": "values",
-				"kind": "values"
-			}`,
-			op: query.Operation{
-				OperationID: "values",
-				Spec:        &query.ValuesOpSpec{},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+					{OperationID: "d"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "c"},
+					{Parent: "b", Child: "c"},
+					{Parent: "c", Child: "d"},
+				},
+			},
+			walkOrder: []query.OperationID{
+				"b", "a", "c", "d",
 			},
 		},
-		"cardinality": {
-			json: `{
-				"id": "cardinality",
-				"kind": "cardinality"
-			}`,
-			op: query.Operation{
-				OperationID: "cardinality",
-				Spec:        &query.CardinalityOpSpec{},
+		{
+			query: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{OperationID: "a"},
+					{OperationID: "b"},
+					{OperationID: "c"},
+					{OperationID: "d"},
+				},
+				Edges: []query.Edge{
+					{Parent: "a", Child: "c"},
+					{Parent: "b", Child: "d"},
+				},
 			},
-		},
-		"limit": {
-			json: `{
-				"id": "limit",
-				"kind": "limit"
-			}`,
-			op: query.Operation{
-				OperationID: "limit",
-				Spec:        &query.LimitOpSpec{},
-			},
-		},
-		"shift": {
-			json: `{
-				"id": "shift",
-				"kind": "shift"
-			}`,
-			op: query.Operation{
-				OperationID: "shift",
-				Spec:        &query.ShiftOpSpec{},
-			},
-		},
-		"interpolate": {
-			json: `{
-				"id": "interpolate",
-				"kind": "interpolate"
-			}`,
-			op: query.Operation{
-				OperationID: "interpolate",
-				Spec:        &query.InterpolateOpSpec{},
-			},
-		},
-		"join": {
-			json: `{
-				"id": "join",
-				"kind": "join"
-			}`,
-			op: query.Operation{
-				OperationID: "join",
-				Spec:        &query.JoinOpSpec{},
-			},
-		},
-		"union": {
-			json: `{
-				"id": "union",
-				"kind": "union"
-			}`,
-			op: query.Operation{
-				OperationID: "union",
-				Spec:        &query.UnionOpSpec{},
-			},
-		},
-		"filter": {
-			json: `{
-				"id": "filter",
-				"kind": "filter"
-			}`,
-			op: query.Operation{
-				OperationID: "filter",
-				Spec:        &query.FilterOpSpec{},
-			},
-		},
-		"sort": {
-			json: `{
-				"id": "sort",
-				"kind": "sort"
-			}`,
-			op: query.Operation{
-				OperationID: "sort",
-				Spec:        &query.SortOpSpec{},
-			},
-		},
-		"rate": {
-			json: `{
-				"id": "rate",
-				"kind": "rate"
-			}`,
-			op: query.Operation{
-				OperationID: "rate",
-				Spec:        &query.RateOpSpec{},
-			},
-		},
-		"count": {
-			json: `{
-				"id": "count",
-				"kind": "count"
-			}`,
-			op: query.Operation{
-				OperationID: "count",
-				Spec:        &query.CountOpSpec{},
-			},
-		},
-		"sum": {
-			json: `{
-				"id": "sum",
-				"kind": "sum"
-			}`,
-			op: query.Operation{
-				OperationID: "sum",
-				Spec:        &query.SumOpSpec{},
-			},
-		},
-		"mean": {
-			json: `{
-				"id": "mean",
-				"kind": "mean"
-			}`,
-			op: query.Operation{
-				OperationID: "mean",
-				Spec:        &query.MeanOpSpec{},
-			},
-		},
-		"percentile": {
-			json: `{
-				"id": "percentile",
-				"kind": "percentile"
-			}`,
-			op: query.Operation{
-				OperationID: "percentile",
-				Spec:        &query.PercentileOpSpec{},
-			},
-		},
-		"stddev": {
-			json: `{
-				"id": "stddev",
-				"kind": "stddev"
-			}`,
-			op: query.Operation{
-				OperationID: "stddev",
-				Spec:        &query.StddevOpSpec{},
-			},
-		},
-		"min": {
-			json: `{
-				"id": "min",
-				"kind": "min"
-			}`,
-			op: query.Operation{
-				OperationID: "min",
-				Spec:        &query.MinOpSpec{},
-			},
-		},
-		"max": {
-			json: `{
-				"id": "max",
-				"kind": "max"
-			}`,
-			op: query.Operation{
-				OperationID: "max",
-				Spec:        &query.MaxOpSpec{},
-			},
-		},
-		"top": {
-			json: `{
-				"id": "top",
-				"kind": "top"
-			}`,
-			op: query.Operation{
-				OperationID: "top",
-				Spec:        &query.TopOpSpec{},
-			},
-		},
-		"difference": {
-			json: `{
-				"id": "difference",
-				"kind": "difference"
-			}`,
-			op: query.Operation{
-				OperationID: "difference",
-				Spec:        &query.DifferenceOpSpec{},
+			walkOrder: []query.OperationID{
+				"b", "d", "a", "c",
 			},
 		},
 	}
-	if got, exp := len(testCases), query.NumberOfKinds; got != exp {
-		t.Fatalf("unexpected number of test cases, have %d test cases, there are %d kinds", got, exp)
-	}
-	for name, tc := range testCases {
+	for i, tc := range testCases {
 		tc := tc
-		t.Run(name, func(t *testing.T) {
-			// Ensure we can properly unmarshal a spec
-			gotO := query.Operation{}
-			if err := json.Unmarshal([]byte(tc.json), &gotO); err != nil {
-				t.Fatal(err)
-			}
-			if !cmp.Equal(gotO, tc.op) {
-				t.Errorf("unexpected operation:\n%s", cmp.Diff(gotO, tc.op))
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			var gotOrder []query.OperationID
+			err := tc.query.Walk(func(o *query.Operation) error {
+				gotOrder = append(gotOrder, o.OperationID)
+				return nil
+			})
+			if tc.err == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("expected error: %q", tc.err)
+				} else if got, exp := err.Error(), tc.err.Error(); got != exp {
+					t.Fatalf("unexpected errors: got %q exp %q", got, exp)
+				}
 			}
 
-			// Marshal the spec and ensure we can unmarshal it again.
-			data, err := json.Marshal(tc.op)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := json.Unmarshal(data, &gotO); err != nil {
-				t.Fatal(err)
-			}
-
-			if !cmp.Equal(gotO, tc.op) {
-				t.Errorf("unexpected operation after marshalling:\n%s", cmp.Diff(gotO, tc.op))
+			if !cmp.Equal(gotOrder, tc.walkOrder) {
+				t.Fatalf("unexpected walk order:\n%s", cmp.Diff(gotOrder, tc.walkOrder))
 			}
 		})
 	}
