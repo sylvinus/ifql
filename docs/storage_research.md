@@ -24,7 +24,7 @@ gRPC  → 164 MB/s or ~10e6 points / sec
 ```
 
 It is worth noting that I have not tested Go's network libraries to determine maximum throughput, 
-however I suspet it may be close to the TCP maximum. Whilst we will benchmark using independent
+however I suspect it may be close to the TCP maximum. Whilst we will benchmark using independent
 machines in AWS, these tests helped me understand relative performance of the various transports 
 and the impact different serialization mechanisms have on our throughput. Protobuf is ok as long 
 as we keep the graph small, meaning we customize the serialization of the points.
