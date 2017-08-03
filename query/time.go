@@ -3,7 +3,7 @@ package query
 import "time"
 
 // Time represents either a relavite or absolute time.
-// If Time.Absolute is time.Zero then the time can is relative
+// If Time.Absolute is time.Zero then the time is considered to be relative.
 type Time struct {
 	Relative time.Duration
 	Absolute time.Time

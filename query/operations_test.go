@@ -23,7 +23,7 @@ func TestOperation_JSON(t *testing.T) {
 				}
 			}`,
 			op: &query.Operation{
-				OperationID: "select",
+				ID: "select",
 				Spec: &query.SelectOpSpec{
 					Database: "mydb",
 				},
@@ -39,7 +39,7 @@ func TestOperation_JSON(t *testing.T) {
 				}
 			}`,
 			op: &query.Operation{
-				OperationID: "range",
+				ID: "range",
 				Spec: &query.RangeOpSpec{
 					Start: query.Time{
 						Relative: -4 * time.Hour,
@@ -54,8 +54,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "clear"
 			}`,
 			op: &query.Operation{
-				OperationID: "clear",
-				Spec:        &query.ClearOpSpec{},
+				ID:   "clear",
+				Spec: &query.ClearOpSpec{},
 			},
 		},
 		"window": {
@@ -71,7 +71,7 @@ func TestOperation_JSON(t *testing.T) {
 				}
 			}`,
 			op: &query.Operation{
-				OperationID: "window",
+				ID: "window",
 				Spec: &query.WindowOpSpec{
 					Every:       query.Duration(time.Minute),
 					Period:      query.Duration(time.Hour),
@@ -90,8 +90,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "merge"
 			}`,
 			op: &query.Operation{
-				OperationID: "merge",
-				Spec:        &query.MergeOpSpec{},
+				ID:   "merge",
+				Spec: &query.MergeOpSpec{},
 			},
 		},
 		"keys": {
@@ -100,8 +100,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "keys"
 			}`,
 			op: &query.Operation{
-				OperationID: "keys",
-				Spec:        &query.KeysOpSpec{},
+				ID:   "keys",
+				Spec: &query.KeysOpSpec{},
 			},
 		},
 		"values": {
@@ -110,8 +110,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "values"
 			}`,
 			op: &query.Operation{
-				OperationID: "values",
-				Spec:        &query.ValuesOpSpec{},
+				ID:   "values",
+				Spec: &query.ValuesOpSpec{},
 			},
 		},
 		"cardinality": {
@@ -120,8 +120,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "cardinality"
 			}`,
 			op: &query.Operation{
-				OperationID: "cardinality",
-				Spec:        &query.CardinalityOpSpec{},
+				ID:   "cardinality",
+				Spec: &query.CardinalityOpSpec{},
 			},
 		},
 		"limit": {
@@ -130,8 +130,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "limit"
 			}`,
 			op: &query.Operation{
-				OperationID: "limit",
-				Spec:        &query.LimitOpSpec{},
+				ID:   "limit",
+				Spec: &query.LimitOpSpec{},
 			},
 		},
 		"shift": {
@@ -140,8 +140,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "shift"
 			}`,
 			op: &query.Operation{
-				OperationID: "shift",
-				Spec:        &query.ShiftOpSpec{},
+				ID:   "shift",
+				Spec: &query.ShiftOpSpec{},
 			},
 		},
 		"interpolate": {
@@ -150,8 +150,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "interpolate"
 			}`,
 			op: &query.Operation{
-				OperationID: "interpolate",
-				Spec:        &query.InterpolateOpSpec{},
+				ID:   "interpolate",
+				Spec: &query.InterpolateOpSpec{},
 			},
 		},
 		"join": {
@@ -160,8 +160,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "join"
 			}`,
 			op: &query.Operation{
-				OperationID: "join",
-				Spec:        &query.JoinOpSpec{},
+				ID:   "join",
+				Spec: &query.JoinOpSpec{},
 			},
 		},
 		"union": {
@@ -170,8 +170,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "union"
 			}`,
 			op: &query.Operation{
-				OperationID: "union",
-				Spec:        &query.UnionOpSpec{},
+				ID:   "union",
+				Spec: &query.UnionOpSpec{},
 			},
 		},
 		"filter": {
@@ -180,8 +180,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "filter"
 			}`,
 			op: &query.Operation{
-				OperationID: "filter",
-				Spec:        &query.FilterOpSpec{},
+				ID:   "filter",
+				Spec: &query.FilterOpSpec{},
 			},
 		},
 		"sort": {
@@ -190,8 +190,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "sort"
 			}`,
 			op: &query.Operation{
-				OperationID: "sort",
-				Spec:        &query.SortOpSpec{},
+				ID:   "sort",
+				Spec: &query.SortOpSpec{},
 			},
 		},
 		"rate": {
@@ -200,8 +200,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "rate"
 			}`,
 			op: &query.Operation{
-				OperationID: "rate",
-				Spec:        &query.RateOpSpec{},
+				ID:   "rate",
+				Spec: &query.RateOpSpec{},
 			},
 		},
 		"count": {
@@ -210,8 +210,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "count"
 			}`,
 			op: &query.Operation{
-				OperationID: "count",
-				Spec:        &query.CountOpSpec{},
+				ID:   "count",
+				Spec: &query.CountOpSpec{},
 			},
 		},
 		"sum": {
@@ -220,8 +220,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "sum"
 			}`,
 			op: &query.Operation{
-				OperationID: "sum",
-				Spec:        &query.SumOpSpec{},
+				ID:   "sum",
+				Spec: &query.SumOpSpec{},
 			},
 		},
 		"mean": {
@@ -230,8 +230,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "mean"
 			}`,
 			op: &query.Operation{
-				OperationID: "mean",
-				Spec:        &query.MeanOpSpec{},
+				ID:   "mean",
+				Spec: &query.MeanOpSpec{},
 			},
 		},
 		"percentile": {
@@ -240,8 +240,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "percentile"
 			}`,
 			op: &query.Operation{
-				OperationID: "percentile",
-				Spec:        &query.PercentileOpSpec{},
+				ID:   "percentile",
+				Spec: &query.PercentileOpSpec{},
 			},
 		},
 		"stddev": {
@@ -250,8 +250,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "stddev"
 			}`,
 			op: &query.Operation{
-				OperationID: "stddev",
-				Spec:        &query.StddevOpSpec{},
+				ID:   "stddev",
+				Spec: &query.StddevOpSpec{},
 			},
 		},
 		"min": {
@@ -260,8 +260,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "min"
 			}`,
 			op: &query.Operation{
-				OperationID: "min",
-				Spec:        &query.MinOpSpec{},
+				ID:   "min",
+				Spec: &query.MinOpSpec{},
 			},
 		},
 		"max": {
@@ -270,8 +270,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "max"
 			}`,
 			op: &query.Operation{
-				OperationID: "max",
-				Spec:        &query.MaxOpSpec{},
+				ID:   "max",
+				Spec: &query.MaxOpSpec{},
 			},
 		},
 		"top": {
@@ -280,8 +280,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "top"
 			}`,
 			op: &query.Operation{
-				OperationID: "top",
-				Spec:        &query.TopOpSpec{},
+				ID:   "top",
+				Spec: &query.TopOpSpec{},
 			},
 		},
 		"difference": {
@@ -290,8 +290,8 @@ func TestOperation_JSON(t *testing.T) {
 				"kind": "difference"
 			}`,
 			op: &query.Operation{
-				OperationID: "difference",
-				Spec:        &query.DifferenceOpSpec{},
+				ID:   "difference",
+				Spec: &query.DifferenceOpSpec{},
 			},
 		},
 	}

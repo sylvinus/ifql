@@ -74,10 +74,10 @@ func (q *QuerySpec) sort() error {
 func (q *QuerySpec) computeLookup() (map[OperationID]*Operation, error) {
 	lookup := make(map[OperationID]*Operation, len(q.Operations))
 	for _, o := range q.Operations {
-		if _, ok := lookup[o.OperationID]; ok {
-			return nil, fmt.Errorf("found duplicate operation ID %q", o.OperationID)
+		if _, ok := lookup[o.ID]; ok {
+			return nil, fmt.Errorf("found duplicate operation ID %q", o.ID)
 		}
-		lookup[o.OperationID] = o
+		lookup[o.ID] = o
 	}
 	return lookup, nil
 }
@@ -101,7 +101,7 @@ func (q *QuerySpec) determineChildrenAndRoots() (children map[OperationID][]*Ope
 		parentCount[e.Child]++
 	}
 	for _, o := range q.Operations {
-		count := parentCount[o.OperationID]
+		count := parentCount[o.ID]
 		if count == 0 {
 			roots = append(roots, o)
 		}
@@ -112,7 +112,7 @@ func (q *QuerySpec) determineChildrenAndRoots() (children map[OperationID][]*Ope
 // Depth first search topological sorting of a DAG.
 // https://en.wikipedia.org/wiki/Topological_sorting#Algorithms
 func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, children map[OperationID][]*Operation, o *Operation) error {
-	id := o.OperationID
+	id := o.ID
 	if tMarks[id] {
 		return errors.New("found cycle in query")
 	}

@@ -53,13 +53,13 @@ func TestQuery_JSON(t *testing.T) {
 	expQ := query.QuerySpec{
 		Operations: []*query.Operation{
 			{
-				OperationID: "select",
+				ID: "select",
 				Spec: &query.SelectOpSpec{
 					Database: "mydb",
 				},
 			},
 			{
-				OperationID: "range",
+				ID: "range",
 				Spec: &query.RangeOpSpec{
 					Start: query.Time{
 						Relative: -4 * time.Hour,
@@ -68,8 +68,8 @@ func TestQuery_JSON(t *testing.T) {
 				},
 			},
 			{
-				OperationID: "clear",
-				Spec:        &query.ClearOpSpec{},
+				ID:   "clear",
+				Spec: &query.ClearOpSpec{},
 			},
 		},
 		Edges: []query.Edge{
@@ -107,8 +107,8 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
+					{ID: "a"},
+					{ID: "b"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -120,9 +120,9 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "b"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "b"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -134,9 +134,9 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -149,10 +149,10 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
-					{OperationID: "d"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
+					{ID: "d"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -166,10 +166,10 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
-					{OperationID: "d"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
+					{ID: "d"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -184,10 +184,10 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
-					{OperationID: "d"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
+					{ID: "d"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "b"},
@@ -203,10 +203,10 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
-					{OperationID: "d"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
+					{ID: "d"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "c"},
@@ -221,10 +221,10 @@ func TestQuery_Walk(t *testing.T) {
 		{
 			query: &query.QuerySpec{
 				Operations: []*query.Operation{
-					{OperationID: "a"},
-					{OperationID: "b"},
-					{OperationID: "c"},
-					{OperationID: "d"},
+					{ID: "a"},
+					{ID: "b"},
+					{ID: "c"},
+					{ID: "d"},
 				},
 				Edges: []query.Edge{
 					{Parent: "a", Child: "c"},
@@ -241,7 +241,7 @@ func TestQuery_Walk(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			var gotOrder []query.OperationID
 			err := tc.query.Walk(func(o *query.Operation) error {
-				gotOrder = append(gotOrder, o.OperationID)
+				gotOrder = append(gotOrder, o.ID)
 				return nil
 			})
 			if tc.err == nil {

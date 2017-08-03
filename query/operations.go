@@ -10,8 +10,8 @@ import (
 
 // Operation denotes a single operation in a query.
 type Operation struct {
-	OperationID `json:"id"`
-	Spec        OperationSpec `json:"spec"`
+	ID   OperationID   `json:"id"`
+	Spec OperationSpec `json:"spec"`
 }
 
 func (o *Operation) UnmarshalJSON(data []byte) error {
@@ -25,7 +25,7 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	o.OperationID = oj.ID
+	o.ID = oj.ID
 	spec, err := unmarshalOpSpec(oj.ID, oj.Kind, oj.Spec)
 	if err != nil {
 		return errors.Wrapf(err, "failed to unmarshal operation %q", oj.ID)
@@ -60,7 +60,7 @@ func (o Operation) MarshalJSON() ([]byte, error) {
 		Spec OperationSpec `json:"spec"`
 	}
 	oj := operationJSON{
-		ID:   o.OperationID,
+		ID:   o.ID,
 		Kind: o.Spec.Kind(),
 		Spec: o.Spec,
 	}
