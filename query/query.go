@@ -7,10 +7,12 @@ import (
 
 // QuerySpec specifies a query.
 type QuerySpec struct {
-	Operations []*Operation
+	Operations map[OperationID]*Operation
 	Edges      []Edge
 
-	sorted []*Operation
+	sorted   []*Operation
+	children map[OperationID][]*Operation
+	parents  map[OperationID][]*Operation
 }
 
 type Edge struct {
@@ -28,7 +30,7 @@ type ExpressionSpec interface{}
 // all of its parents have already been passed to f.
 func (q *QuerySpec) Walk(f func(o *Operation) error) error {
 	if len(q.sorted) == 0 {
-		if err := q.sort(); err != nil {
+		if err := q.prepare(); err != nil {
 			return err
 		}
 	}
@@ -43,12 +45,37 @@ func (q *QuerySpec) Walk(f func(o *Operation) error) error {
 
 // Validate ensures the query is a valid DAG.
 func (q *QuerySpec) Validate() error {
-	return q.sort()
+	return q.prepare()
 }
 
-// sort populates the sorted field and also validates that the query is a valid DAG.
-func (q *QuerySpec) sort() error {
-	children, roots, err := q.determineChildrenAndRoots()
+// Children returns a list of children for a given operation.
+// If the query is invalid no children will be returned.
+func (q *QuerySpec) Children(id OperationID) []*Operation {
+	if q.children == nil {
+		err := q.prepare()
+		if err != nil {
+			return nil
+		}
+	}
+	return q.children[id]
+}
+
+// Parents returns a list of parents for a given operation.
+// If the query is invalid no parents will be returned.
+func (q *QuerySpec) Parents(id OperationID) []*Operation {
+	if q.parents == nil {
+		err := q.prepare()
+		if err != nil {
+			return nil
+		}
+	}
+	return q.parents[id]
+}
+
+// prepare populates the internal datastructure needed to quickly navigate the query DAG.
+// As a result the query DAG is validated.
+func (q *QuerySpec) prepare() error {
+	parents, children, roots, err := q.determineParentsChildrenAndRoots()
 	if err != nil {
 		return err
 	}
@@ -56,11 +83,14 @@ func (q *QuerySpec) sort() error {
 		return errors.New("query has no root nodes")
 	}
 
+	q.parents = parents
+	q.children = children
+
 	tMarks := make(map[OperationID]bool)
 	pMarks := make(map[OperationID]bool)
 
 	for _, r := range roots {
-		if err := q.visit(tMarks, pMarks, children, r); err != nil {
+		if err := q.visit(tMarks, pMarks, r); err != nil {
 			return err
 		}
 	}
@@ -82,27 +112,31 @@ func (q *QuerySpec) computeLookup() (map[OperationID]*Operation, error) {
 	return lookup, nil
 }
 
-func (q *QuerySpec) determineChildrenAndRoots() (children map[OperationID][]*Operation, roots []*Operation, _ error) {
+func (q *QuerySpec) determineParentsChildrenAndRoots() (parents, children map[OperationID][]*Operation, roots []*Operation, _ error) {
 	lookup, err := q.computeLookup()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	children = make(map[OperationID][]*Operation, len(q.Operations))
-	parentCount := make(map[OperationID]int)
+	parents = make(map[OperationID][]*Operation, len(q.Operations))
 	for _, e := range q.Edges {
 		// Build children map
 		c, ok := lookup[e.Child]
 		if !ok {
-			return nil, nil, fmt.Errorf("edge references unknown child operation %q", e.Child)
+			return nil, nil, nil, fmt.Errorf("edge references unknown child operation %q", e.Child)
 		}
 		children[e.Parent] = append(children[e.Parent], c)
 
-		// Count parents of each operation
-		parentCount[e.Child]++
+		// Build parents map
+		p, ok := lookup[e.Parent]
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("edge references unknown parent operation %q", e.Parent)
+		}
+		parents[e.Child] = append(parents[e.Child], p)
 	}
+	// Find roots, i.e operations with not parents.
 	for _, o := range q.Operations {
-		count := parentCount[o.ID]
-		if count == 0 {
+		if len(parents[o.ID]) == 0 {
 			roots = append(roots, o)
 		}
 	}
@@ -111,7 +145,7 @@ func (q *QuerySpec) determineChildrenAndRoots() (children map[OperationID][]*Ope
 
 // Depth first search topological sorting of a DAG.
 // https://en.wikipedia.org/wiki/Topological_sorting#Algorithms
-func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, children map[OperationID][]*Operation, o *Operation) error {
+func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, o *Operation) error {
 	id := o.ID
 	if tMarks[id] {
 		return errors.New("found cycle in query")
@@ -119,8 +153,8 @@ func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, children map[Oper
 
 	if !pMarks[id] {
 		tMarks[id] = true
-		for _, c := range children[id] {
-			if err := q.visit(tMarks, pMarks, children, c); err != nil {
+		for _, c := range q.children[id] {
+			if err := q.visit(tMarks, pMarks, c); err != nil {
 				return err
 			}
 		}

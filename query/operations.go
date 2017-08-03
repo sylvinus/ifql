@@ -53,6 +53,7 @@ func unmarshalOpSpec(id OperationID, k OperationKind, data []byte) (OperationSpe
 	}
 	return op, nil
 }
+
 func (o Operation) MarshalJSON() ([]byte, error) {
 	type operationJSON struct {
 		ID   OperationID   `json:"id"`
@@ -164,9 +165,8 @@ func (s *SelectOpSpec) Kind() OperationKind {
 }
 
 type RangeOpSpec struct {
-	Start Time  `json:"start"`
-	Stop  Time  `json:"stop"`
-	Count int64 `json:"count"`
+	Start Time `json:"start"`
+	Stop  Time `json:"stop"`
 }
 
 func init() {
