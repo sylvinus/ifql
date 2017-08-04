@@ -1,30 +1,24 @@
 package plan
 
-type Plan interface {
-	Operations() []Operation
-	Datasets() []Dataset
-}
+import "time"
 
-type Dataset interface {
-	Bounded() bool
-	Bounds() Bounds
-	setBounds(Bounds)
-
-	Windowed() bool
-	Window() Window
-	setWindow(Window)
-
-	Source() Source
-	setSource(Source)
+type PlanSpec struct {
+	Operations []Operation
+	Datasets   []Dataset
+	Now        time.Time
 }
 
 type Planner interface {
-	Plan(AbstractPlan) (Plan, error)
+	// Plan create a plan from the abstract plan and available storage.
+	Plan(p *AbstractPlanSpec, s Storage) (*PlanSpec, error)
 }
 
 type planner struct {
-	plan *plan
+	plan *PlanSpec
 }
 
-type plan struct {
+func (p *planner) Plan(ap *AbstractPlanSpec, s Storage) (*PlanSpec, error) {
+	p.plan = new(PlanSpec)
+
+	return p.plan, nil
 }
