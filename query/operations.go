@@ -26,7 +26,7 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	o.ID = oj.ID
-	spec, err := unmarshalOpSpec(oj.ID, oj.Kind, oj.Spec)
+	spec, err := unmarshalOpSpec(oj.Kind, oj.Spec)
 	if err != nil {
 		return errors.Wrapf(err, "failed to unmarshal operation %q", oj.ID)
 	}
@@ -34,7 +34,7 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func unmarshalOpSpec(id OperationID, k OperationKind, data []byte) (OperationSpec, error) {
+func unmarshalOpSpec(k OperationKind, data []byte) (OperationSpec, error) {
 	if int(k) > len(kindToGoType) {
 		return nil, fmt.Errorf("unknown operation spec kind %v", k)
 	}

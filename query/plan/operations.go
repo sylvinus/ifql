@@ -23,6 +23,28 @@ func (o *absOp) Operation() *query.Operation {
 	return o.operation
 }
 
+type rangeOperation struct {
+	operation
+	bounds Bounds
+}
+
 type clearOperation struct {
+	operation
+}
+
+type windowOperation struct {
+	operation
+	w Window
+}
+
+type sumOperation struct {
+	operation
+}
+
+type countOperation struct {
+	operation
+}
+
+type meanOperation struct {
 	operation
 }

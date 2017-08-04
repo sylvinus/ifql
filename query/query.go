@@ -7,7 +7,7 @@ import (
 
 // QuerySpec specifies a query.
 type QuerySpec struct {
-	Operations map[OperationID]*Operation
+	Operations []*Operation
 	Edges      []Edge
 
 	sorted   []*Operation

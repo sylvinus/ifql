@@ -12,12 +12,14 @@ type AbstractPlan interface {
 }
 
 type AbstractDataset interface {
-	// Bounded reports whether the dataset is bounded.
 	Bounded() bool
 	Bounds() Bounds
+	setBounds(Bounds)
+
 	Windowed() bool
 	Window() Window
-	setBounds(Bounds)
+	setWindow(Window)
+
 	Source() AbstractSource
 	setSource(AbstractSource)
 
@@ -37,6 +39,15 @@ func (d *absDataset) Bounds() Bounds {
 }
 func (d *absDataset) setBounds(b Bounds) {
 	d.bounds = b
+}
+func (d *absDataset) Windowed() bool {
+	return d.window != nil
+}
+func (d *absDataset) Window() Windows {
+	return d.window
+}
+func (d *absDataset) setWindow(w Window) {
+	d.window = w
 }
 func (d *absDataset) Source() AbstractSource {
 	return d.source
@@ -143,6 +154,14 @@ func (p *absPlanner) walk(o *query.Operation) error {
 		return p.doRange(o, spec)
 	case *query.ClearOpSpec:
 		return p.doClear(o, spec)
+	case *query.WindowOpSpec:
+		return p.doWindow(o, spec)
+	case *query.SumOpSpec:
+		return p.doSum(o, spec)
+	case *query.CountOpSpec:
+		return p.doCount(o, spec)
+	case *query.MeanOpSpec:
+		return p.doMean(o, spec)
 	default:
 		return fmt.Errorf("unsupported query operation %v", o.Spec.Kind())
 	}
@@ -164,12 +183,22 @@ func (p *absPlanner) doRange(o *query.Operation, spec *query.RangeOpSpec) error 
 
 	parents := p.q.Parents(o.ID)
 	for _, parent := range parents {
-		datasets := p.datasetLookup[parent.ID]
-		for _, ds := range datasets {
-			ds.setBounds(b)
+		parentDS := p.datasetLookup[parent.ID]
+		childDS := make([]AbstractDataset, len(parentDS))
+		for i := range parentDS {
+			cds := parentDS[i].MakeNarrowChild()
+			cds.setBounds(b)
+			childDS[i] = cds
 		}
-		// Re-index the parent datasets under the range operation ID
-		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], datasets)
+		op := &rangeOperation{
+			operation: operation{
+				parents:   parentDS,
+				children:  childDS,
+				operation: o,
+			},
+			bounds: b,
+		}
+		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
 	}
 	return nil
 }
@@ -183,14 +212,111 @@ func (p *absPlanner) doClear(o *query.Operation, spec *query.ClearOpSpec) error 
 			childDS[i] = parentDS[i].MakeNarrowChild()
 		}
 
-		co := &clearOperation{
+		op := &clearOperation{
 			operation: operation{
 				parents:   parentDS,
 				children:  childDS,
 				operation: o,
 			},
 		}
-		p.operations = append(p.operations, co)
+		p.plan.operations = append(p.plan.operations, op)
+		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
+	}
+	return nil
+}
+
+func (p *absPlanner) doWindow(o *query.Operation, spec *query.WindowOpSpec) error {
+	w := &window{
+		every:  spec.Every,
+		period: spec.Period,
+		round:  spec.Round,
+		start:  spec.Start,
+	}
+	parents := p.q.Parents(o.ID)
+	for _, parent := range parents {
+		parentDS := p.datasetLookup[parent.ID]
+		childDS := make([]AbstractDataset, len(parentDS))
+		for i := range parentDS {
+			cds := parentDS[i].MakeNarrowChild()
+			cds.setWindow(w)
+			childDS[i] = cds
+		}
+
+		op := &windowOperation{
+			operation: operation{
+				parents:   parentDS,
+				children:  childDS,
+				operation: o,
+			},
+			window: w,
+		}
+		p.plan.operations = append(p.plan.operations, op)
+		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
+	}
+	return nil
+}
+
+func (p *absPlanner) doCount(o *query.Operation, spec *query.CountOpSpec) error {
+	parents := p.q.Parents(o.ID)
+	for _, parent := range parents {
+		parentDS := p.datasetLookup[parent.ID]
+		childDS := make([]AbstractDataset, len(parentDS))
+		for i := range parentDS {
+			childDS[i] = parentDS[i].MakeNarrowChild()
+		}
+
+		op := &countOperation{
+			operation: operation{
+				parents:   parentDS,
+				children:  childDS,
+				operation: o,
+			},
+		}
+		p.plan.operations = append(p.plan.operations, op)
+		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
+	}
+	return nil
+}
+
+func (p *absPlanner) doSum(o *query.Operation, spec *query.SumOpSpec) error {
+	parents := p.q.Parents(o.ID)
+	for _, parent := range parents {
+		parentDS := p.datasetLookup[parent.ID]
+		childDS := make([]AbstractDataset, len(parentDS))
+		for i := range parentDS {
+			childDS[i] = parentDS[i].MakeNarrowChild()
+		}
+
+		op := &sumOperation{
+			operation: operation{
+				parents:   parentDS,
+				children:  childDS,
+				operation: o,
+			},
+		}
+		p.plan.operations = append(p.plan.operations, op)
+		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
+	}
+	return nil
+}
+
+func (p *absPlanner) doMean(o *query.Operation, spec *query.MeanOpSpec) error {
+	parents := p.q.Parents(o.ID)
+	for _, parent := range parents {
+		parentDS := p.datasetLookup[parent.ID]
+		childDS := make([]AbstractDataset, len(parentDS))
+		for i := range parentDS {
+			childDS[i] = parentDS[i].MakeNarrowChild()
+		}
+
+		op := &meanOperation{
+			operation: operation{
+				parents:   parentDS,
+				children:  childDS,
+				operation: o,
+			},
+		}
+		p.plan.operations = append(p.plan.operations, op)
 		p.datasetLookup[o.ID] = append(p.datasetLookup[o.ID], childDS)
 	}
 	return nil
