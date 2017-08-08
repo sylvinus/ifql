@@ -50,5 +50,18 @@ func (p *planner) Plan(ap *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpe
 		}
 	}
 
+	// Find Range+Select
+	for _, o := range ap.Operations {
+		if o.Spec.Kind() == RangeKind {
+			spec := o.Spec.(*RangeOpSpec)
+			for _, parent := range o.Parents {
+				if po := p.plan.Operations[p.plan.Datasets[parent].Source]; po.Spec.Kind() == SelectKind {
+					selectSpec := po.Spec.(*SelectOpSpec)
+					selectSpec.Bounds = spec.Bounds
+				}
+			}
+		}
+	}
+
 	return p.plan, nil
 }

@@ -66,6 +66,7 @@ func (d *dataset) NextFrame() (DataFrame, bool) {
 type readDataset struct {
 	reader StorageReader
 	spec   *plan.SelectOpSpec
+	bounds Bounds
 }
 
 func (d *readDataset) Window() Window {
@@ -77,5 +78,5 @@ func (d *readDataset) Frames() FrameIterator {
 
 func (d *readDataset) NextFrame() (DataFrame, bool) {
 	//TODO push down bounds into readDataset
-	return d.reader.Read(d.spec.Database, 0, 1e10)
+	return d.reader.Read(d.spec.Database, d.bounds.Start(), d.bounds.Stop())
 }

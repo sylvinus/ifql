@@ -58,9 +58,9 @@ type rangeOp struct {
 }
 
 func (o rangeOp) Do(src DataFrame) (DataFrame, bool) {
-	//if src.Bounds().Stop() > o.stop {
-	//	return nil, false
-	//}
+	if src.Bounds().Stop() > o.stop {
+		return nil, false
+	}
 	return src, true
 }
 

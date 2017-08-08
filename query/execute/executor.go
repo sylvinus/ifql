@@ -56,9 +56,14 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 func (es *executionState) createDataset(d *plan.Dataset) Dataset {
 	src := es.p.Operations[d.Source]
 	if src.Spec.Kind() == plan.SelectKind {
+		spec := src.Spec.(*plan.SelectOpSpec)
 		return &readDataset{
 			reader: es.sr,
-			spec:   src.Spec.(*plan.SelectOpSpec),
+			spec:   spec,
+			bounds: bounds{
+				start: Time(spec.Bounds.Start.Time(es.p.Now).UnixNano()),
+				stop:  Time(spec.Bounds.Stop.Time(es.p.Now).UnixNano()),
+			},
 		}
 	}
 	ds := new(dataset)

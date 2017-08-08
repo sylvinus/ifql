@@ -114,6 +114,7 @@ func registerOpSpec(k OperationKind, qk query.OperationKind, name string, s Oper
 type SelectOpSpec struct {
 	Database string        `json:"database"`
 	Where    PredicateSpec `json:"where"`
+	Bounds   BoundsSpec
 }
 
 func init() {
