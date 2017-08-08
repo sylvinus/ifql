@@ -2,10 +2,28 @@
 
 
 [[projects]]
+  name = "github.com/gogo/protobuf"
+  packages = ["codec","gogoproto","proto","protoc-gen-gogo/descriptor","sortkeys","types"]
+  revision = "100ba4e885062801d56799d78530b73b178a78f3"
+  version = "v0.4"
+
+[[projects]]
   branch = "master"
   name = "github.com/google/go-cmp"
-  packages = ["cmp","cmp/cmpopts","cmp/internal/diff","cmp/internal/value"]
-  revision = "a9cc2ea1d957ce7e952bfdc3efe805184ce85972"
+  packages = ["cmp","cmp/cmpopts","cmp/internal/diff","cmp/internal/function","cmp/internal/value"]
+  revision = "8099a9787ce5dc5984ed879a3bda47dc730a8e97"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  revision = "d1caa6c97c9fc1cc9e83bbe34d0603f9ff0ce8bd"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/influxdata/yarpc"
+  packages = [".","codes","status","yarpcproto"]
+  revision = "0ab5efd0edfe4fd076e8fea64e990774d83014b9"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -22,6 +40,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c6526b0b3eb93960414d8a27d514b130b3734ff99eee8e103848a981906a66d4"
+  inputs-digest = "c633e9d6bf280cba75991d47e07265bfb4f707638b678eaa2bebe562c0a29deb"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -142,7 +142,8 @@ type storageReader struct {
 	idx    int
 }
 
-func (s *storageReader) Read() (execute.DataFrame, bool) {
+func (s *storageReader) Close() {}
+func (s *storageReader) Read(string, execute.Time, execute.Time) (execute.DataFrame, bool) {
 	idx := s.idx
 	if idx >= len(s.frames) {
 		return nil, false

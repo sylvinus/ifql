@@ -76,5 +76,6 @@ func (d *readDataset) Frames() FrameIterator {
 }
 
 func (d *readDataset) NextFrame() (DataFrame, bool) {
-	return d.reader.Read()
+	//TODO push down bounds into readDataset
+	return d.reader.Read(d.spec.Database, 0, 1e10)
 }
