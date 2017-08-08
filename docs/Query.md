@@ -16,7 +16,7 @@ Each node has the following properties:
 
 * ID - A unique identifier for the node within the graph.
 * Kind - The kind of operation the node performs.
-* Parameters - The parameters provided to the node detailing the specifics of the operation.
+* Spec - The spec, specifies the parameters provided to the node detailing the specifics of the operation.
     The parameters vary by the kind of node.
 
 

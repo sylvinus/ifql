@@ -1,0 +1,8 @@
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/google/go-cmp"
+
+[[override]]
+  branch = "fbae0281ffd546fa6d1959fec6075ac5da7fb577"
+  name = "github.com/uber-go/zap"
