@@ -20,7 +20,7 @@ type AbstractPlanner interface {
 	Plan(*query.QuerySpec) (*AbstractPlanSpec, error)
 }
 
-type absPlanner struct {
+type abstractPlanner struct {
 	plan            *AbstractPlanSpec
 	q               *query.QuerySpec
 	operationLookup map[OperationID]*Operation
@@ -28,10 +28,10 @@ type absPlanner struct {
 }
 
 func NewAbstractPlanner() AbstractPlanner {
-	return new(absPlanner)
+	return new(abstractPlanner)
 }
 
-func (p *absPlanner) Plan(q *query.QuerySpec) (*AbstractPlanSpec, error) {
+func (p *abstractPlanner) Plan(q *query.QuerySpec) (*AbstractPlanSpec, error) {
 	p.q = q
 	p.plan = new(AbstractPlanSpec)
 	p.operationLookup = make(map[OperationID]*Operation)
@@ -47,7 +47,7 @@ func OpIDFromQueryOpID(id query.OperationID) OperationID {
 	return OperationID(uuid.NewV5(RootUUID, string(id)))
 }
 
-func (p *absPlanner) walkQuery(o *query.Operation) error {
+func (p *abstractPlanner) walkQuery(o *query.Operation) error {
 	opSpec := p.createSpec(o.Spec.Kind())
 	if err := opSpec.SetSpec(o.Spec); err != nil {
 		return err
@@ -72,13 +72,13 @@ func (p *absPlanner) walkQuery(o *query.Operation) error {
 	return nil
 }
 
-func (p *absPlanner) createSpec(qk query.OperationKind) OperationSpec {
+func (p *abstractPlanner) createSpec(qk query.OperationKind) OperationSpec {
 	k := queryOpToOpKind[qk]
 	typ := kindToGoType[k]
 	return reflect.New(typ).Interface().(OperationSpec)
 }
 
-func (p *absPlanner) doNarrow(parents []*query.Operation, o *Operation, spec NarrowOperationSpec) {
+func (p *abstractPlanner) doNarrow(parents []*query.Operation, o *Operation, spec NarrowOperationSpec) {
 	for _, parent := range parents {
 		parentOpID := OpIDFromQueryOpID(parent.ID)
 		parentOp := p.operationLookup[parentOpID]
@@ -104,11 +104,13 @@ func CreateDatasetID(root DatasetID, oid OperationID) DatasetID {
 	return DatasetID(uuid.NewV5(uuid.UUID(root), oid.String()))
 }
 
-func (p *absPlanner) doWide(o *Operation, spec WideOperationSpec) {
+func (p *abstractPlanner) doWide(o *Operation, spec WideOperationSpec) {
 	children := spec.DetermineChildren()
 	childIDs := make([]DatasetID, len(children))
 
 	for i, c := range children {
+		// TODO figure out how the dataset ID hierarchy should work
+		// This currently can create duplicate IDs
 		c.ID = CreateDatasetID(InvalidDatasetID, o.ID)
 		c.Source = o.ID
 		childIDs[i] = c.ID
