@@ -1,8 +1,5 @@
 {
-package peg
-// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h)
-// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h).sum()
-// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h).window(period:1m).count()
+package ifql
 
 func toInterface(vals interface{}) (interface{}, error){
     if vals == nil {

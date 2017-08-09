@@ -1,4 +1,4 @@
-package peg
+package ifql
 
 import (
 	"bytes"

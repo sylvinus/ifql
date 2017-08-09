@@ -1,4 +1,4 @@
-package parser
+package ifql
 
 type Function struct {
 	Name string
