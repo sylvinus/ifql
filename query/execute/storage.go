@@ -76,7 +76,6 @@ func (sr *storageReader) Read(database string, start, stop Time) (DataFrame, boo
 					for i, c := range p.Timestamps {
 						df.cols[i] = Time(c)
 					}
-					df.bounds = bounds{start: df.cols[0], stop: df.cols[len(df.cols)-1]}
 				}
 				if len(p.Values) != df.stride {
 					panic("non dense data found")

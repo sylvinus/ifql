@@ -13,19 +13,57 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: ifql <query>")
-		fmt.Println(os.Args)
-		os.Exit(1)
-	}
-	queryStr := os.Args[1]
+	//if len(os.Args) != 2 {
+	//	fmt.Println("Usage: ifql <query>")
+	//	fmt.Println(os.Args)
+	//	os.Exit(1)
+	//}
+	//queryStr := os.Args[1]
+	queryStr := `{
+  "operations": [
+    {
+      "id": "select",
+      "kind": "select",
+      "spec": {
+        "database": "mydb"
+      }
+    },
+    {
+      "id": "range",
+      "kind": "range",
+      "spec": {
+        "start": "-4h",
+        "stop": "now"
+      }
+    },
+    {
+      "id": "sum",
+      "kind": "sum"
+    }
+  ],
+  "edges": [
+    {
+      "parent": "select",
+      "child": "range"
+    },
+    {
+      "parent": "range",
+      "child": "sum"
+    }
+  ]
+}`;
 
 	results, err := doQuery(queryStr)
 	if err != nil {
 		fmt.Println("E!", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%+v\n", results)
+	fmt.Println(len(results))
+	for _, r := range results {
+		fmt.Println(r.ColsIndex())
+		rows, _ := r.RowSlice(0)
+		fmt.Println(rows)
+	}
 }
 
 func doQuery(queryStr string) ([]execute.DataFrame, error) {

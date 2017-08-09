@@ -78,5 +78,8 @@ func (d *readDataset) Frames() FrameIterator {
 
 func (d *readDataset) NextFrame() (DataFrame, bool) {
 	//TODO push down bounds into readDataset
-	return d.reader.Read(d.spec.Database, d.bounds.Start(), d.bounds.Stop())
+	b := d.bounds
+	period := b.Stop() - b.Start()
+	d.bounds = bounds{start: b.Stop() + 1, stop: b.Stop() + period} // TODO(sgc): hack to move readDataset to next period
+	return d.reader.Read(d.spec.Database, b.Start(), b.Stop())
 }

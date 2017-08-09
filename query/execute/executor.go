@@ -2,8 +2,6 @@ package execute
 
 import (
 	"context"
-	"log"
-
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -76,9 +74,7 @@ func (es *executionState) createDataset(d *plan.Dataset) Dataset {
 func (es *executionState) do(ctx context.Context) {
 	for _, r := range es.results {
 		frames := r.Frames()
-		log.Println("do", frames)
 		for f, ok := frames.NextFrame(); ok; f, ok = frames.NextFrame() {
-			log.Println("frame", f)
 			es.resultFrames = append(es.resultFrames, f)
 		}
 	}
