@@ -107,6 +107,7 @@ func (n *Number) Value() interface{} {
 	return n.Val
 }
 
+// *github.com/influxdata/ifql/query/execute/storage.Predicate
 type WhereExpr struct {
 	node Node
 }

@@ -1,7 +1,6 @@
 package ifql
 
 import (
-	"log"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -58,8 +57,6 @@ func TestNewAST(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			log.Printf("%+#v", g)
-			//got := string(g.([]byte))
 			if !cmp.Equal(tt.want, g) {
 				t.Errorf("Parse() = %s", cmp.Diff(tt.want, g))
 			}
