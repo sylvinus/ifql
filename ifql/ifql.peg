@@ -1,0 +1,142 @@
+{
+package ifql
+}
+
+Grammar = __ function:Function EOF {
+    return function.(*Function), nil
+}
+
+Tests =  Function / StringLiteral / Duration / DateTime / Number
+
+Function = name:FunctionName __  "(" __ args:FunctionArgs* __ ")" children:FunctionChain* {
+    return NewFunction(name, args, children)
+}
+
+FunctionChain = __ "." __ child:Function {
+    return child, nil
+}
+
+FunctionName = String
+FunctionArgs = first:FunctionArg __ rest:FunctionArgsRest* {
+    return NewFunctionArgs(first, rest)
+}
+
+FunctionArgsRest = "," arg:FunctionArg {
+    return arg, nil
+}
+
+FunctionArg = name:String __  ":" __ arg:FunctionArgValues __ {
+    return &FunctionArg{
+        Name: name.(string),
+        Arg: arg.(Arg),
+    }, nil
+}
+
+FunctionArgValues = StringLiteral / Duration / DateTime / Number / WhereExpr
+
+WhereExpr = "{" __ Expr __  "}" {
+    return &StringLiteral{string(c.text)}, nil
+}
+
+Expr = Primary __ BinaryExpr*
+BinaryExpr = Operators __ Primary
+Primary = '(' __ Expr __ ')' / StringLiteral / Duration / DateTime / Number
+// TODO :  Break the operators apart into precedence
+Operators = "<=" / "<" / ">=" / ">" / "=" / "!=" / "or"i / "and"i / "in"i / "not"i / "empty"i / "startsWith"i
+
+DateFullYear = Digit Digit Digit Digit
+
+DateMonth
+  // 01-12
+  = Digit Digit
+
+DateMDay
+  // 01-28, 01-29, 01-30, 01-31 based on
+  // month/year
+  = Digit Digit
+
+TimeHour
+  // 00-23
+  = Digit Digit
+
+TimeMinute
+  // 00-59
+  = Digit Digit
+
+TimeSecond
+  // 00-58, 00-59, 00-60 based on leap second
+  // rules
+  = Digit Digit
+
+TimeSecFrac = "." Digit+
+TimeNumOffset = ("+" / "-") TimeHour ":" TimeMinute
+TimeOffset = ("Z"i / TimeNumOffset)
+PartialTime = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
+FullDate = DateFullYear "-" DateMonth "-" DateMDay
+FullTime = PartialTime TimeOffset
+DateTime = FullDate "T"i FullTime {
+    t, err := time.Parse(time.RFC3339Nano, string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &DateTime{t}, nil
+}
+
+NanoSecondUnits = "ns"
+MicroSecondUnits = ("us" / "µs" / "μs")
+MilliSecondUnits = "ms"
+SecondUnits = "s"
+MinuteUnits = "m"
+HourUnits = "h"
+DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondUnits / MinuteUnits / HourUnits)
+
+SingleDuration = Number DurationUnits
+Duration = SingleDuration+ {
+    d, err := time.ParseDuration(string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &Duration{d}, nil
+}
+
+StringLiteral ← ( '"' DoubleStringChar* '"' ) {
+    s, err := strconv.Unquote(string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &StringLiteral{s}, nil
+} / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
+    return "", errors.New("string literal not terminated")
+}
+
+DoubleStringChar ← !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
+
+DoubleStringEscape ←  '"' / ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid escape character")
+}
+
+String = StringChar+ {
+    return string(c.text), nil
+}
+
+StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / ",") SourceChar
+
+Number ← '-'? Integer ( '.' Digit+ )? {
+    n, err := strconv.ParseFloat(string(c.text), 64)
+    if err != nil {
+        return nil, err
+    }
+    return &Number{n}, nil
+}
+
+Integer ← '0' / NonZeroDigit Digit*
+NonZeroDigit ← [1-9]
+Digit ← [0-9]
+
+SourceChar ← .
+
+__ ← ( Whitespace / EOL )*
+Whitespace ← [ \t\r]
+
+EOL ← '\n'
+EOF ← !.
