@@ -7,7 +7,7 @@ type StringLiteral struct {
 }
 
 func (s *StringLiteral) Type() ArgType {
-	return STRING
+	return StringKind
 }
 
 func (s *StringLiteral) Value() interface{} {
@@ -19,7 +19,7 @@ type Duration struct {
 }
 
 func (d *Duration) Type() ArgType {
-	return DURATION
+	return DurationKind
 }
 
 func (d *Duration) Value() interface{} {
@@ -31,7 +31,7 @@ type DateTime struct {
 }
 
 func (d *DateTime) Type() ArgType {
-	return DATETIME
+	return DateTimeKind
 }
 
 func (d *DateTime) Value() interface{} {
@@ -43,7 +43,7 @@ type Number struct {
 }
 
 func (n *Number) Type() ArgType {
-	return NUMBER
+	return NumberKind
 }
 
 func (n *Number) Value() interface{} {
@@ -55,7 +55,7 @@ type WhereExpr struct {
 }
 
 func (w *WhereExpr) Type() ArgType {
-	return EXPR
+	return ExprKind
 }
 
 func (w *WhereExpr) Value() interface{} {

@@ -16,6 +16,17 @@ type FunctionArg struct {
 }
 
 type Arg interface {
-	Type() ArgType
+	Type() ArgKind
 	Value() interface{}
 }
+
+type ArgKind int
+
+const (
+	DateTimeKind ArgKind = iota
+	DurationKind
+	ExprKind
+	NumberKind
+	StringKind
+	NumKinds int = iota
+)
