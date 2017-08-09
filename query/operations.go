@@ -98,6 +98,7 @@ func (k OperationKind) MarshalText() ([]byte, error) {
 
 const (
 	SelectKind OperationKind = iota
+	WhereKind
 	RangeKind
 	ClearKind
 	WindowKind
@@ -152,8 +153,7 @@ func registerOpSpec(k OperationKind, name string, s OperationSpec) {
 }
 
 type SelectOpSpec struct {
-	Database string         `json:"database"`
-	Where    ExpressionSpec `json:"where"`
+	Database string `json:"database"`
 }
 
 func init() {
@@ -162,6 +162,18 @@ func init() {
 
 func (s *SelectOpSpec) Kind() OperationKind {
 	return SelectKind
+}
+
+type WhereOpSpec struct {
+	Exp *WhereExpressionSpec `json:"exp"`
+}
+
+func init() {
+	registerOpSpec(WhereKind, "where", new(WhereOpSpec))
+}
+
+func (w *WhereOpSpec) Kind() OperationKind {
+	return WhereKind
 }
 
 type RangeOpSpec struct {

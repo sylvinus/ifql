@@ -55,6 +55,7 @@ func ExpressionToPredicate(query.ExpressionSpec) PredicateSpec {
 
 const (
 	SelectKind OperationKind = iota
+	WhereKind
 	RangeKind
 	ClearKind
 	WindowKind
@@ -112,8 +113,7 @@ func registerOpSpec(k OperationKind, qk query.OperationKind, name string, s Oper
 }
 
 type SelectOpSpec struct {
-	Database string        `json:"database"`
-	Where    PredicateSpec `json:"where"`
+	Database string `json:"database"`
 	Bounds   BoundsSpec
 }
 
@@ -131,12 +131,32 @@ func (s *SelectOpSpec) SetSpec(qs query.OperationSpec) error {
 		return fmt.Errorf("invalid spec type %T", qs)
 	}
 	s.Database = spec.Database
-	s.Where = ExpressionToPredicate(spec.Where)
 	return nil
 }
 
 func (s *SelectOpSpec) DetermineChildren() []*Dataset {
 	return []*Dataset{new(Dataset)}
+}
+
+type WhereOpSpec struct {
+	Exp *query.WhereOpSpec `json:"exp"`
+}
+
+func init() {
+	registerOpSpec(WhereKind, query.WhereKind, "where", new(WhereOpSpec))
+}
+
+func (w *WhereOpSpec) Kind() OperationKind {
+	return WhereKind
+}
+
+func (w *WhereOpSpec) SetSpec(qs query.OperationSpec) error {
+	spec, ok := qs.(*query.WhereOpSpec)
+	if !ok {
+		return fmt.Errorf("invalid spec type %T", qs)
+	}
+	w.Exp = spec
+	return nil
 }
 
 type RangeOpSpec struct {
