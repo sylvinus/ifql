@@ -3,6 +3,8 @@ package query
 import (
 	"errors"
 	"fmt"
+
+	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 // QuerySpec specifies a query.
@@ -18,6 +20,18 @@ type QuerySpec struct {
 type Edge struct {
 	Parent OperationID `json:"parent"`
 	Child  OperationID `json:"child"`
+}
+
+// TODO: instead of taking a predicate, take what can be returned by
+//       the parser. That is, the parser could have variable references.
+type WhereExpressionSpec struct {
+	Predicate *storage.Predicate
+}
+
+// TODO: wire this up to evaluate in the engine to fill in variables
+//       with values
+func (w *WhereExpressionSpec) Evaluate() *storage.Predicate {
+	return w.Predicate
 }
 
 // ExpressionSpec specifies an expression.
