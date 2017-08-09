@@ -1,51 +1,41 @@
 {
 package ifql
-
-func toInterface(vals interface{}) (interface{}, error){
-    if vals == nil {
-        return nil, nil
-    }
-    switch v := vals.(type) {
-    case float64:
-        return v, nil
-    case string:
-        return v, nil
-    case time.Time:
-        return v.String(), nil
-    case time.Duration:
-        return v.String(), nil
-    default:
-        log.Printf("UNKNOWN TYPE %t", v)
-    }
-    return nil, fmt.Errorf("Unknown types for now")
 }
 
-
-func toIfaceSlice(v interface{}) []interface{} {
-    if v == nil {
-        return nil
-    }
-    return v.([]interface{})
-}
-
-}
-
-Grammar = __ vals:Tests EOF {
-    return toInterface(vals)
+Grammar = __ function:Function EOF {
+    return function.(*Function), nil
 }
 
 Tests =  Function / StringLiteral / Duration / DateTime / Number
 
-Function = FunctionName __  "(" __ FunctionArgs* __ ")" FunctionChain*
-FunctionChain = __ "." __ Function
+Function = name:FunctionName __  "(" __ args:FunctionArgs* __ ")" children:FunctionChain* {
+    return NewFunction(name, args, children)
+}
+
+FunctionChain = __ "." __ child:Function {
+    return child, nil
+}
+
 FunctionName = String
-FunctionArgs = FunctionArg __ ( "," FunctionArg )*
-FunctionArg = String __  ":" __ FunctionArgValues __
+FunctionArgs = first:FunctionArg __ rest:FunctionArgsRest* {
+    return NewFunctionArgs(first, rest)
+}
+
+FunctionArgsRest = "," arg:FunctionArg {
+    return arg, nil
+}
+
+FunctionArg = name:String __  ":" __ arg:FunctionArgValues __ {
+    return &FunctionArg{
+        Name: name.(string),
+        Arg: arg.(Arg),
+    }, nil
+}
+
 FunctionArgValues = StringLiteral / Duration / DateTime / Number / WhereExpr
 
 WhereExpr = "{" __ Expr __  "}" {
-    log.Printf("howdy")
-    return c.text, nil
+    return &StringLiteral{string(c.text)}, nil
 }
 
 Expr = Primary __ BinaryExpr*
@@ -78,25 +68,18 @@ TimeSecond
   // rules
   = Digit Digit
 
-TimeSecFrac
-  = "." Digit+
-
-TimeNumOffset
-  = ("+" / "-") TimeHour ":" TimeMinute
-
+TimeSecFrac = "." Digit+
+TimeNumOffset = ("+" / "-") TimeHour ":" TimeMinute
 TimeOffset = ("Z"i / TimeNumOffset)
-
-PartialTime
-  = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
-
-FullDate
-  = DateFullYear "-" DateMonth "-" DateMDay
-
-FullTime
-  = PartialTime TimeOffset
-
+PartialTime = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
+FullDate = DateFullYear "-" DateMonth "-" DateMDay
+FullTime = PartialTime TimeOffset
 DateTime = FullDate "T"i FullTime {
-    return time.Parse(time.RFC3339Nano, string(c.text))
+    t, err := time.Parse(time.RFC3339Nano, string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &DateTime{t}, nil
 }
 
 NanoSecondUnits = "ns"
@@ -109,11 +92,19 @@ DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondU
 
 SingleDuration = Number DurationUnits
 Duration = SingleDuration+ {
-    return time.ParseDuration(string(c.text))
+    d, err := time.ParseDuration(string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &Duration{d}, nil
 }
 
 StringLiteral ← ( '"' DoubleStringChar* '"' ) {
-    return strconv.Unquote(string(c.text))
+    s, err := strconv.Unquote(string(c.text))
+    if err != nil {
+        return nil, err
+    }
+    return &StringLiteral{s}, nil
 } / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
     return "", errors.New("string literal not terminated")
 }
@@ -124,11 +115,18 @@ DoubleStringEscape ←  '"' / ( SourceChar / EOL / EOF ) {
     return nil, errors.New("invalid escape character")
 }
 
-String = StringChar+
+String = StringChar+ {
+    return string(c.text), nil
+}
+
 StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / ",") SourceChar
 
 Number ← '-'? Integer ( '.' Digit+ )? {
-    return strconv.ParseFloat(string(c.text), 64)
+    n, err := strconv.ParseFloat(string(c.text), 64)
+    if err != nil {
+        return nil, err
+    }
+    return &Number{n}, nil
 }
 
 Integer ← '0' / NonZeroDigit Digit*

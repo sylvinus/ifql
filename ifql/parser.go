@@ -1,32 +1,16 @@
 package ifql
 
-type Function struct {
-	Name string
-	Args
+func toIfaceSlice(v interface{}) []interface{} {
+	if v == nil {
+		return nil
+	}
+	return v.([]interface{})
 }
 
-type FunctionChain struct {
-	Name string
-	Args
+func NewAST(ifql string) (*Function, error) {
+	f, err := Parse("", []byte(ifql))
+	if err != nil {
+		return nil, err
+	}
+	return f.(*Function), nil
 }
-
-type FunctionArg struct {
-	Name string
-	Arg  Arg
-}
-
-type Arg interface {
-	Type() ArgKind
-	Value() interface{}
-}
-
-type ArgKind int
-
-const (
-	DateTimeKind ArgKind = iota
-	DurationKind
-	ExprKind
-	NumberKind
-	StringKind
-	NumKinds int = iota
-)

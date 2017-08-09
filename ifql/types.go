@@ -2,70 +2,131 @@ package ifql
 
 import "time"
 
-type StringLiteral struct {
-	value string
+type Arg interface {
+	Type() ArgKind
+	Value() interface{}
 }
 
-func (s *StringLiteral) Type() ArgType {
+type ArgKind int
+
+const (
+	DateTimeKind ArgKind = iota
+	DurationKind
+	ExprKind
+	NumberKind
+	StringKind
+	NumKinds int = iota
+)
+
+type Function struct {
+	Name     string
+	Args     []*FunctionArg
+	Children []*Function
+}
+
+func NewFunction(name, args, children interface{}) (*Function, error) {
+	chain := []*Function{}
+	if children != nil {
+		for _, child := range toIfaceSlice(children) {
+			chain = append(chain, child.(*Function))
+		}
+	}
+	funcArgs := []*FunctionArg{}
+	if args != nil {
+		for _, arg := range toIfaceSlice(args) {
+			funcArgs = append(funcArgs, arg.([]*FunctionArg)...)
+		}
+	}
+	return &Function{
+		Name:     name.(string),
+		Args:     funcArgs,
+		Children: chain,
+	}, nil
+}
+
+type FunctionArg struct {
+	Name string
+	Arg  Arg
+}
+
+func NewFunctionArgs(first, rest interface{}) ([]*FunctionArg, error) {
+	args := []*FunctionArg{first.(*FunctionArg)}
+	if rest != nil {
+		for _, arg := range toIfaceSlice(rest) {
+			args = append(args, arg.(*FunctionArg))
+		}
+	}
+	return args, nil
+}
+
+type StringLiteral struct {
+	String string
+}
+
+func (s *StringLiteral) Type() ArgKind {
 	return StringKind
 }
 
 func (s *StringLiteral) Value() interface{} {
-	return n.value
+	return s.String
 }
 
 type Duration struct {
-	value time.Duration
+	Dur time.Duration
 }
 
-func (d *Duration) Type() ArgType {
+func (d *Duration) Type() ArgKind {
 	return DurationKind
 }
 
 func (d *Duration) Value() interface{} {
-	return n.value
+	return d.Dur
 }
 
 type DateTime struct {
-	value time.Time
+	Date time.Time
 }
 
-func (d *DateTime) Type() ArgType {
+func (d *DateTime) Type() ArgKind {
 	return DateTimeKind
 }
 
 func (d *DateTime) Value() interface{} {
-	return n.value
+	return d.Date
 }
 
 type Number struct {
-	value float64
+	Val float64
 }
 
-func (n *Number) Type() ArgType {
+func (n *Number) Type() ArgKind {
 	return NumberKind
 }
 
 func (n *Number) Value() interface{} {
-	return n.value
+	return n.Val
 }
 
 type WhereExpr struct {
 	node Node
 }
 
-func (w *WhereExpr) Type() ArgType {
+func (w *WhereExpr) Type() ArgKind {
 	return ExprKind
 }
 
 func (w *WhereExpr) Value() interface{} {
-	return w.Node
+	return w.node
 }
 
+type NodeKind int
+type ComparisonKind int
+type LogicalKind int
+
 type Node struct {
-	Type       NodeType
-	Comparison ComparisonType
-	Logical    LogicalType
+	Kind       NodeKind
+	Comparison ComparisonKind
+	Logical    LogicalKind
 	Children   []Node
 	Value      Arg
 }
