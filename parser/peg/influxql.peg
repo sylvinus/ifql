@@ -1,0 +1,147 @@
+{
+package peg
+// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h)
+// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h).sum()
+// select(db:"foo").where(exp:{"t1"="val1" and "t2"="val2"}).range(start:-1h).window(period:1m).count()
+
+func toInterface(vals interface{}) (interface{}, error){
+    if vals == nil {
+        return nil, nil
+    }
+    switch v := vals.(type) {
+    case float64:
+        return v, nil
+    case string:
+        return v, nil
+    case time.Time:
+        return v.String(), nil
+    case time.Duration:
+        return v.String(), nil
+    default:
+        log.Printf("UNKNOWN TYPE %t", v)
+    }
+    return nil, fmt.Errorf("Unknown types for now")
+}
+
+
+func toIfaceSlice(v interface{}) []interface{} {
+    if v == nil {
+        return nil
+    }
+    return v.([]interface{})
+}
+
+}
+
+Grammar = __ vals:Tests EOF {
+    return toInterface(vals)
+}
+
+Tests =  Function / StringLiteral / Duration / DateTime / Number
+
+Function = FunctionName __  "(" __ FunctionArgs* __ ")" FunctionChain*
+FunctionChain = __ "." __ Function
+FunctionName = String
+FunctionArgs = FunctionArg __ ( "," FunctionArg )*
+FunctionArg = String __  ":" __ FunctionArgValues __
+FunctionArgValues = StringLiteral / Duration / DateTime / Number / WhereExpr
+
+WhereExpr = "{" __ Expr __  "}" {
+    log.Printf("howdy")
+    return c.text, nil
+}
+
+Expr = Primary __ BinaryExpr*
+BinaryExpr = Operators __ Primary
+Primary = '(' __ Expr __ ')' / StringLiteral / Duration / DateTime / Number
+// TODO :  Break the operators apart into precedence
+Operators = "<=" / "<" / ">=" / ">" / "=" / "!=" / "or"i / "and"i / "in"i / "not"i / "empty"i / "startsWith"i
+
+DateFullYear = Digit Digit Digit Digit
+
+DateMonth
+  // 01-12
+  = Digit Digit
+
+DateMDay
+  // 01-28, 01-29, 01-30, 01-31 based on
+  // month/year
+  = Digit Digit
+
+TimeHour
+  // 00-23
+  = Digit Digit
+
+TimeMinute
+  // 00-59
+  = Digit Digit
+
+TimeSecond
+  // 00-58, 00-59, 00-60 based on leap second
+  // rules
+  = Digit Digit
+
+TimeSecFrac
+  = "." Digit+
+
+TimeNumOffset
+  = ("+" / "-") TimeHour ":" TimeMinute
+
+TimeOffset = ("Z"i / TimeNumOffset)
+
+PartialTime
+  = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
+
+FullDate
+  = DateFullYear "-" DateMonth "-" DateMDay
+
+FullTime
+  = PartialTime TimeOffset
+
+DateTime = FullDate "T"i FullTime {
+    return time.Parse(time.RFC3339Nano, string(c.text))
+}
+
+NanoSecondUnits = "ns"
+MicroSecondUnits = ("us" / "µs" / "μs")
+MilliSecondUnits = "ms"
+SecondUnits = "s"
+MinuteUnits = "m"
+HourUnits = "h"
+DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondUnits / MinuteUnits / HourUnits)
+
+SingleDuration = Number DurationUnits
+Duration = SingleDuration+ {
+    return time.ParseDuration(string(c.text))
+}
+
+StringLiteral ← ( '"' DoubleStringChar* '"' ) {
+    return strconv.Unquote(string(c.text))
+} / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
+    return "", errors.New("string literal not terminated")
+}
+
+DoubleStringChar ← !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
+
+DoubleStringEscape ←  '"' / ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid escape character")
+}
+
+String = StringChar+
+StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / ",") SourceChar
+
+Number ← '-'? Integer ( '.' Digit+ )? {
+    return strconv.ParseFloat(string(c.text), 64)
+}
+
+Integer ← '0' / NonZeroDigit Digit*
+NonZeroDigit ← [1-9]
+Digit ← [0-9]
+
+SourceChar ← .
+
+__ ← ( Whitespace / EOL )*
+Whitespace ← [ \t\r]
+
+EOL ← '\n'
+EOF ← !.
