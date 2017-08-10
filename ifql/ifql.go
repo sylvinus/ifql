@@ -1382,28 +1382,28 @@ var g = &grammar{
 			pos:  position{line: 153, col: 1, offset: 3612},
 			expr: &charClassMatcher{
 				pos:        position{line: 153, col: 6, offset: 3619},
-				val:        "[ \\t\\r]",
-				chars:      []rune{' ', '\t', '\r'},
+				val:        "[ \\t\\r\\n]",
+				chars:      []rune{' ', '\t', '\r', '\n'},
 				ignoreCase: false,
 				inverted:   false,
 			},
 		},
 		{
 			name: "EOL",
-			pos:  position{line: 155, col: 1, offset: 3628},
+			pos:  position{line: 155, col: 1, offset: 3630},
 			expr: &litMatcher{
-				pos:        position{line: 155, col: 7, offset: 3636},
+				pos:        position{line: 155, col: 7, offset: 3638},
 				val:        "\n",
 				ignoreCase: false,
 			},
 		},
 		{
 			name: "EOF",
-			pos:  position{line: 156, col: 1, offset: 3641},
+			pos:  position{line: 156, col: 1, offset: 3643},
 			expr: &notExpr{
-				pos: position{line: 156, col: 7, offset: 3649},
+				pos: position{line: 156, col: 7, offset: 3651},
 				expr: &anyMatcher{
-					line: 156, col: 8, offset: 3650,
+					line: 156, col: 8, offset: 3652,
 				},
 			},
 		},

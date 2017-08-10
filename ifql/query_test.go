@@ -208,7 +208,18 @@ func TestNewQuery(t *testing.T) {
 
 		{
 			name: "select with database where (and with or) and range",
-			raw:  `select(database:"mydb").where(exp:{(("t1"="val1") and ("t2"="val2")) or ("t3"="val3")}).range(start:-4h stop:-2h).count()`,
+			raw: `select(database:"mydb")
+						.where(exp:{
+								(
+									("t1"="val1")
+									and
+									("t2"="val2")
+								)
+								or
+								("t3"="val3")
+							})
+						.range(start:-4h stop:-2h)
+						.count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{

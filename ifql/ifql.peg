@@ -150,7 +150,7 @@ Digit ← [0-9]
 SourceChar ← .
 
 __ ← ( ws / EOL )*
-ws ← [ \t\r]
+ws ← [ \t\r\n]
 
 EOL ← '\n'
 EOF ← !.
