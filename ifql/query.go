@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 func NewQuery(ifql string) (*query.QuerySpec, error) {
@@ -218,4 +219,80 @@ func NewTime(arg Arg) (query.Time, error) {
 	default:
 		return query.Time{}, fmt.Errorf("Unknown time type")
 	}
+}
+
+func NewLogicalNode(op string, lhs, rhs *storage.Node) (*storage.Node, error) {
+	var logic storage.Node_Logical
+	switch op {
+	case "and":
+		logic = storage.LogicalAnd
+	case "or":
+		logic = storage.LogicalOr
+	default:
+		return nil, fmt.Errorf("Unknown logical operator: %s", op)
+	}
+	return &storage.Node{
+		NodeType: storage.NodeTypeGroupExpression,
+		Value:    &storage.Node_Logical_{Logical: logic},
+		Children: []*storage.Node{
+			lhs,
+			rhs,
+		},
+	}, nil
+}
+
+func NewComparisonNode(op string, ref, val interface{}) (*storage.Node, error) {
+	// TODO: add regex
+	var comparison storage.Node_Comparison
+	switch op {
+	case "=":
+		comparison = storage.ComparisonEqual
+	case "!=":
+		comparison = storage.ComparisonNotEqual
+	case "startsWith":
+		comparison = storage.ComparisonStartsWith
+	default:
+		return nil, fmt.Errorf("Unknown comparison operator: %s", op)
+	}
+	return &storage.Node{
+		NodeType: storage.NodeTypeBooleanExpression,
+		Value:    &storage.Node_Comparison_{Comparison: comparison},
+		Children: []*storage.Node{
+			NewNodeRef(ref),
+			NewNodeLiteral(val),
+		},
+	}, nil
+}
+
+func NewNodeRef(val interface{}) *storage.Node {
+	switch v := val.(type) {
+	case StringLiteral:
+		return &storage.Node{
+			NodeType: storage.NodeTypeRef,
+			Value: &storage.Node_StringValue{
+				StringValue: v.Value().(string),
+			},
+		}
+	}
+	return nil
+}
+
+func NewNodeLiteral(val interface{}) *storage.Node {
+	switch v := val.(type) {
+	case StringLiteral:
+		return &storage.Node{
+			NodeType: storage.NodeTypeLiteral,
+			Value: &storage.Node_StringValue{
+				StringValue: v.Value().(string),
+			},
+		}
+	case Number:
+		return &storage.Node{
+			NodeType: storage.NodeTypeLiteral,
+			Value: &storage.Node_FloatValue{
+				FloatValue: v.Value().(float64),
+			},
+		}
+	}
+	return nil
 }
