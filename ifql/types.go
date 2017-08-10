@@ -23,9 +23,9 @@ const (
 )
 
 type Function struct {
-	Name     string
-	Args     []*FunctionArg
-	Children []*Function
+	Name     string         `json:"name,omitempty"`
+	Args     []*FunctionArg `json:"args,omitempty"`
+	Children []*Function    `json:"children,omitempty"`
 }
 
 func NewFunction(name, args, children interface{}) (*Function, error) {
@@ -49,8 +49,8 @@ func NewFunction(name, args, children interface{}) (*Function, error) {
 }
 
 type FunctionArg struct {
-	Name string
-	Arg  Arg
+	Name string `json:"name,omitempty"`
+	Arg  Arg    `json:"arg,omitempty"`
 }
 
 func NewFunctionArgs(first, rest interface{}) ([]*FunctionArg, error) {
@@ -64,7 +64,7 @@ func NewFunctionArgs(first, rest interface{}) ([]*FunctionArg, error) {
 }
 
 type StringLiteral struct {
-	String string
+	String string `json:"string,omitempty"`
 }
 
 func (s *StringLiteral) Type() ArgKind {
@@ -76,7 +76,7 @@ func (s *StringLiteral) Value() interface{} {
 }
 
 type Duration struct {
-	Dur time.Duration
+	Dur time.Duration `json:"dur,omitempty"`
 }
 
 func (d *Duration) Type() ArgKind {
@@ -88,7 +88,7 @@ func (d *Duration) Value() interface{} {
 }
 
 type DateTime struct {
-	Date time.Time
+	Date time.Time `json:"date,omitempty"`
 }
 
 func (d *DateTime) Type() ArgKind {
@@ -100,7 +100,7 @@ func (d *DateTime) Value() interface{} {
 }
 
 type Number struct {
-	Val float64
+	Val float64 `json:"val,omitempty"`
 }
 
 func (n *Number) Type() ArgKind {
@@ -112,7 +112,7 @@ func (n *Number) Value() interface{} {
 }
 
 type WhereExpr struct {
-	node *storage.Node
+	Node *storage.Node `json:"node,omitempty"`
 }
 
 func (w *WhereExpr) Type() ArgKind {
@@ -120,5 +120,5 @@ func (w *WhereExpr) Type() ArgKind {
 }
 
 func (w *WhereExpr) Value() interface{} {
-	return w.node
+	return w.Node
 }

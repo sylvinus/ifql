@@ -1,5 +1,7 @@
 {
 package ifql
+
+//go:generate pigeon -o ifql.go ifql.peg
 }
 
 Grammar = __ function:Function EOF {
