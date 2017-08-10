@@ -2,6 +2,7 @@ package ifql
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -73,6 +74,10 @@ func NewOperation(function *Function, parent string) (*query.Operation, query.Ed
 		edge.Child = query.OperationID(function.Name)
 		op, err := NewClearOperation(function.Args)
 		return op, edge, err
+	case "where":
+		edge.Child = query.OperationID(function.Name)
+		op, err := NewWhereOperation(function.Args)
+		return op, edge, err
 	default:
 		return nil, query.Edge{}, fmt.Errorf("Unknown function")
 	}
@@ -131,6 +136,24 @@ func NewSelectOperation(args []*FunctionArg) (*query.Operation, error) {
 		ID: "select", // TODO: Change this to a UUID
 		Spec: &query.SelectOpSpec{
 			Database: database,
+		},
+	}, nil
+}
+
+func NewWhereOperation(args []*FunctionArg) (*query.Operation, error) {
+	if len(args) != 1 || args[0].Name != "exp" {
+		return nil, fmt.Errorf("Invalid Where clause... also I should make this error better")
+	}
+	arg := args[0].Arg
+	node := arg.Value().(*storage.Node)
+	return &query.Operation{
+		ID: "where", // TODO: Change this to a UUID
+		Spec: &query.WhereOpSpec{
+			Exp: &query.WhereExpressionSpec{
+				Predicate: &storage.Predicate{
+					Root: node,
+				},
+			},
 		},
 	}, nil
 }
@@ -221,52 +244,9 @@ func NewTime(arg Arg) (query.Time, error) {
 	}
 }
 
-func NewLogicalNode(op string, lhs, rhs *storage.Node) (*storage.Node, error) {
-	var logic storage.Node_Logical
-	switch op {
-	case "and":
-		logic = storage.LogicalAnd
-	case "or":
-		logic = storage.LogicalOr
-	default:
-		return nil, fmt.Errorf("Unknown logical operator: %s", op)
-	}
-	return &storage.Node{
-		NodeType: storage.NodeTypeGroupExpression,
-		Value:    &storage.Node_Logical_{Logical: logic},
-		Children: []*storage.Node{
-			lhs,
-			rhs,
-		},
-	}, nil
-}
-
-func NewComparisonNode(op string, ref, val interface{}) (*storage.Node, error) {
-	// TODO: add regex
-	var comparison storage.Node_Comparison
-	switch op {
-	case "=":
-		comparison = storage.ComparisonEqual
-	case "!=":
-		comparison = storage.ComparisonNotEqual
-	case "startsWith":
-		comparison = storage.ComparisonStartsWith
-	default:
-		return nil, fmt.Errorf("Unknown comparison operator: %s", op)
-	}
-	return &storage.Node{
-		NodeType: storage.NodeTypeBooleanExpression,
-		Value:    &storage.Node_Comparison_{Comparison: comparison},
-		Children: []*storage.Node{
-			NewNodeRef(ref),
-			NewNodeLiteral(val),
-		},
-	}, nil
-}
-
 func NewNodeRef(val interface{}) *storage.Node {
 	switch v := val.(type) {
-	case StringLiteral:
+	case *StringLiteral:
 		return &storage.Node{
 			NodeType: storage.NodeTypeRef,
 			Value: &storage.Node_StringValue{
@@ -279,14 +259,14 @@ func NewNodeRef(val interface{}) *storage.Node {
 
 func NewNodeLiteral(val interface{}) *storage.Node {
 	switch v := val.(type) {
-	case StringLiteral:
+	case *StringLiteral:
 		return &storage.Node{
 			NodeType: storage.NodeTypeLiteral,
 			Value: &storage.Node_StringValue{
 				StringValue: v.Value().(string),
 			},
 		}
-	case Number:
+	case *Number:
 		return &storage.Node{
 			NodeType: storage.NodeTypeLiteral,
 			Value: &storage.Node_FloatValue{
@@ -295,4 +275,88 @@ func NewNodeLiteral(val interface{}) *storage.Node {
 		}
 	}
 	return nil
+}
+
+func NewComparisonOperator(text []byte) (storage.Node_Comparison, error) {
+	op := strings.ToLower(string(text))
+	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
+	switch op {
+	case "=":
+		return storage.ComparisonEqual, nil
+	case "!=":
+		return storage.ComparisonNotEqual, nil
+	case "startswith":
+		return storage.ComparisonStartsWith, nil
+	case "<=", "<", ">=", ">", "in", "not empty", "empty":
+		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)
+	default:
+		return 0, fmt.Errorf("Unknown comparison operator %s", op)
+	}
+}
+
+func NewLogicalOperator(text []byte) (storage.Node_Logical, error) {
+	op := strings.ToLower(string(text))
+	if op == "and" {
+		return storage.LogicalAnd, nil
+	} else if op == "or" {
+		return storage.LogicalOr, nil
+	}
+	return 0, fmt.Errorf("Unknown logical operator %s", op)
+}
+
+func NewRHS(op, rhs interface{}) (*storage.Node, error) {
+	r, ok := rhs.(*storage.Node)
+	if !ok {
+		if r = NewNodeLiteral(rhs); r == nil {
+			return nil, fmt.Errorf("Invalid RHS: not a storage.Node")
+		}
+	}
+	switch o := op.(type) {
+	case storage.Node_Comparison:
+		return &storage.Node{
+			NodeType: storage.NodeTypeBooleanExpression,
+			Value:    &storage.Node_Comparison_{Comparison: o},
+			Children: []*storage.Node{r},
+		}, nil
+	case storage.Node_Logical:
+		return &storage.Node{
+			NodeType: storage.NodeTypeGroupExpression,
+			Value:    &storage.Node_Logical_{Logical: o},
+			Children: []*storage.Node{r},
+		}, nil
+	default:
+		return nil, fmt.Errorf("Unknown operator type %t %#+v", op, op)
+	}
+}
+
+func NewExpr(lhs, rhs interface{}) (*storage.Node, error) {
+	right := toIfaceSlice(rhs)
+	top := right[0].(*storage.Node)
+	switch l := lhs.(type) {
+	case *storage.Node:
+		top.Children = append([]*storage.Node{l}, top.Children...)
+	case *StringLiteral, *Number:
+		// TODO: we are assuming LHS is always a tag
+		left := NewNodeRef(l)
+		top.Children = append([]*storage.Node{left}, top.Children...)
+	case *Duration, *DateTime:
+		return nil, fmt.Errorf("We don't support LHS durations, date times or numbers yet. sorry")
+	default:
+		return nil, fmt.Errorf("Unknown LHS %t", lhs)
+	}
+
+	for _, next := range right[1:] {
+		// if op is the same as the top, then this is a child.  Otherwise,
+		// we create a new top node where the current top will be left and
+		// right will be the top.
+		r := next.(*storage.Node)
+		if top.NodeType != r.NodeType {
+			left := *top
+			top = r
+			top.Children = append([]*storage.Node{&left}, top.Children...)
+			continue
+		}
+		top.Children = append(top.Children, r)
+	}
+	return top, nil
 }

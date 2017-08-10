@@ -1,8 +1,6 @@
 package ifql
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/influxdata/ifql/query/execute/storage"
@@ -113,9 +111,8 @@ func (n *Number) Value() interface{} {
 	return n.Val
 }
 
-// *github.com/influxdata/ifql/query/execute/storage.Predicate
 type WhereExpr struct {
-	node Node
+	node *storage.Node
 }
 
 func (w *WhereExpr) Type() ArgKind {
@@ -124,43 +121,4 @@ func (w *WhereExpr) Type() ArgKind {
 
 func (w *WhereExpr) Value() interface{} {
 	return w.node
-}
-
-type NodeKind int
-type ComparisonKind int
-type LogicalKind int
-
-type Node struct {
-	Kind       NodeKind
-	Comparison ComparisonKind
-	Logical    LogicalKind
-	Children   []Node
-	Value      Arg
-}
-
-func NewComparisonOperator(text []byte) (storage.Node_Comparison, error) {
-	op := strings.ToLower(string(text))
-	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
-	switch op {
-	case "=":
-		return storage.ComparisonEqual, nil
-	case "!=":
-		return storage.ComparisonNotEqual, nil
-	case "startswith":
-		return storage.ComparisonStartsWith, nil
-	case "<=", "<", ">=", ">", "in", "not empty", "empty":
-		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)
-	default:
-		return 0, fmt.Errorf("Unknown comparison operator %s", op)
-	}
-}
-
-func NewLogicalOperator(text []byte) (storage.Node_Logical, error) {
-	op := strings.ToLower(string(text))
-	if op == "and" {
-		return storage.LogicalAnd, nil
-	} else if op == "or" {
-		return storage.LogicalOr, nil
-	}
-	return 0, fmt.Errorf("Unknown logical operator %s", op)
 }

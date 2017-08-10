@@ -8,11 +8,7 @@ Grammar = __ function:Function EOF {
 
 Tests =  Function / StringLiteral / Duration / DateTime / Number
 
-/* 
-Function = name:FunctionName __  "(" __ "{" __ args:FunctionArgs* __ "}"__ )" children:FunctionChain* {
-    return NewFunction(name, args, children)
-}*/
-Function = name:FunctionName __  "(" __  args:FunctionArgs* __ )" children:FunctionChain* {
+Function = name:FunctionName __  "(" __ args:FunctionArgs* __ ")" children:FunctionChain* {
     return NewFunction(name, args, children)
 }
 
@@ -36,26 +32,29 @@ FunctionArg = name:String __  ":" __ arg:FunctionArgValues __ {
     }, nil
 }
 
-FunctionArgValues = StringLiteral / Duration / DateTime / Number / WhereExpr
+FunctionArgValues =  WhereExpr / StringLiteral / Duration / DateTime / Number
 
-WhereExpr = "{" __ Expr __  "}" {
-    return &StringLiteral{string(c.text)}, nil
+WhereExpr = "{" __ expr:Expr __  "}" {
+    return &WhereExpr{expr.(*storage.Node)}, nil
 }
 
-Expr = lhs:Primary __ rhs:BinaryExpr* {
-    return NewLHSalksjdf;ajsfd
+Expr = lhs:Primary __ rhs:BinaryExpr+ {
+    return NewExpr(lhs, rhs)
 }
+
 BinaryExpr = op:Operators __ rhs:Primary {
     return NewRHS(op, rhs)
 }
-Primary = '(' __ Expr __ ')' / StringLiteral / Duration / DateTime / Number
+Primary = '(' __ expr:Expr __ ')' {
+    return expr.(*storage.Node), nil
+} / StringLiteral / Duration / DateTime / Number
+
 // TODO :  Break the operators apart into precedence
-Operators = ComparisonOperators / LogicalOperators
-ComparisonOperators =  "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i {
+Operators = (ComparisonOperators / LogicalOperators)
+ComparisonOperators =  ("<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith" / "IN"i / "NOT EMPTY"i / "EMPTY"i) {
     return NewComparisonOperator(c.text)
 }
-
-LogicalOperators =  "or"i / "and"i {
+LogicalOperators =  ("or"i / "and"i) {
     return NewLogicalOperator(c.text)
 }
 
@@ -150,8 +149,8 @@ Digit ← [0-9]
 
 SourceChar ← .
 
-__ ← ( Whitespace / EOL )*
-Whitespace ← [ \t\r]
+__ ← ( ws / EOL )*
+ws ← [ \t\r]
 
 EOL ← '\n'
 EOF ← !.
