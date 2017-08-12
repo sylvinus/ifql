@@ -8,10 +8,10 @@
   version = "v0.4"
 
 [[projects]]
-  branch = "master"
   name = "github.com/google/go-cmp"
   packages = ["cmp","cmp/cmpopts","cmp/internal/diff","cmp/internal/function","cmp/internal/value"]
   revision = "8099a9787ce5dc5984ed879a3bda47dc730a8e97"
+  version = "v0.1.0"
 
 [[projects]]
   branch = "master"
@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/influxdata/yarpc"
   packages = [".","codes","status","yarpcproto"]
-  revision = "0ab5efd0edfe4fd076e8fea64e990774d83014b9"
+  revision = "7d68715e9b3b188a817ce06732b634ff0c9a8a4b"
 
 [[projects]]
   name = "github.com/pkg/errors"
