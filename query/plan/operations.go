@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute/storage"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -115,6 +116,9 @@ func registerOpSpec(k OperationKind, qk query.OperationKind, name string, s Oper
 type SelectOpSpec struct {
 	Database string `json:"database"`
 	Bounds   BoundsSpec
+	Where    *storage.Predicate
+	Desc     bool
+	Limit    int64
 }
 
 func init() {
@@ -157,6 +161,10 @@ func (w *WhereOpSpec) SetSpec(qs query.OperationSpec) error {
 	}
 	w.Exp = spec
 	return nil
+}
+
+func (w *WhereOpSpec) NewChild(ds *Dataset) {
+	// do nothing
 }
 
 type RangeOpSpec struct {

@@ -81,5 +81,5 @@ func (d *readDataset) NextFrame() (DataFrame, bool) {
 	b := d.bounds
 	period := b.Stop() - b.Start()
 	d.bounds = bounds{start: b.Stop() + 1, stop: b.Stop() + period} // TODO(sgc): hack to move readDataset to next period
-	return d.reader.Read(d.spec.Database, b.Start(), b.Stop())
+	return d.reader.Read(d.spec.Database, d.spec.Where, d.spec.Limit, d.spec.Desc, b.Start(), b.Stop())
 }

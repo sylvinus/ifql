@@ -11,7 +11,7 @@ import (
 )
 
 type StorageReader interface {
-	Read(database string, start, stop Time) (DataFrame, bool)
+	Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (DataFrame, bool)
 	Close()
 }
 
@@ -34,10 +34,13 @@ type storageReader struct {
 	c    storage.StorageClient
 }
 
-func (sr *storageReader) Read(database string, start, stop Time) (DataFrame, bool) {
+func (sr *storageReader) Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (DataFrame, bool) {
 
 	var req storage.ReadRequest
 	req.Database = database
+	req.Predicate = predicate
+	req.Limit = limit
+	req.Descending = desc
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
 	stream, err := sr.c.Read(context.Background(), &req)
