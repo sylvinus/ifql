@@ -50,18 +50,41 @@ func (p *planner) Plan(ap *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpe
 		}
 	}
 
-	// Find Range+Select
+	// Find Where+Range+Select to push down time bounds and predicate
 	for _, o := range ap.Operations {
 		if o.Spec.Kind() == RangeKind {
 			spec := o.Spec.(*RangeOpSpec)
-			for _, parent := range o.Parents {
-				if po := p.plan.Operations[p.plan.Datasets[parent].Source]; po.Spec.Kind() == SelectKind {
-					selectSpec := po.Spec.(*SelectOpSpec)
-					selectSpec.Bounds = spec.Bounds
-				}
-			}
+			p.pushDownRange(o, spec)
+		}
+		if o.Spec.Kind() == WhereKind {
+			spec := o.Spec.(*WhereOpSpec)
+			p.pushDownWhere(o, spec)
 		}
 	}
 
 	return p.plan, nil
+}
+
+func (p *planner) pushDownRange(o *Operation, spec *RangeOpSpec) {
+	for _, parent := range o.Parents {
+		if po := p.plan.Operations[p.plan.Datasets[parent].Source]; po.Spec.Kind() == SelectKind {
+			selectSpec := po.Spec.(*SelectOpSpec)
+			selectSpec.Bounds = spec.Bounds
+			return
+		} else {
+			p.pushDownRange(po, spec)
+		}
+	}
+}
+
+func (p *planner) pushDownWhere(o *Operation, spec *WhereOpSpec) {
+	for _, parent := range o.Parents {
+		if po := p.plan.Operations[p.plan.Datasets[parent].Source]; po.Spec.Kind() == SelectKind {
+			selectSpec := po.Spec.(*SelectOpSpec)
+			selectSpec.Where = spec.Exp.Exp.Predicate
+			return
+		} else {
+			p.pushDownWhere(po, spec)
+		}
+	}
 }

@@ -22,9 +22,25 @@ func operationFromSpec(spec plan.OperationSpec, now time.Time) Operation {
 			spec: s,
 			stop: Time(s.Bounds.Stop.Time(now).UnixNano()),
 		}
+	case *plan.WhereOpSpec:
+		return passthroughOp{
+			spec: s,
+		}
 	default:
 		return nil
 	}
+}
+
+type passthroughOp struct {
+	spec plan.OperationSpec
+}
+
+func (o passthroughOp) Spec() plan.OperationSpec {
+	return o.spec
+}
+
+func (passthroughOp) Do(src DataFrame) (DataFrame, bool) {
+	return src, true
 }
 
 type sumOp struct {

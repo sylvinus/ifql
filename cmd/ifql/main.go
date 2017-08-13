@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
@@ -19,41 +18,41 @@ func main() {
 	//	os.Exit(1)
 	//}
 	//queryStr := os.Args[1]
-	queryStr := `{
-  "operations": [
-    {
-      "id": "select",
-      "kind": "select",
-      "spec": {
-        "database": "mydb"
-      }
-    },
-    {
-      "id": "range",
-      "kind": "range",
-      "spec": {
-        "start": "-4h",
-        "stop": "now"
-      }
-    },
-    {
-      "id": "sum",
-      "kind": "sum"
-    }
-  ],
-  "edges": [
-    {
-      "parent": "select",
-      "child": "range"
-    },
-    {
-      "parent": "range",
-      "child": "sum"
-    }
-  ]
-}`;
+	// 	queryStr := `{
+	//   "operations": [
+	//     {
+	//       "id": "select",
+	//       "kind": "select",
+	//       "spec": {
+	//         "database": "mydb"
+	//       }
+	//     },
+	//     {
+	//       "id": "range",
+	//       "kind": "range",
+	//       "spec": {
+	//         "start": "-4h",
+	//         "stop": "now"
+	//       }
+	//     },
+	//     {
+	//       "id": "sum",
+	//       "kind": "sum"
+	//     }
+	//   ],
+	//   "edges": [
+	//     {
+	//       "parent": "select",
+	//       "child": "range"
+	//     },
+	//     {
+	//       "parent": "range",
+	//       "child": "sum"
+	//     }
+	//   ]
+	// }`
 
-	results, err := doQuery(queryStr)
+	results, err := doQuery(`select(database:"mydb").where(exp:{"_measurement" = "m0"}).range(start:-170h).sum()`)
 	if err != nil {
 		fmt.Println("E!", err)
 		os.Exit(1)
@@ -67,16 +66,20 @@ func main() {
 }
 
 func doQuery(queryStr string) ([]execute.DataFrame, error) {
-	var qSpec query.QuerySpec
-	// TODO parse query
-	//qSpec = parser.Parse(q)
-	err := json.Unmarshal([]byte(queryStr), &qSpec)
+	// var qSpec query.QuerySpec
+	// // TODO parse query
+	// //qSpec = parser.Parse(q)
+	// err := json.Unmarshal([]byte(queryStr), &qSpec)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	qSpec, err := ifql.NewQuery(queryStr)
 	if err != nil {
 		return nil, err
 	}
 
 	aplanner := plan.NewAbstractPlanner()
-	ap, err := aplanner.Plan(&qSpec)
+	ap, err := aplanner.Plan(qSpec)
 	if err != nil {
 		return nil, err
 	}

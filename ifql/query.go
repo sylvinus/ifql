@@ -249,8 +249,8 @@ func NewNodeRef(val interface{}) *storage.Node {
 	case *StringLiteral:
 		return &storage.Node{
 			NodeType: storage.NodeTypeRef,
-			Value: &storage.Node_StringValue{
-				StringValue: v.Value().(string),
+			Value: &storage.Node_RefValue{
+				RefValue: v.Value().(string),
 			},
 		}
 	}
