@@ -25,7 +25,7 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database",
-			raw:  `select(database:"mydb").range(start:-4h stop:-2h).clear()`,
+			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).clear()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -58,7 +58,7 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database with range",
-			raw:  `select(database:"mydb").range(start:-4h stop:-2h).sum()`,
+			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -91,7 +91,7 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database with range and count",
-			raw:  `select(database:"mydb").range(start:-4h stop:-2h).count()`,
+			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -124,7 +124,7 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database where and range",
-			raw:  `select(database:"mydb").where(exp:{("t1"="val1") and ("t2"="val2")}).range(start:-4h stop:-2h).count()`,
+			raw:  `select(database:"mydb").where(exp:{("t1"="val1") and ("t2"="val2")}).range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -219,7 +219,7 @@ func TestNewQuery(t *testing.T) {
 								or
 								("t3"="val3")
 							})
-						.range(start:-4h stop:-2h)
+						.range(start:-4h, stop:-2h)
 						.count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
@@ -335,7 +335,7 @@ func TestNewQuery(t *testing.T) {
 							and
 							($ = 10)
 						})
-						.range(start:-4h stop:-2h)
+						.range(start:-4h, stop:-2h)
 						.count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
@@ -424,7 +424,7 @@ func TestNewQuery(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := NewQuery(tt.raw)
+			got, err := NewQuery(tt.raw, Debug(false))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return

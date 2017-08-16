@@ -9,8 +9,8 @@ import (
 	"github.com/influxdata/ifql/query/execute/storage"
 )
 
-func NewQuery(ifql string) (*query.QuerySpec, error) {
-	function, err := NewAST(ifql)
+func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
+	function, err := NewAST(ifql, opts...)
 	if err != nil {
 		return nil, err
 	}
