@@ -1,9 +1,11 @@
 package ifql
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
@@ -146,8 +148,8 @@ func TestNewQuery(t *testing.T) {
 												Children: []*storage.Node{
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_StringValue{
-															StringValue: "t1",
+														Value: &storage.Node_RefValue{
+															RefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -164,8 +166,8 @@ func TestNewQuery(t *testing.T) {
 												Children: []*storage.Node{
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_StringValue{
-															StringValue: "t2",
+														Value: &storage.Node_RefValue{
+															RefValue: "t2",
 														},
 													},
 													&storage.Node{
@@ -208,7 +210,18 @@ func TestNewQuery(t *testing.T) {
 
 		{
 			name: "select with database where (and with or) and range",
-			raw:  `select(database:"mydb").where(exp:{(("t1"="val1") and ("t2"="val2")) or ("t3"="val3")}).range(start:-4h stop:-2h).count()`,
+			raw: `select(database:"mydb")
+						.where(exp:{
+								(
+									("t1"="val1")
+									and
+									("t2"="val2")
+								)
+								or
+								("t3"="val3")
+							})
+						.range(start:-4h stop:-2h)
+						.count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -236,8 +249,8 @@ func TestNewQuery(t *testing.T) {
 														Children: []*storage.Node{
 															&storage.Node{
 																NodeType: storage.NodeTypeRef,
-																Value: &storage.Node_StringValue{
-																	StringValue: "t1",
+																Value: &storage.Node_RefValue{
+																	RefValue: "t1",
 																},
 															},
 															&storage.Node{
@@ -254,8 +267,8 @@ func TestNewQuery(t *testing.T) {
 														Children: []*storage.Node{
 															&storage.Node{
 																NodeType: storage.NodeTypeRef,
-																Value: &storage.Node_StringValue{
-																	StringValue: "t2",
+																Value: &storage.Node_RefValue{
+																	RefValue: "t2",
 																},
 															},
 															&storage.Node{
@@ -274,8 +287,8 @@ func TestNewQuery(t *testing.T) {
 												Children: []*storage.Node{
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_StringValue{
-															StringValue: "t3",
+														Value: &storage.Node_RefValue{
+															RefValue: "t3",
 														},
 													},
 													&storage.Node{
@@ -328,9 +341,9 @@ func TestNewQuery(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%q. NewQuery() = %v, want %v", tt.name, got, tt.want)
+			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
+			if !cmp.Equal(tt.want, got, opts...) {
+				t.Errorf("%q. NewQuery() = -got/+want %s", tt.name, cmp.Diff(tt.want, got, opts...))
 			}
 		})
 	}
