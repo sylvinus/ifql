@@ -19,6 +19,7 @@ const (
 	ExprKind
 	NumberKind
 	StringKind
+	FieldKind
 	NumKinds int = iota
 )
 
@@ -121,4 +122,16 @@ func (w *WhereExpr) Type() ArgKind {
 
 func (w *WhereExpr) Value() interface{} {
 	return w.Node
+}
+
+// Field represents a value associated with a series
+type Field struct {
+}
+
+func (f *Field) Type() ArgKind {
+	return FieldKind
+}
+
+func (f *Field) Value() interface{} {
+	return "_field"
 }

@@ -253,6 +253,13 @@ func NewNodeRef(val interface{}) *storage.Node {
 				RefValue: v.Value().(string),
 			},
 		}
+	case *Field: // TODO: Change this to a field node when available (remove from this area)
+		return &storage.Node{
+			NodeType: storage.NodeTypeRef,
+			Value: &storage.Node_RefValue{
+				RefValue: v.Value().(string),
+			},
+		}
 	}
 	return nil
 }
@@ -335,11 +342,11 @@ func NewExpr(lhs, rhs interface{}) (*storage.Node, error) {
 	switch l := lhs.(type) {
 	case *storage.Node:
 		top.Children = append([]*storage.Node{l}, top.Children...)
-	case *StringLiteral, *Number:
-		// TODO: we are assuming LHS is always a tag
+	case *StringLiteral, *Field:
+		// TODO: we are assuming LHS is always a tag or field
 		left := NewNodeRef(l)
 		top.Children = append([]*storage.Node{left}, top.Children...)
-	case *Duration, *DateTime:
+	case *Duration, *DateTime, *Number:
 		return nil, fmt.Errorf("We don't support LHS durations, date times or numbers yet. sorry")
 	default:
 		return nil, fmt.Errorf("Unknown LHS %t", lhs)
