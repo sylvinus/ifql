@@ -216,7 +216,7 @@ var reservedWords = map[string]bool{}
 
 }
 
-Grammar =  ( Comment / VectorSelector ) EOF {
+Grammar =  ( Comment / AggregateExpression / VectorSelector ) EOF {
     return string(c.text), nil
 }
 
@@ -389,10 +389,12 @@ Duration = dur:Integer units:DurationUnits {
 Code = ( ( ![{}] LabelMatches )+ / '{' Code '}' )*
 
 Operators = "-" / "+" / "*" / "%" / "/" / "==" / "!=" / "<=" / "<" / ">=" / ">" / "=~" / "!~" / "^" / "="
-LabelOperators  = "!=" / "=~" / "!~" / "="
 
-LabelMatch = label:Identifier __ op:LabelOperators __ match:( StringLiteral / Number )
+LabelOperators  = "!=" / "=~" / "!~" / "="
+Label = Identifier
+LabelMatch = label:Label __ op:LabelOperators __ match:( StringLiteral / Number )
 LabelMatches = LabelMatch __ ( "," __ LabelMatch)*
+LabelList = ("(" __ ")") / ("(" __ label:Label __ rest:( "," __ Label )* __ ")")
 
 VectorSelector = metric:Identifier __  CodeBlock? __ Range? __ Offset?
 
@@ -402,6 +404,27 @@ Range = "[" __ dur:Duration __ "]" {
 
 Offset = "offset"i __ dur:Duration {
     return dur, nil
+}
+
+BinaryAggregateOperators = "count_values"i / "topk"i / "bottomk"i / "quantile"i
+UnaryAggregateOperators = "sum"i / "min"i / "max"i / "avg"i / "stddev"i / "stdvar"i / "count"i
+AggregateOperators = BinaryAggregateOperators / UnaryAggregateOperators
+
+AggregateBy = "by"i __ labels:LabelList __ keep:"keep_common"i? {
+    // TODO: handle keep_common
+    return labels, nil
+}
+
+AggregateWithout = "without"i __ labels:LabelList {
+    return labels, nil
+}
+
+AggregateGroup = AggregateBy / AggregateWithout
+
+AggregateExpression = op:AggregateOperators __ "(" __ vector:VectorSelector __ ")" __ group:AggregateGroup? {
+    return vector, nil
+} / op:AggregateOperators __ group:AggregateGroup? __ "(" __ vector:VectorSelector __ ")" {
+    return vector, nil
 }
 
 __ = ( Whitespace / EOL / Comment )*

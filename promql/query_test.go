@@ -69,6 +69,46 @@ func TestNewQuery(t *testing.T) {
 			promql: `test{a="b"}[5y] OFFSET 3d`,
 			want:   `test{a="b"}[5y] OFFSET 3d`,
 		},
+		{
+			name:   "Min function with group by and keep common",
+			promql: `MIN (some_metric) by (foo) keep_common`,
+			want:   `MIN (some_metric) by (foo) keep_common`,
+		},
+		{
+			name:   "count function with group by and keep common reversed with label",
+			promql: `COUNT by (foo) keep_common (some_metric)`,
+			want:   `COUNT by (foo) keep_common (some_metric)`,
+		},
+		{
+			name:   "avg function with group by and no keep common reversed with label",
+			promql: `avg by (foo)(some_metric)`,
+			want:   `avg by (foo)(some_metric)`,
+		},
+		{
+			name:   "sum function with multiple group by and keep common",
+			promql: `sum (some_metric) by (foo,bar) keep_common`,
+			want:   `sum (some_metric) by (foo,bar) keep_common`,
+		},
+		{
+			name:   "sum function with group by",
+			promql: `sum by (foo)(some_metric)`,
+			want:   `sum by (foo)(some_metric)`,
+		},
+		{
+			name:   "sum function without reversed label",
+			promql: `sum without (foo) (some_metric)`,
+			want:   `sum without (foo) (some_metric)`,
+		},
+		{
+			name:   "sum function without",
+			promql: `sum (some_metric) without (foo)`,
+			want:   `sum (some_metric) without (foo)`,
+		},
+		{
+			name:   "sum function with keywords as label names",
+			promql: `sum without(and, by, avg, count, alert, annotations)(some_metric)`,
+			want:   `sum without(and, by, avg, count, alert, annotations)(some_metric)`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
