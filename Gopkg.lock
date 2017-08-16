@@ -26,6 +26,12 @@
   revision = "7d68715e9b3b188a817ce06732b634ff0c9a8a4b"
 
 [[projects]]
+  name = "github.com/mna/pigeon"
+  packages = [".","ast","builder"]
+  revision = "9df264905d4734c0133161d8c67828ff522b154a"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
@@ -40,6 +46,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c633e9d6bf280cba75991d47e07265bfb4f707638b678eaa2bebe562c0a29deb"
+  inputs-digest = "2d380fc1e615cb2f1e6ef7e42361addaf9fe9a4563a814a8e6f070e0d5915226"
   solver-name = "gps-cdcl"
   solver-version = 1
