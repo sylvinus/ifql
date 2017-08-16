@@ -29,7 +29,7 @@ type Function struct {
 	Children []*Function    `json:"children,omitempty"`
 }
 
-func NewFunction(name, args, children interface{}) (*Function, error) {
+func NewFunction(name string, args, children interface{}) (*Function, error) {
 	chain := []*Function{}
 	if children != nil {
 		for _, child := range toIfaceSlice(children) {
@@ -38,12 +38,10 @@ func NewFunction(name, args, children interface{}) (*Function, error) {
 	}
 	funcArgs := []*FunctionArg{}
 	if args != nil {
-		for _, arg := range toIfaceSlice(args) {
-			funcArgs = append(funcArgs, arg.([]*FunctionArg)...)
-		}
+		funcArgs = args.([]*FunctionArg)
 	}
 	return &Function{
-		Name:     name.(string),
+		Name:     name,
 		Args:     funcArgs,
 		Children: chain,
 	}, nil

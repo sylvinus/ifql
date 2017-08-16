@@ -7,8 +7,8 @@ func toIfaceSlice(v interface{}) []interface{} {
 	return v.([]interface{})
 }
 
-func NewAST(ifql string) (*Function, error) {
-	f, err := Parse("", []byte(ifql))
+func NewAST(ifql string, opts ...Option) (*Function, error) {
+	f, err := Parse("", []byte(ifql), opts...)
 	if err != nil {
 		return nil, err
 	}
