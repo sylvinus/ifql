@@ -1,0 +1,414 @@
+{
+package promql
+
+//go:generate pigeon -o promql.go promql.peg
+
+// validateUnicodeEscape checks that the provided escape sequence is a
+// valid Unicode escape sequence.
+func validateUnicodeEscape(escape, errMsg string) (interface{}, error) {
+	r, _, _, err := strconv.UnquoteChar("\\"+escape, '"')
+	if err != nil {
+		return nil, errors.New(errMsg)
+	}
+	if 0xD800 <= r && r <= 0xDFFF {
+		return nil, errors.New(errMsg)
+	}
+	return nil, nil
+}
+
+var unicodeClasses = map[string]bool{
+	"ASCII_Hex_Digit": true,
+	"Arabic":          true,
+	"Armenian":        true,
+	"Avestan":         true,
+	"Balinese":        true,
+	"Bamum":           true,
+	"Bassa_Vah":       true,
+	"Batak":           true,
+	"Bengali":         true,
+	"Bidi_Control":    true,
+	"Bopomofo":        true,
+	"Brahmi":          true,
+	"Braille":         true,
+	"Buginese":        true,
+	"Buhid":           true,
+	"C":               true,
+	"Canadian_Aboriginal":    true,
+	"Carian":                 true,
+	"Caucasian_Albanian":     true,
+	"Cc":                     true,
+	"Cf":                     true,
+	"Chakma":                 true,
+	"Cham":                   true,
+	"Cherokee":               true,
+	"Co":                     true,
+	"Common":                 true,
+	"Coptic":                 true,
+	"Cs":                     true,
+	"Cuneiform":              true,
+	"Cypriot":                true,
+	"Cyrillic":               true,
+	"Dash":                   true,
+	"Deprecated":             true,
+	"Deseret":                true,
+	"Devanagari":             true,
+	"Diacritic":              true,
+	"Duployan":               true,
+	"Egyptian_Hieroglyphs":   true,
+	"Elbasan":                true,
+	"Ethiopic":               true,
+	"Extender":               true,
+	"Georgian":               true,
+	"Glagolitic":             true,
+	"Gothic":                 true,
+	"Grantha":                true,
+	"Greek":                  true,
+	"Gujarati":               true,
+	"Gurmukhi":               true,
+	"Han":                    true,
+	"Hangul":                 true,
+	"Hanunoo":                true,
+	"Hebrew":                 true,
+	"Hex_Digit":              true,
+	"Hiragana":               true,
+	"Hyphen":                 true,
+	"IDS_Binary_Operator":    true,
+	"IDS_Trinary_Operator":   true,
+	"Ideographic":            true,
+	"Imperial_Aramaic":       true,
+	"Inherited":              true,
+	"Inscriptional_Pahlavi":  true,
+	"Inscriptional_Parthian": true,
+	"Javanese":               true,
+	"Join_Control":           true,
+	"Kaithi":                 true,
+	"Kannada":                true,
+	"Katakana":               true,
+	"Kayah_Li":               true,
+	"Kharoshthi":             true,
+	"Khmer":                  true,
+	"Khojki":                 true,
+	"Khudawadi":              true,
+	"L":                      true,
+	"Lao":                    true,
+	"Latin":                  true,
+	"Lepcha":                 true,
+	"Limbu":                  true,
+	"Linear_A":               true,
+	"Linear_B":               true,
+	"Lisu":                   true,
+	"Ll":                     true,
+	"Lm":                     true,
+	"Lo":                     true,
+	"Logical_Order_Exception": true,
+	"Lt":                   true,
+	"Lu":                   true,
+	"Lycian":               true,
+	"Lydian":               true,
+	"M":                    true,
+	"Mahajani":             true,
+	"Malayalam":            true,
+	"Mandaic":              true,
+	"Manichaean":           true,
+	"Mc":                   true,
+	"Me":                   true,
+	"Meetei_Mayek":         true,
+	"Mende_Kikakui":        true,
+	"Meroitic_Cursive":     true,
+	"Meroitic_Hieroglyphs": true,
+	"Miao":                 true,
+	"Mn":                   true,
+	"Modi":                 true,
+	"Mongolian":            true,
+	"Mro":                  true,
+	"Myanmar":              true,
+	"N":                    true,
+	"Nabataean":            true,
+	"Nd":                   true,
+	"New_Tai_Lue":          true,
+	"Nko":                  true,
+	"Nl":                   true,
+	"No":                   true,
+	"Noncharacter_Code_Point":            true,
+	"Ogham":                              true,
+	"Ol_Chiki":                           true,
+	"Old_Italic":                         true,
+	"Old_North_Arabian":                  true,
+	"Old_Permic":                         true,
+	"Old_Persian":                        true,
+	"Old_South_Arabian":                  true,
+	"Old_Turkic":                         true,
+	"Oriya":                              true,
+	"Osmanya":                            true,
+	"Other_Alphabetic":                   true,
+	"Other_Default_Ignorable_Code_Point": true,
+	"Other_Grapheme_Extend":              true,
+	"Other_ID_Continue":                  true,
+	"Other_ID_Start":                     true,
+	"Other_Lowercase":                    true,
+	"Other_Math":                         true,
+	"Other_Uppercase":                    true,
+	"P":                                  true,
+	"Pahawh_Hmong":                       true,
+	"Palmyrene":                          true,
+	"Pattern_Syntax":                     true,
+	"Pattern_White_Space":                true,
+	"Pau_Cin_Hau":                        true,
+	"Pc":                                 true,
+	"Pd":                                 true,
+	"Pe":                                 true,
+	"Pf":                                 true,
+	"Phags_Pa":                           true,
+	"Phoenician":                         true,
+	"Pi":                                 true,
+	"Po":                                 true,
+	"Ps":                                 true,
+	"Psalter_Pahlavi":                    true,
+	"Quotation_Mark":                     true,
+	"Radical":                            true,
+	"Rejang":                             true,
+	"Runic":                              true,
+	"S":                                  true,
+	"STerm":                              true,
+	"Samaritan":                          true,
+	"Saurashtra":                         true,
+	"Sc":                                 true,
+	"Sharada":                            true,
+	"Shavian":                            true,
+	"Siddham":                            true,
+	"Sinhala":                            true,
+	"Sk":                                 true,
+	"Sm":                                 true,
+	"So":                                 true,
+	"Soft_Dotted":                        true,
+	"Sora_Sompeng":                       true,
+	"Sundanese":                          true,
+	"Syloti_Nagri":                       true,
+	"Syriac":                             true,
+	"Tagalog":                            true,
+	"Tagbanwa":                           true,
+	"Tai_Le":                             true,
+	"Tai_Tham":                           true,
+	"Tai_Viet":                           true,
+	"Takri":                              true,
+	"Tamil":                              true,
+	"Telugu":                             true,
+	"Terminal_Punctuation":               true,
+	"Thaana":                             true,
+	"Thai":                               true,
+	"Tibetan":                            true,
+	"Tifinagh":                           true,
+	"Tirhuta":                            true,
+	"Ugaritic":                           true,
+	"Unified_Ideograph":                  true,
+	"Vai":                                true,
+	"Variation_Selector":                 true,
+	"Warang_Citi":                        true,
+	"White_Space":                        true,
+	"Yi":                                 true,
+	"Z":                                  true,
+	"Zl":                                 true,
+	"Zp":                                 true,
+	"Zs":                                 true,
+}
+
+var reservedWords = map[string]bool{}
+
+}
+
+Grammar =  ( Comment / VectorSelector ) EOF {
+    return string(c.text), nil
+}
+
+SourceChar = .
+
+Comment = "#" ( !EOL SourceChar )*
+
+Identifier = ident:IdentifierName {
+    i := string(c.text)
+    if reservedWords[i] {
+        return nil, errors.New("identifier is a reserved word")
+    }
+    return ident, nil
+}
+
+IdentifierName = IdentifierStart IdentifierPart* {
+    return string(c.text), nil
+}
+IdentifierStart = [\pL_]
+IdentifierPart = IdentifierStart / [\p{Nd}]
+
+StringLiteral = ( '"' DoubleStringChar* '"' / "'" SingleStringChar "'" / '`' RawStringChar* '`' ) {
+    return string(c.text), nil
+} / ( ( '"' DoubleStringChar* ( EOL / EOF ) ) / ( "'" SingleStringChar? ( EOL / EOF ) ) / '`' RawStringChar* EOF ) {
+    return nil, errors.New("string literal not terminated")
+}
+
+DoubleStringChar = !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
+SingleStringChar = !( "'" / "\\" / EOL ) SourceChar / "\\" SingleStringEscape
+RawStringChar = !'`' SourceChar
+
+DoubleStringEscape = ( '"' / CommonEscapeSequence )
+    / ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid escape character")
+}
+SingleStringEscape = ( "'" / CommonEscapeSequence )
+    / ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid escape character")
+}
+
+CommonEscapeSequence = SingleCharEscape / OctalEscape / HexEscape / LongUnicodeEscape / ShortUnicodeEscape
+SingleCharEscape = 'a' / 'b' / 'n' / 'f' / 'r' / 't' / 'v' / '\\'
+OctalEscape = OctalDigit OctalDigit OctalDigit
+    / OctalDigit ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid octal escape")
+}
+HexEscape = 'x' HexDigit HexDigit
+    / 'x' ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid hexadecimal escape")
+}
+LongUnicodeEscape = 
+    'U' HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit {
+        return validateUnicodeEscape(string(c.text), "invalid Unicode escape")
+    }
+    / 'U' ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid Unicode escape")
+}
+ShortUnicodeEscape = 
+    'u' HexDigit HexDigit HexDigit HexDigit {
+        return validateUnicodeEscape(string(c.text), "invalid Unicode escape")
+    }
+    / 'u' ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid Unicode escape")
+}
+
+OctalDigit = [0-7]
+DecimalDigit = [0-9]
+HexDigit = [0-9a-f]i
+
+CharClassMatcher = '[' ( ClassCharRange / ClassChar / "\\" UnicodeClassEscape )* ']' 'i'? {
+    return string(c.text), nil
+} / '[' ( !( EOL ) SourceChar )* ( EOL / EOF ) {
+    return nil, errors.New("character class not terminated")
+}
+
+ClassCharRange = ClassChar '-' ClassChar
+ClassChar = !( "]" / "\\" / EOL ) SourceChar / "\\" CharClassEscape
+CharClassEscape = ( ']' / CommonEscapeSequence )
+    / !'p' ( SourceChar / EOL / EOF ) {
+    return nil, errors.New("invalid escape character")
+}
+
+UnicodeClassEscape = 'p' ( 
+      SingleCharUnicodeClass
+    / !'{' ( SourceChar / EOL / EOF ) { return nil, errors.New("invalid Unicode class escape") }
+    / '{' ident:IdentifierName '}' {
+        if !unicodeClasses[ident.(string)] {
+            return nil, errors.New("invalid Unicode class escape")
+        }
+        return nil, nil
+    }
+    / '{' IdentifierName ( ']' / EOL / EOF ) {
+        return nil, errors.New("Unicode class not terminated")
+    }
+)
+
+SingleCharUnicodeClass = [LMNCPZS]
+
+
+Number = '-'? Integer ( '.' Digit+ )? {
+    return strconv.ParseFloat(string(c.text), 64)
+}
+
+Integer = '0' / NonZeroDigit Digit* {
+    return strconv.ParseInt(string(c.text), 10, 64)
+}
+
+NonZeroDigit = [1-9]
+Digit = [0-9]
+
+CodeBlock = '{' Code '}' {
+    return string(c.text), nil
+} / '{' Code EOF {
+    return nil, errors.New("code block not terminated")
+}
+
+NanoSecondUnits = "ns"{
+    // Prometheus doesn't support nanoseconds, but, influx does
+    return time.Nanosecond, nil
+}
+
+MicroSecondUnits = ("us" / "µs" / "μs") {
+    // Prometheus doesn't support nanoseconds, but, influx does
+    return time.Microsecond, nil
+}
+
+MilliSecondUnits = "ms" {
+    // Prometheus doesn't support nanoseconds, but, influx does
+    return time.Millisecond, nil
+}
+
+SecondUnits = "s" {
+    return time.Second, nil
+}
+
+MinuteUnits = "m" {
+    return time.Minute, nil
+}
+
+HourUnits = "h" {
+    return time.Hour, nil
+}
+
+DayUnits = "d" {
+    // Prometheus always assumes exactly 24 hours in a day
+    // https://github.com/prometheus/common/blob/61f87aac8082fa8c3c5655c7608d7478d46ac2ad/model/time.go#L180
+    return time.Hour * 24, nil
+}
+
+WeekUnits = "w" {
+    // Prometheus always assumes exactly 7 days in a week
+    // https://github.com/prometheus/common/blob/61f87aac8082fa8c3c5655c7608d7478d46ac2ad/model/time.go#L180
+    return time.Hour * 24 * 7, nil
+}
+
+YearUnits = "y" {
+    // Prometheus always assumes 365 days
+    // https://github.com/prometheus/common/blob/61f87aac8082fa8c3c5655c7608d7478d46ac2ad/model/time.go#L180
+    return time.Hour * 24 * 365, nil
+}
+
+DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondUnits / MinuteUnits / HourUnits / DayUnits / WeekUnits / YearUnits)
+
+Duration = dur:Integer units:DurationUnits {
+    nanos := time.Duration(dur.(int64))
+    conversion := units.(time.Duration)
+    return time.Duration(nanos) * conversion, nil
+}
+
+Code = ( ( ![{}] LabelMatches )+ / '{' Code '}' )*
+
+Operators = "-" / "+" / "*" / "%" / "/" / "==" / "!=" / "<=" / "<" / ">=" / ">" / "=~" / "!~" / "^" / "="
+LabelOperators  = "!=" / "=~" / "!~" / "="
+
+LabelMatch = label:Identifier __ op:LabelOperators __ match:( StringLiteral / Number )
+LabelMatches = LabelMatch __ ( "," __ LabelMatch)*
+
+VectorSelector = metric:Identifier __  CodeBlock? __ Range? __ Offset?
+
+Range = "[" __ dur:Duration __ "]" {
+    return dur, nil
+}
+
+Offset = "offset"i __ dur:Duration {
+    return dur, nil
+}
+
+__ = ( Whitespace / EOL / Comment )*
+_ = Whitespace*
+
+Whitespace = [ \t\r]
+EOL = '\n'
+EOS = __ ';' / _ SingleLineComment? EOL / __ EOF
+
+EOF = !.
