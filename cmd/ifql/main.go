@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/promql"
+	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
@@ -52,7 +54,17 @@ func main() {
 	//   ]
 	// }`
 
-	results, err := doQuery(`select(database:"mydb").where(exp:{"_measurement" = "m0"}).range(start:-170h).sum()`)
+	query := `select(database:"mydb").where(exp:{"_measurement" = "m0"}).range(start:-170h).sum()`
+	qSpec, err := ifqlSpec(query)
+	/*
+		query := `sum(node_cpu{_measurement="m0"}[170h])`
+		qSpec, err := promqlSpec(queryStr)
+	*/
+	if err != nil {
+		fmt.Println("E!", err)
+		os.Exit(1)
+	}
+	results, err := doQuery(qSpec)
 	if err != nil {
 		fmt.Println("E!", err)
 		os.Exit(1)
@@ -63,9 +75,18 @@ func main() {
 		rows, _ := r.RowSlice(0)
 		fmt.Println(rows)
 	}
+
 }
 
-func doQuery(queryStr string) ([]execute.DataFrame, error) {
+func ifqlSpec(query string) (*query.QuerySpec, error) {
+	return ifql.NewQuery(query)
+}
+
+func promqlSpec(query string) (*query.QuerySpec, error) {
+	return promql.Build(query)
+}
+
+func doQuery(qSpec *query.QuerySpec) ([]execute.DataFrame, error) {
 	// var qSpec query.QuerySpec
 	// // TODO parse query
 	// //qSpec = parser.Parse(q)
@@ -73,11 +94,6 @@ func doQuery(queryStr string) ([]execute.DataFrame, error) {
 	// if err != nil {
 	// 	return nil, err
 	// }
-	qSpec, err := ifql.NewQuery(queryStr)
-	if err != nil {
-		return nil, err
-	}
-
 	aplanner := plan.NewAbstractPlanner()
 	ap, err := aplanner.Plan(qSpec)
 	if err != nil {

@@ -312,6 +312,28 @@ func TestParsePromQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "sum over a range",
+			promql: `sum(node_cpu{_measurement="m0"}[170h])`,
+			want: &AggregateExpr{
+				Op: &Operator{
+					Kind: SumKind,
+				},
+				Selector: &Selector{
+					Name:  "node_cpu",
+					Range: 170 * time.Hour,
+					LabelMatchers: []*LabelMatcher{
+						{
+							Name: "_measurement",
+							Kind: Equal,
+							Value: &StringLiteral{
+								String: "m0",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -504,6 +526,93 @@ func TestBuild(t *testing.T) {
 					{
 						Parent: query.OperationID("range"),
 						Child:  query.OperationID("where"),
+					},
+				},
+			},
+		},
+
+		{
+			name:   "sum over a range",
+			promql: `sum(node_cpu{_measurement="m0"}[170h])`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID:   query.OperationID("select"),
+						Spec: &query.SelectOpSpec{Database: "prometheus"},
+					},
+					{
+						ID: query.OperationID("range"),
+						Spec: &query.RangeOpSpec{
+							Start: query.Time{Relative: -170 * time.Hour},
+						},
+					},
+					{
+						ID: "where",
+						Spec: &query.WhereOpSpec{
+							Exp: &query.WhereExpressionSpec{
+								Predicate: &storage.Predicate{
+									Root: &storage.Node{
+										NodeType: storage.NodeTypeGroupExpression,
+										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
+										Children: []*storage.Node{
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "metric",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_StringValue{
+															StringValue: "node_cpu",
+														},
+													},
+												},
+											},
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "_measurement",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_StringValue{
+															StringValue: "m0",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: query.OperationID("sum"), Spec: &query.SumOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{
+						Parent: query.OperationID("select"),
+						Child:  query.OperationID("range"),
+					},
+					{
+						Parent: query.OperationID("range"),
+						Child:  query.OperationID("where"),
+					},
+					{
+						Parent: query.OperationID("where"),
+						Child:  query.OperationID("sum"),
 					},
 				},
 			},
