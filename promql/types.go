@@ -220,7 +220,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 						&storage.Node{
 							NodeType: storage.NodeTypeRef,
 							Value: &storage.Node_RefValue{
-								RefValue: "metric",
+								RefValue: "_metric",
 							},
 						},
 						&storage.Node{

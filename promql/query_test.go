@@ -382,7 +382,7 @@ func TestBuild(t *testing.T) {
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
 														Value: &storage.Node_RefValue{
-															RefValue: "metric",
+															RefValue: "_metric",
 														},
 													},
 													&storage.Node{
@@ -482,7 +482,7 @@ func TestBuild(t *testing.T) {
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
 														Value: &storage.Node_RefValue{
-															RefValue: "metric",
+															RefValue: "_metric",
 														},
 													},
 													&storage.Node{
@@ -562,7 +562,7 @@ func TestBuild(t *testing.T) {
 													&storage.Node{
 														NodeType: storage.NodeTypeRef,
 														Value: &storage.Node_RefValue{
-															RefValue: "metric",
+															RefValue: "_metric",
 														},
 													},
 													&storage.Node{
