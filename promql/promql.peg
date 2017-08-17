@@ -7,13 +7,15 @@ var reservedWords = map[string]bool{}
 
 }
 
-Grammar =  ( Comment / AggregateExpression / VectorSelector ) EOF {
-    return string(c.text), nil
+Grammar =  grammar:( Comment / AggregateExpression / VectorSelector ) EOF {
+    return grammar, nil
 }
 
 SourceChar = .
 
-Comment = "#" ( !EOL SourceChar )*
+Comment = "#" ( !EOL SourceChar )* {
+    return &Comment{string(c.text)}, nil
+}
 
 Identifier = ident:IdentifierName {
     i := string(c.text)
@@ -122,9 +124,9 @@ Integer = '0' / NonZeroDigit Digit* {
 NonZeroDigit = [1-9]
 Digit = [0-9]
 
-CodeBlock = '{' Code '}' {
-    return string(c.text), nil
-} / '{' Code EOF {
+LabelBlock = '{' block:LabelMatches '}' {
+    return block, nil
+} / '{' LabelMatches EOF {
     return nil, errors.New("code block not terminated")
 }
 
@@ -181,8 +183,6 @@ Duration = dur:Integer units:DurationUnits {
     return time.Duration(nanos) * conversion, nil
 }
 
-Code = ( ( ![{}] LabelMatches )+ / '{' Code '}' )*
-
 Operators = "-" / "+" / "*" / "%" / "/" / "==" / "!=" / "<=" / "<" / ">=" / ">" / "=~" / "!~" / "^" / "="
 
 LabelOperators  = "!=" {
@@ -207,9 +207,17 @@ LabelMatchesRest =  "," __ match:LabelMatch {
     return match, nil
 }
 
-LabelList = ("(" __ ")") / ("(" __ label:Label __ rest:( "," __ Label )* __ ")")
+LabelList = ("(" __ ")") {
+    return nil, nil
+} / ("(" __ label:Label __ rest:LabelListRest* __ ")" {
+    return NewIdentifierList(label.(*Identifier), rest)
+})
 
-VectorSelector = metric:Identifier __  block:CodeBlock? __ rng:Range? __ offset:Offset? {
+LabelListRest =  "," __ label:Label {
+    return label, nil
+}
+
+VectorSelector = metric:Identifier __  block:LabelBlock? __ rng:Range? __ offset:Offset? {
     return NewSelector(metric.(*Identifier), block, rng, offset)
 }
 
@@ -221,25 +229,74 @@ Offset = "offset"i __ dur:Duration {
     return dur, nil
 }
 
-BinaryAggregateOperators = "count_values"i / "topk"i / "bottomk"i / "quantile"i
-UnaryAggregateOperators = "sum"i / "min"i / "max"i / "avg"i / "stddev"i / "stdvar"i / "count"i
-AggregateOperators = BinaryAggregateOperators / UnaryAggregateOperators
+CountValueOperator = "count_values"i {
+    return &Operator{
+        Kind: CountValuesKind,
+    }, nil
+}
+
+BinaryAggregateOperators =  op:("topk"i / "bottomk"i / "quantile"i) {
+    return &Operator{
+        Kind: ToOperatorKind(string(op.([]byte))),
+    }, nil
+}
+
+UnaryAggregateOperators = op:("sum"i / "min"i / "max"i / "avg"i / "stddev"i / "stdvar"i / "count"i) {
+    return &Operator{
+        Kind: ToOperatorKind(string(op.([]byte))),
+    }, nil
+}
+
+AggregateOperators = CountValueOperator / BinaryAggregateOperators / UnaryAggregateOperators
 
 AggregateBy = "by"i __ labels:LabelList __ keep:"keep_common"i? {
-    // TODO: handle keep_common
-    return labels, nil
+    return &Aggregate{
+        By: true,
+        KeepCommon: keep != nil,
+        Labels: labels.([]*Identifier),
+    }, nil
 }
 
 AggregateWithout = "without"i __ labels:LabelList {
-    return labels, nil
+    return &Aggregate{
+        Without: true,
+        Labels: labels.([]*Identifier),
+    }, nil
 }
 
 AggregateGroup = AggregateBy / AggregateWithout
 
-AggregateExpression = op:AggregateOperators __ "(" __ vector:VectorSelector __ ")" __ group:AggregateGroup? {
-    return vector, nil
-} / op:AggregateOperators __ group:AggregateGroup? __ "(" __ vector:VectorSelector __ ")" {
-    return vector, nil
+AggregateExpression =
+op:CountValueOperator  __ "(" __ param:StringLiteral __ "," __ vector:VectorSelector __ ")" __ group:AggregateGroup? {
+    oper := op.(*Operator)
+    oper.Arg = param.(*StringLiteral)
+    return NewAggregateExpr(oper, vector.(*Selector), group)
+}
+/
+op:CountValueOperator  __ group:AggregateGroup? __ "(" __ param:StringLiteral __ "," __ vector:VectorSelector __ ")" {
+    oper := op.(*Operator)
+    oper.Arg = param.(*StringLiteral)
+    return NewAggregateExpr(oper, vector.(*Selector), group)
+}
+/
+op:BinaryAggregateOperators  __ "(" __  param:Number __ "," __ vector:VectorSelector __ ")" __ group:AggregateGroup? {
+    oper := op.(*Operator)
+    oper.Arg = param.(*Number)
+    return NewAggregateExpr(oper, vector.(*Selector), group)
+}
+/
+op:BinaryAggregateOperators  __ group:AggregateGroup? __ "(" __  param:Number __ "," __ vector:VectorSelector __ ")" {
+    oper := op.(*Operator)
+    oper.Arg = param.(*Number)
+    return NewAggregateExpr(oper, vector.(*Selector), group)
+}
+/
+op:UnaryAggregateOperators  __ "(" __ vector:VectorSelector __ ")" __ group:AggregateGroup? {
+    return NewAggregateExpr(op.(*Operator), vector.(*Selector), group)
+}
+/
+op:UnaryAggregateOperators  __ group:AggregateGroup? __ "(" __ vector:VectorSelector __ ")" {
+    return NewAggregateExpr(op.(*Operator), vector.(*Selector), group)
 }
 
 __ = ( Whitespace / EOL / Comment )*

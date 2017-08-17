@@ -1,15 +1,27 @@
 package promql
 
 import (
-	"log"
+	"fmt"
+
+	"github.com/influxdata/ifql/query"
 )
 
-func NewQuery(promql string, opts ...Option) (string, error) {
+func ParsePromQL(promql string, opts ...Option) (interface{}, error) {
 	f, err := Parse("", []byte(promql), opts...)
 	if err != nil {
 		return "", err
 	}
-	log.Printf("%#+v", f)
+	return f, nil
+}
 
-	return f.(string), nil
+func Build(promql string, opts ...Option) (*query.QuerySpec, error) {
+	parsed, err := ParsePromQL(promql, opts...)
+	if err != nil {
+		return nil, err
+	}
+	builder, ok := parsed.(QueryBuilder)
+	if !ok {
+		return nil, fmt.Errorf("Unable to build as %t is not a QueryBuilder", parsed)
+	}
+	return builder.QuerySpec()
 }
