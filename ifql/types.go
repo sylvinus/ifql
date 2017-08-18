@@ -2,8 +2,6 @@ package ifql
 
 import (
 	"time"
-
-	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 type Arg interface {
@@ -23,6 +21,7 @@ const (
 	NumKinds int = iota
 )
 
+// TODO: Convert to QuerySpec
 type Function struct {
 	Name     string         `json:"name,omitempty"`
 	Args     []*FunctionArg `json:"args,omitempty"`
@@ -111,7 +110,7 @@ func (n *Number) Value() interface{} {
 }
 
 type WhereExpr struct {
-	Node *storage.Node `json:"node,omitempty"`
+	Expr *BinaryExpression `json:"expr,omitempty"`
 }
 
 func (w *WhereExpr) Type() ArgKind {
@@ -119,7 +118,7 @@ func (w *WhereExpr) Type() ArgKind {
 }
 
 func (w *WhereExpr) Value() interface{} {
-	return w.Node
+	return w.Expr
 }
 
 // Field represents a value associated with a series
@@ -133,3 +132,50 @@ func (f *Field) Type() ArgKind {
 func (f *Field) Value() interface{} {
 	return "_field"
 }
+
+type BinaryExpression struct {
+	Left     interface{} `json:"left,omitempty"`
+	Operator interface{} `json:"operator,omitempty"`
+	Right    interface{} `json:"right,omitempty"`
+}
+
+func NewBinaryExpression(head, tails interface{}) (interface{}, error) {
+	res := head
+	for _, tail := range toIfaceSlice(tails) {
+		right := toIfaceSlice(tail)
+		res = &BinaryExpression{
+			Left:     res,
+			Right:    right[3],
+			Operator: right[1],
+		}
+	}
+	return res, nil
+}
+
+/*
+func (b *BinaryExpression) String() string {
+	res := ""
+	switch l := b.Left.(type) {
+	case *BinaryExpression:
+		res += "(" + l.String() + ")"
+	case *StringLiteral:
+		res += `"` + l.String + `"`
+	case *Number:
+		res += fmt.Sprintf("%f", l.Val)
+	case *Field:
+		res += "$"
+	}
+	res += " " + b.Operator.(string) + " "
+
+	switch r := b.Right.(type) {
+	case *BinaryExpression:
+		res += "(" + r.String() + ")"
+	case *StringLiteral:
+		res += `"` + r.String + `"`
+	case *Number:
+		res += fmt.Sprintf("%f", r.Val)
+	case *Field:
+		res += "$"
+	}
+	return res
+}*/

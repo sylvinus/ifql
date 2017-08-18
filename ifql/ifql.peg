@@ -3,7 +3,14 @@ package ifql
 
 //go:generate pigeon -o ifql.go ifql.peg
 }
+// TODO: Change the Literal duration, etc to be a type like this:
+/*
+type Primary struct {
+    Type LiteralType
+    Value interface{}
+}
 
+*/
 Grammar = __ function:Function EOF {
     return function.(*Function), nil
 }
@@ -37,28 +44,37 @@ FunctionArg = name:String __  ":" __ arg:FunctionArgValues {
 FunctionArgValues =  WhereExpr / StringLiteral / Duration / DateTime / Number
 
 WhereExpr = "{" __ expr:Expr __  "}" {
-    return &WhereExpr{expr.(*storage.Node)}, nil
+    return &WhereExpr{Expr: expr.(*BinaryExpression)}, nil
 }
 
-Expr = lhs:Primary __ rhs:BinaryExpr+ {
-    return NewExpr(lhs, rhs)
-}
+// + -
+// <= < >= > startsWith IN NOT EMPTY EMPTY
+// = != 
+// and or 
+// Lowest to Highest Priority.
+// Highest Priority includes the valid primary
+// primary contains the Lowest Priority
+Expr = Logical
 
-BinaryExpr = op:Operators __ rhs:Primary {
-    return NewRHS(op, rhs)
-}
-Primary = '(' __ expr:Expr __ ')' {
-    return expr.(*storage.Node), nil
-} / StringLiteral / Duration / DateTime / Number / Field
+LogicalOperators =  ("or"i / "and"i) { return strings.ToLower(string(c.text)), nil }
+Logical = head:Equality tail:( __  LogicalOperators __  Equality )* { return NewBinaryExpression(head, tail) }
 
-// TODO :  Break the operators apart into precedence
-Operators = (ComparisonOperators / LogicalOperators)
-ComparisonOperators =  ("<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith" / "IN"i / "NOT EMPTY"i / "EMPTY"i) {
-    return NewComparisonOperator(c.text)
-}
-LogicalOperators =  ("or"i / "and"i) {
-    return NewLogicalOperator(c.text)
-}
+EqualityOperators =  ("=" / "!=" ) { return string(c.text), nil }
+Equality = head:Relational tail:( __ EqualityOperators __ Relational )* { return NewBinaryExpression(head, tail) }
+
+RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) { return strings.ToLower(string(c.text)), nil }
+Relational = head:Additive tail:( __ RelationalOperators __ Additive )* { return NewBinaryExpression(head, tail) }
+
+AdditiveOperator = ("+" / "-") { return string(c.text), nil }
+Additive = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { return NewBinaryExpression(head, tail) }
+
+MultiplicativeOperator = ("*" / "/")  { return string(c.text), nil }
+Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* { return NewBinaryExpression(head, tail) }
+
+Primary = '(' __ expr:Logical __ ')' {
+        return expr.(*BinaryExpression), nil
+    }
+    / StringLiteral / Duration / DateTime / Number / Field
 
 DateFullYear = Digit Digit Digit Digit
 

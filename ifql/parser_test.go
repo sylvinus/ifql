@@ -36,6 +36,65 @@ func TestNewAST(t *testing.T) {
 				Children: []*Function{},
 			},
 		},
+		{
+			name: "select with where with no parens",
+			raw:  `select(database:"telegraf").where(exp:{"other"="mem" and "this"="that" or "these"!="those"})`,
+			want: &Function{
+				Name: "select",
+				Args: []*FunctionArg{
+					&FunctionArg{
+						Name: "database",
+						Arg: &StringLiteral{
+							String: "telegraf",
+						},
+					},
+				},
+				Children: []*Function{
+					&Function{
+						Name: "where",
+						Args: []*FunctionArg{
+							&FunctionArg{
+								Name: "exp",
+								Arg: &WhereExpr{
+									Expr: &BinaryExpression{
+										Left: &BinaryExpression{
+											Left: &BinaryExpression{
+												Left: &StringLiteral{
+													String: "other",
+												},
+												Operator: "=",
+												Right: &StringLiteral{
+													String: "mem",
+												},
+											},
+											Operator: "and",
+											Right: &BinaryExpression{
+												Left: &StringLiteral{
+													String: "this",
+												}, Operator: "=",
+												Right: &StringLiteral{
+													String: "that",
+												},
+											},
+										},
+										Operator: "or",
+										Right: &BinaryExpression{
+											Left: &StringLiteral{
+												String: "these",
+											},
+											Operator: "!=",
+											Right: &StringLiteral{
+												String: "those"},
+										},
+									},
+								},
+							},
+						},
+						Children: []*Function{},
+					},
+				},
+			},
+		},
 		/*{
 			name: "select with range",
 			raw:  `select(database:"telegraf").range(start:-1h, end:10m)`,
