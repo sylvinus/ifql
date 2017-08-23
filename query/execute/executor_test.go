@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -39,64 +40,50 @@ func TestExecutor_Execute(t *testing.T) {
 			}},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
-				Operations: map[plan.OperationID]*plan.Operation{
-					plan.OpIDFromQueryOpID("0"): {
-						ID: plan.OpIDFromQueryOpID("0"),
-						Spec: &plan.SelectOpSpec{
-							Database: "mydb",
-						},
-						Parents: nil,
-						Children: []plan.DatasetID{
-							plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")),
-						},
-					},
-					plan.OpIDFromQueryOpID("1"): {
-						ID: plan.OpIDFromQueryOpID("1"),
-						Spec: &plan.RangeOpSpec{
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("select"): {
+						ID: plan.ProcedureIDFromOperationID("select"),
+						Spec: &plan.SelectProcedureSpec{
+							Database:  "mydb",
+							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -5},
 							},
 						},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")),
-						},
+						Parents: nil,
 						Children: []plan.DatasetID{
-							plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")),
+							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
 						},
 					},
-					plan.OpIDFromQueryOpID("2"): {
-						ID:   plan.OpIDFromQueryOpID("2"),
-						Spec: &plan.SumOpSpec{},
+					plan.ProcedureIDFromOperationID("sum"): {
+						ID:   plan.ProcedureIDFromOperationID("sum"),
+						Spec: &plan.SumProcedureSpec{},
 						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")),
+							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
 						},
 						Children: []plan.DatasetID{
-							plan.CreateDatasetID(plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")), plan.OpIDFromQueryOpID("2")),
+							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
 						},
 					},
 				},
 				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")): {
-						ID:     plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")),
-						Source: plan.OpIDFromQueryOpID("0"),
-					},
-					plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")): {
-						ID:     plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")),
-						Source: plan.OpIDFromQueryOpID("1"),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"): {
+						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
+						Source: plan.ProcedureIDFromOperationID("select"),
 						Bounds: plan.BoundsSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 						},
 					},
-					plan.CreateDatasetID(plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")), plan.OpIDFromQueryOpID("2")): {
-						ID:     plan.CreateDatasetID(plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")), plan.OpIDFromQueryOpID("2")),
-						Source: plan.OpIDFromQueryOpID("2"),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"): {
+						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
+						Source: plan.ProcedureIDFromOperationID("sum"),
 						Bounds: plan.BoundsSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 						},
 					},
 				},
 				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.CreateDatasetID(plan.CreateDatasetID(plan.InvalidDatasetID, plan.OpIDFromQueryOpID("0")), plan.OpIDFromQueryOpID("1")), plan.OpIDFromQueryOpID("2")),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
 				},
 			},
 			exp: []dataFrame{{
@@ -143,7 +130,7 @@ type storageReader struct {
 }
 
 func (s *storageReader) Close() {}
-func (s *storageReader) Read(string, execute.Time, execute.Time) (execute.DataFrame, bool) {
+func (s *storageReader) Read(string, *storage.Predicate, int64, bool, execute.Time, execute.Time) (execute.DataFrame, bool) {
 	idx := s.idx
 	if idx >= len(s.frames) {
 		return nil, false

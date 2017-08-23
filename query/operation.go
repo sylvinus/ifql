@@ -123,13 +123,13 @@ const (
 	MaxKind
 	TopKind
 	DifferenceKind
-	// NumberOfKinds is the of Kind values
-	NumberOfKinds int = iota
+	// NumberOfOperations is the of Kind values
+	NumberOfOperations int = iota
 )
 
-var kindToNames [NumberOfKinds]string
+var kindToNames [NumberOfOperations]string
 var namesToKind = make(map[string]OperationKind)
-var kindToGoType [NumberOfKinds]reflect.Type
+var kindToGoType [NumberOfOperations]reflect.Type
 
 var operationSpecType = reflect.TypeOf((*OperationSpec)(nil)).Elem()
 

@@ -43,7 +43,7 @@ type FrameIterator interface {
 
 type dataset struct {
 	parent FrameIterator
-	op     Operation
+	op     Process
 	window Window
 }
 
@@ -65,7 +65,7 @@ func (d *dataset) NextFrame() (DataFrame, bool) {
 
 type readDataset struct {
 	reader StorageReader
-	spec   *plan.SelectOpSpec
+	spec   *plan.SelectProcedureSpec
 	bounds Bounds
 }
 

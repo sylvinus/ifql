@@ -11,20 +11,21 @@ func (did DatasetID) String() string {
 	return uuid.UUID(did).String()
 }
 
-var InvalidDatasetID DatasetID
+var ZeroDatasetID DatasetID
 
 type Dataset struct {
-	ID     DatasetID
-	Bounds BoundsSpec
-	Window WindowSpec
-	Source OperationID
+	ID          DatasetID
+	Bounds      BoundsSpec
+	Window      WindowSpec
+	Source      ProcedureID
+	Destination ProcedureID
 }
 
-func (d *Dataset) MakeNarrowChild(oid OperationID) *Dataset {
+func (d *Dataset) MakeNarrowChild(pid ProcedureID, name string) *Dataset {
 	c := new(Dataset)
 	*c = *d
-	c.ID = CreateDatasetID(d.ID, oid)
-	c.Source = oid
+	c.ID = CreateDatasetID(pid, name)
+	c.Source = pid
 	return c
 }
 
