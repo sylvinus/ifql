@@ -52,9 +52,9 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 }
 
 func (es *executionState) createDataset(d *plan.Dataset) Dataset {
-	src := es.p.Operations[d.Source]
+	src := es.p.Procedures[d.Source]
 	if src.Spec.Kind() == plan.SelectKind {
-		spec := src.Spec.(*plan.SelectOpSpec)
+		spec := src.Spec.(*plan.SelectProcedureSpec)
 		return &readDataset{
 			reader: es.sr,
 			spec:   spec,
@@ -65,7 +65,7 @@ func (es *executionState) createDataset(d *plan.Dataset) Dataset {
 		}
 	}
 	ds := new(dataset)
-	ds.op = operationFromSpec(src.Spec, es.p.Now)
+	ds.op = processFromProcedureSpec(src.Spec, es.p.Now)
 	// TODO implement more than one parent
 	ds.parent = es.createDataset(es.p.Datasets[src.Parents[0]]).Frames()
 	return ds

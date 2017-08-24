@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/influxdata/ifql/query"
 	uuid "github.com/satori/go.uuid"
@@ -12,7 +13,7 @@ var NilUUID uuid.UUID
 var RootUUID = NilUUID
 
 type AbstractPlanSpec struct {
-	Operations []*Operation
+	Procedures []*Procedure
 	Datasets   []*Dataset
 }
 
@@ -23,7 +24,7 @@ type AbstractPlanner interface {
 type abstractPlanner struct {
 	plan            *AbstractPlanSpec
 	q               *query.QuerySpec
-	operationLookup map[OperationID]*Operation
+	procedureLookup map[ProcedureID]*Procedure
 	datasetLookup   map[DatasetID]*Dataset
 }
 
@@ -34,7 +35,7 @@ func NewAbstractPlanner() AbstractPlanner {
 func (p *abstractPlanner) Plan(q *query.QuerySpec) (*AbstractPlanSpec, error) {
 	p.q = q
 	p.plan = new(AbstractPlanSpec)
-	p.operationLookup = make(map[OperationID]*Operation)
+	p.procedureLookup = make(map[ProcedureID]*Procedure)
 	p.datasetLookup = make(map[DatasetID]*Dataset)
 	err := q.Walk(p.walkQuery)
 	if err != nil {
@@ -43,51 +44,52 @@ func (p *abstractPlanner) Plan(q *query.QuerySpec) (*AbstractPlanSpec, error) {
 	return p.plan, nil
 }
 
-func OpIDFromQueryOpID(id query.OperationID) OperationID {
-	return OperationID(uuid.NewV5(RootUUID, string(id)))
+func ProcedureIDFromOperationID(id query.OperationID) ProcedureID {
+	return ProcedureID(uuid.NewV5(RootUUID, string(id)))
 }
 
 func (p *abstractPlanner) walkQuery(o *query.Operation) error {
-	opSpec := p.createSpec(o.Spec.Kind())
-	if err := opSpec.SetSpec(o.Spec); err != nil {
+	spec := p.createSpec(o.Spec.Kind())
+	if err := spec.SetSpec(o.Spec); err != nil {
 		return err
 	}
 
-	op := &Operation{
-		ID:   OpIDFromQueryOpID(o.ID),
-		Spec: opSpec,
+	pr := &Procedure{
+		ID:   ProcedureIDFromOperationID(o.ID),
+		Spec: spec,
 	}
-	p.operationLookup[op.ID] = op
-	p.plan.Operations = append(p.plan.Operations, op)
+	p.procedureLookup[pr.ID] = pr
+	p.plan.Procedures = append(p.plan.Procedures, pr)
 
 	parents := p.q.Parents(o.ID)
-	switch spec := opSpec.(type) {
-	case NarrowOperationSpec:
-		p.doNarrow(parents, op, spec)
-	case WideOperationSpec:
-		p.doWide(op, spec)
+
+	switch spec := spec.(type) {
+	case NarrowProcedureSpec:
+		p.doNarrow(parents, pr, spec)
+	case WideProcedureSpec:
+		p.doWide(pr, spec)
 	default:
 		return fmt.Errorf("operation must be be either narrow or wide: %v", spec.Kind())
 	}
 	return nil
 }
 
-func (p *abstractPlanner) createSpec(qk query.OperationKind) OperationSpec {
-	k := queryOpToOpKind[qk]
+func (p *abstractPlanner) createSpec(qk query.OperationKind) ProcedureSpec {
+	k := opToProcedureKind[qk]
 	typ := kindToGoType[k]
-	return reflect.New(typ).Interface().(OperationSpec)
+	return reflect.New(typ).Interface().(ProcedureSpec)
 }
 
-func (p *abstractPlanner) doNarrow(parents []*query.Operation, o *Operation, spec NarrowOperationSpec) {
+func (p *abstractPlanner) doNarrow(parents []*query.Operation, o *Procedure, spec NarrowProcedureSpec) {
 	for _, parent := range parents {
-		parentOpID := OpIDFromQueryOpID(parent.ID)
-		parentOp := p.operationLookup[parentOpID]
+		parentOpID := ProcedureIDFromOperationID(parent.ID)
+		parentOp := p.procedureLookup[parentOpID]
 		parentDatasetIDs := parentOp.Children
 		childrenDatasets := make([]*Dataset, len(parentDatasetIDs))
 		childrenDatasetIDs := make([]DatasetID, len(parentDatasetIDs))
 		for i, pid := range parentDatasetIDs {
 			parentDataset := p.datasetLookup[pid]
-			childDataset := parentDataset.MakeNarrowChild(o.ID)
+			childDataset := parentDataset.MakeNarrowChild(o.ID, strconv.Itoa(i))
 			childDataset.Source = o.ID
 			spec.NewChild(childDataset)
 			childrenDatasets[i] = childDataset
@@ -100,18 +102,18 @@ func (p *abstractPlanner) doNarrow(parents []*query.Operation, o *Operation, spe
 	}
 }
 
-func CreateDatasetID(root DatasetID, oid OperationID) DatasetID {
-	return DatasetID(uuid.NewV5(uuid.UUID(root), oid.String()))
+func CreateDatasetID(pid ProcedureID, name string) DatasetID {
+	return DatasetID(uuid.NewV5(uuid.UUID(pid), name))
 }
 
-func (p *abstractPlanner) doWide(o *Operation, spec WideOperationSpec) {
+func (p *abstractPlanner) doWide(o *Procedure, spec WideProcedureSpec) {
 	children := spec.DetermineChildren()
 	childIDs := make([]DatasetID, len(children))
 
 	for i, c := range children {
 		// TODO figure out how the dataset ID hierarchy should work
 		// This currently can create duplicate IDs
-		c.ID = CreateDatasetID(InvalidDatasetID, o.ID)
+		c.ID = CreateDatasetID(o.ID, strconv.Itoa(i))
 		c.Source = o.ID
 		childIDs[i] = c.ID
 		p.datasetLookup[c.ID] = c

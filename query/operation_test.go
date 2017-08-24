@@ -310,7 +310,7 @@ func TestOperation_JSON(t *testing.T) {
 			},
 		},
 	}
-	if got, exp := len(testCases), query.NumberOfKinds; got != exp {
+	if got, exp := len(testCases), query.NumberOfOperations; got != exp {
 		t.Fatalf("unexpected number of test cases, have %d test cases, there are %d kinds", got, exp)
 	}
 	for name, tc := range testCases {
