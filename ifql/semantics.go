@@ -345,7 +345,7 @@ func comparisonNode(expr *ast.BinaryExpression) (*storage.Node, error) {
 	}
 
 	return &storage.Node{
-		NodeType: storage.NodeTypeBooleanExpression,
+		NodeType: storage.NodeTypeComparisonExpression,
 		Value:    &storage.Node_Comparison_{Comparison: op},
 		Children: []*storage.Node{lhs, rhs},
 	}, nil
@@ -381,9 +381,9 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 	case *ast.StringLiteral:
 		if isLeft {
 			return &storage.Node{
-				NodeType: storage.NodeTypeRef,
-				Value: &storage.Node_RefValue{
-					RefValue: lit.Value,
+				NodeType: storage.NodeTypeTagRef,
+				Value: &storage.Node_TagRefValue{
+					TagRefValue: lit.Value,
 				},
 			}, nil
 		}
@@ -410,9 +410,9 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 		}, nil
 	case *ast.FieldLiteral:
 		return &storage.Node{
-			NodeType: storage.NodeTypeRef,
-			Value: &storage.Node_RefValue{
-				RefValue: lit.Value,
+			NodeType: storage.NodeTypeTagRef,
+			Value: &storage.Node_TagRefValue{
+				TagRefValue: lit.Value,
 			},
 		}, nil
 	case *ast.DurationLiteral, *ast.DateTimeLiteral, *ast.BooleanLiteral:
@@ -441,7 +441,7 @@ func logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
 	}
 
 	return &storage.Node{
-		NodeType: storage.NodeTypeGroupExpression,
+		NodeType: storage.NodeTypeLogicalExpression,
 		Value:    value(expr.Operator),
 		Children: []*storage.Node{lhs, rhs},
 	}, nil

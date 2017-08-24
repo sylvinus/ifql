@@ -26,6 +26,7 @@ Below is a list of concepts within the executor.
 | Event time                   | The time the event actually occurred.                                                                                                                                     |
 | Processing time              | The time the event is processed. This time may be completely out of order with respect to its event time and the event time of other events with similar processing time. |
 | Watermarks                   | Watermarks communicate the lag between event time and processing time. Watermarks define a bound on the event time of data that has been observed.                        |
+| Horizon | Duration after the watermark of which data is simply dropped since it arrived to late. |
 | Triggers                     | Triggers communicate when data should be materialized.                                                                                                                    |
 | Accumulation                 | Accumulation defines how different results from events of the same window can be combined into a single result.                                                           |
 | Data Frame                   | An abstraction over bounded datasets. The dataset is resilient because its lineage is known and it can be recreated in the event of loss or corruption.                   |

@@ -69,7 +69,7 @@ func (p *abstractPlanner) walkQuery(o *query.Operation) error {
 	case WideProcedureSpec:
 		p.doWide(pr, spec)
 	default:
-		return fmt.Errorf("operation must be be either narrow or wide: %v", spec.Kind())
+		return fmt.Errorf("procedure must be be either narrow or wide: %v", spec.Kind())
 	}
 	return nil
 }

@@ -139,17 +139,17 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t1",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -161,13 +161,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t2",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t2",
 														},
 													},
 													&storage.Node{
@@ -235,21 +235,21 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalOr},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeGroupExpression,
+												NodeType: storage.NodeTypeLogicalExpression,
 												Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeBooleanExpression,
+														NodeType: storage.NodeTypeComparisonExpression,
 														Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 														Children: []*storage.Node{
 															&storage.Node{
-																NodeType: storage.NodeTypeRef,
-																Value: &storage.Node_RefValue{
-																	RefValue: "t1",
+																NodeType: storage.NodeTypeTagRef,
+																Value: &storage.Node_TagRefValue{
+																	TagRefValue: "t1",
 																},
 															},
 															&storage.Node{
@@ -261,13 +261,13 @@ func TestNewQuery(t *testing.T) {
 														},
 													},
 													&storage.Node{
-														NodeType: storage.NodeTypeBooleanExpression,
+														NodeType: storage.NodeTypeComparisonExpression,
 														Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 														Children: []*storage.Node{
 															&storage.Node{
-																NodeType: storage.NodeTypeRef,
-																Value: &storage.Node_RefValue{
-																	RefValue: "t2",
+																NodeType: storage.NodeTypeTagRef,
+																Value: &storage.Node_TagRefValue{
+																	TagRefValue: "t2",
 																},
 															},
 															&storage.Node{
@@ -281,13 +281,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t3",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t3",
 														},
 													},
 													&storage.Node{
@@ -351,17 +351,17 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t1",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -373,13 +373,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_field",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_field",
 														},
 													},
 													&storage.Node{
@@ -443,17 +443,17 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t1",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -465,13 +465,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_field",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_field",
 														},
 													},
 													&storage.Node{
@@ -535,17 +535,17 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t1",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -557,13 +557,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_field",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_field",
 														},
 													},
 													&storage.Node{
@@ -623,13 +623,13 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeBooleanExpression,
+										NodeType: storage.NodeTypeComparisonExpression,
 										Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeRef,
-												Value: &storage.Node_RefValue{
-													RefValue: "t1",
+												NodeType: storage.NodeTypeTagRef,
+												Value: &storage.Node_TagRefValue{
+													TagRefValue: "t1",
 												},
 											},
 											&storage.Node{
@@ -672,17 +672,17 @@ func TestNewQuery(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t1",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t1",
 														},
 													},
 													&storage.Node{
@@ -694,13 +694,13 @@ func TestNewQuery(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonNotRegex},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "t2",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "t2",
 														},
 													},
 													&storage.Node{

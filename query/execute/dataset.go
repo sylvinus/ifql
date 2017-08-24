@@ -2,84 +2,144 @@ package execute
 
 import (
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/plan"
 )
 
+type AccumulationMode int
+
+const (
+	DiscardingMode AccumulationMode = iota
+	AccumulatingMode
+	AccumulatingRetractingMode
+)
+
+type BlockKey string
+
 type Dataset interface {
-	Window() Window
-	Frames() FrameIterator
+	Node
+
+	// BlockBuilder will return the builder for the specified block.
+	// If no builder exists, one will be created.
+	BlockBuilder(meta BlockMetadata) BlockBuilder
+	ForEachBuilder(func(BlockKey, BlockBuilder))
+
+	TriggerBlock(key BlockKey)
+	ExpireBlock(key BlockKey)
+	RetractBlock(key BlockKey)
+
+	UpdateProcessingTime(t Time)
+	UpdateWatermark(mark Time)
+	Finish()
+
+	setTriggerSpec(t query.TriggerSpec)
 }
 
-type Window interface {
-	Every() query.Duration
-	Period() query.Duration
-	Round() query.Duration
-	Start() query.Time
-}
-
-type window struct {
-	every  query.Duration
-	period query.Duration
-	round  query.Duration
-	start  query.Time
-}
-
-func (w window) Every() query.Duration {
-	return w.every
-}
-func (w window) Period() query.Duration {
-	return w.period
-}
-func (w window) Round() query.Duration {
-	return w.round
-}
-func (w window) Start() query.Time {
-	return w.start
-}
-
-type FrameIterator interface {
-	NextFrame() (DataFrame, bool)
+func newDataset(accMode AccumulationMode) Dataset {
+	return &dataset{
+		accMode: accMode,
+		blocks:  make(map[BlockKey]blockState),
+	}
 }
 
 type dataset struct {
-	parent FrameIterator
-	op     Process
-	window Window
+	// Stateful triggers per stop time bound?
+	blocks  map[BlockKey]blockState
+	t       Transformation
+	accMode AccumulationMode
+
+	triggerSpec    query.TriggerSpec
+	watermark      Time
+	processingTime Time
 }
 
-func (d *dataset) Window() Window {
-	return d.window
+type blockState struct {
+	builder BlockBuilder
+	trigger Trigger
 }
 
-func (d *dataset) Frames() FrameIterator {
-	return d
+func (d *dataset) setTransformation(t Transformation) {
+	d.t = t
+}
+func (d *dataset) setTriggerSpec(ts query.TriggerSpec) {
+	d.triggerSpec = ts
 }
 
-func (d *dataset) NextFrame() (DataFrame, bool) {
-	src, ok := d.parent.NextFrame()
-	if !ok {
-		return nil, false
+func (d *dataset) UpdateWatermark(mark Time) {
+	d.watermark = mark
+	d.evalTriggers()
+	d.t.UpdateWatermark(mark)
+}
+
+func (d *dataset) UpdateProcessingTime(t Time) {
+	d.processingTime = t
+	d.evalTriggers()
+	d.t.UpdateProcessingTime(t)
+}
+
+func (d *dataset) evalTriggers() {
+	c := TriggerContext{
+		Watermark:             d.watermark,
+		CurrentProcessingTime: d.processingTime,
 	}
-	return d.op.Do(src)
+	for bk, b := range d.blocks {
+		c.Builder = b.builder
+
+		if b.trigger.Triggered(c) {
+			d.TriggerBlock(bk)
+		}
+		if b.trigger.Finished() {
+			d.ExpireBlock(bk)
+		}
+	}
 }
 
-type readDataset struct {
-	reader StorageReader
-	spec   *plan.SelectProcedureSpec
-	bounds Bounds
+func (d *dataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
+	key := ToBlockKey(meta)
+	b, ok := d.blocks[key]
+	if !ok {
+		builder := newRowListBlockBuilder()
+		builder.SetTags(meta.Tags())
+		builder.SetBounds(meta.Bounds())
+		t := newTriggerFromSpec(d.triggerSpec)
+		b = blockState{
+			builder: builder,
+			trigger: t,
+		}
+		d.blocks[key] = b
+	}
+	return b.builder
 }
 
-func (d *readDataset) Window() Window {
-	return nil
-}
-func (d *readDataset) Frames() FrameIterator {
-	return d
+func (d *dataset) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
+	for k, b := range d.blocks {
+		f(k, b.builder)
+	}
 }
 
-func (d *readDataset) NextFrame() (DataFrame, bool) {
-	//TODO push down bounds into readDataset
-	b := d.bounds
-	period := b.Stop() - b.Start()
-	d.bounds = bounds{start: b.Stop() + 1, stop: b.Stop() + period} // TODO(sgc): hack to move readDataset to next period
-	return d.reader.Read(d.spec.Database, d.spec.Where, d.spec.Limit, d.spec.Desc, b.Start(), b.Stop())
+func (d *dataset) ExpireBlock(key BlockKey) {
+	delete(d.blocks, key)
+}
+
+func (d *dataset) TriggerBlock(key BlockKey) {
+	b := d.blocks[key].builder.Block()
+	switch d.accMode {
+	case DiscardingMode:
+		d.t.Process(b)
+		d.blocks[key].builder.ClearData()
+	case AccumulatingRetractingMode:
+		d.t.RetractBlock(b)
+		fallthrough
+	case AccumulatingMode:
+		d.t.Process(b)
+	}
+}
+
+func (d *dataset) RetractBlock(key BlockKey) {
+	d.t.RetractBlock(d.blocks[key].builder)
+}
+
+func (d *dataset) Finish() {
+	for k := range d.blocks {
+		d.TriggerBlock(k)
+	}
+	d.t.Finish()
 }

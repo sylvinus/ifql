@@ -128,6 +128,9 @@ type SelectProcedureSpec struct {
 	LimitSet bool
 	Limit    int64
 	Offset   int64
+
+	WindowSet bool
+	Window    WindowSpec
 }
 
 func init() {
@@ -219,7 +222,8 @@ func (s *ClearProcedureSpec) SetSpec(qs query.OperationSpec) error {
 }
 
 type WindowProcedureSpec struct {
-	Window WindowSpec
+	Window     WindowSpec
+	Triggering query.TriggerSpec
 }
 
 func init() {
@@ -231,7 +235,21 @@ func (s *WindowProcedureSpec) Kind() ProcedureKind {
 }
 
 func (s *WindowProcedureSpec) SetSpec(qs query.OperationSpec) error {
+	ws := qs.(*query.WindowOpSpec)
+	s.Window = WindowSpec{
+		Every:  ws.Every,
+		Period: ws.Period,
+		Round:  ws.Round,
+		Start:  ws.Start,
+	}
+	s.Triggering = ws.Triggering
+	if s.Triggering == nil {
+		s.Triggering = query.DefaultTrigger
+	}
 	return nil
+}
+
+func (s *WindowProcedureSpec) NewChild(ds *Dataset) {
 }
 
 type MergeProcedureSpec struct {

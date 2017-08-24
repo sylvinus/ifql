@@ -3,7 +3,6 @@ package execute
 import (
 	"context"
 	"io"
-	"log"
 
 	"github.com/gogo/protobuf/codec"
 	"github.com/influxdata/ifql/query/execute/storage"
@@ -11,7 +10,7 @@ import (
 )
 
 type StorageReader interface {
-	Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (DataFrame, bool)
+	Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (BlockIterator, error)
 	Close()
 }
 
@@ -34,61 +33,86 @@ type storageReader struct {
 	c    storage.StorageClient
 }
 
-func (sr *storageReader) Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (DataFrame, bool) {
-
+func (sr *storageReader) Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (BlockIterator, error) {
 	var req storage.ReadRequest
 	req.Database = database
 	req.Predicate = predicate
-	req.Limit = limit
+	//	req.Limit = limit
 	req.Descending = desc
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
+
 	stream, err := sr.c.Read(context.Background(), &req)
 	if err != nil {
-		log.Println("E!", err)
-		return nil, false
+		return nil, err
 	}
-
-	df := new(dataframe)
-	// TODO handle sparse times
-	df.stride = -1
-	df.bounds = bounds{start: start, stop: stop}
-
-	for {
-		// Recv the next response
-		var rep storage.ReadResponse
-		if err := stream.RecvMsg(&rep); err != nil {
-			if err == io.EOF {
-				return df, true
-			}
-			//TODO add proper error handling
-			log.Println("E!", err)
-			return nil, false
-		}
-
-		for _, frame := range rep.Frames {
-			if s := frame.GetSeries(); s != nil {
-				//TODO get actual tag values back from storage response
-				df.rows = append(df.rows, Tags{"__name__": s.Name})
-			} else if p := frame.GetIntegerPoints(); p != nil {
-				panic("ints not supported")
-			} else if p := frame.GetFloatPoints(); p != nil {
-				if df.stride == -1 {
-					df.stride = len(p.Timestamps)
-					df.cols = make([]Time, df.stride)
-					for i, c := range p.Timestamps {
-						df.cols[i] = Time(c)
-					}
-				}
-				if len(p.Values) != df.stride {
-					panic("non dense data found")
-				}
-				df.data = append(df.data, p.Values...)
-			}
-		}
+	bi := &storageBlockIterator{
+		bounds: Bounds{
+			Start: start,
+			Stop:  stop,
+		},
+		stream: stream,
+		blocks: make(chan Block),
 	}
+	go bi.readBlocks()
+	return bi, nil
 }
 
 func (sr *storageReader) Close() {
 	sr.conn.Close()
+}
+
+type storageBlockIterator struct {
+	bounds Bounds
+	stream storage.Storage_ReadClient
+	blocks chan Block
+}
+
+func (bi *storageBlockIterator) NextBlock() (Block, bool) {
+	b, ok := <-bi.blocks
+	return b, ok
+}
+
+func (bi *storageBlockIterator) readBlocks() {
+	defer close(bi.blocks)
+
+	for {
+		// Recv the next response
+		var rep storage.ReadResponse
+		if err := bi.stream.RecvMsg(&rep); err != nil {
+			if err == io.EOF {
+				return
+			}
+			//TODO add proper error handling
+			return
+		}
+
+		builder := newRowListBlockBuilder()
+		builder.SetBounds(bi.bounds)
+
+		for _, frame := range rep.Frames {
+			if s := frame.GetSeries(); s != nil {
+				tags := make(Tags)
+				for _, t := range s.Tags {
+					tags[string(t.Key)] = string(t.Value)
+				}
+				builder.AddRow(tags)
+				builder.SetTags(tags)
+			} else if p := frame.GetIntegerPoints(); p != nil {
+				panic("ints not supported")
+			} else if p := frame.GetFloatPoints(); p != nil {
+				for _, c := range p.Timestamps {
+					builder.AddCol(Time(c))
+				}
+				for j, v := range p.Values {
+					builder.Set(0, j, v)
+				}
+
+				// Each row is its own block
+				bi.blocks <- builder.Block()
+				builder = newRowListBlockBuilder()
+				builder.SetBounds(bi.bounds)
+			}
+		}
+	}
 }

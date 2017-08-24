@@ -201,12 +201,13 @@ func (s *ClearOpSpec) Kind() OperationKind {
 }
 
 type WindowOpSpec struct {
-	Every       Duration `json:"every"`
-	Period      Duration `json:"period"`
-	EveryCount  int64    `json:"every_count"`
-	PeriodCount int64    `json:"period_count"`
-	Start       Time     `json:"start"`
-	Round       Duration `json:"round"`
+	Every       Duration    `json:"every"`
+	Period      Duration    `json:"period"`
+	EveryCount  int64       `json:"every_count"`
+	PeriodCount int64       `json:"period_count"`
+	Start       Time        `json:"start"`
+	Round       Duration    `json:"round"`
+	Triggering  TriggerSpec `json:"triggering"`
 }
 
 func init() {
