@@ -419,6 +419,98 @@ func TestNewQuery(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select with database where with no parens including fields",
+			raw: `select(database:"mydb")
+						.where(exp:{
+							"t1"="val1"
+							and
+							$ = 10
+						})
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select",
+						Spec: &query.SelectOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "where",
+						Spec: &query.WhereOpSpec{
+							Exp: &query.WhereExpressionSpec{
+								Predicate: &storage.Predicate{
+									Root: &storage.Node{
+										NodeType: storage.NodeTypeGroupExpression,
+										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
+										Children: []*storage.Node{
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "t1",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_StringValue{
+															StringValue: "val1",
+														},
+													},
+												},
+											},
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "_field",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_FloatValue{
+															FloatValue: 10.0,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range",
+						Spec: &query.RangeOpSpec{
+							Start: query.Time{
+								Relative: -4 * time.Hour,
+							},
+							Stop: query.Time{
+								Relative: -2 * time.Hour,
+							},
+						},
+					},
+					{
+						ID:   "count",
+						Spec: &query.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select", Child: "where"},
+					{Parent: "where", Child: "range"},
+					{Parent: "range", Child: "count"},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
