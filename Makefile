@@ -1,4 +1,4 @@
-SUBDIRS := ifql
+SUBDIRS := ifql promql
 TOPTARGETS := all clean
 
 $(TOPTARGETS): $(SUBDIRS)
