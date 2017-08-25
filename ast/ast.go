@@ -27,28 +27,37 @@ type Node interface {
 	Location() *SourceLocation
 }
 
-func (*ExpressionStatement) node() {}
-func (*VariableDeclaration) node() {}
-func (*VariableDeclarator) node()  {}
-func (*FunctionExpression) node()  {}
-func (*SequenceExpression) node()  {}
-func (*BinaryExpression) node()    {}
-func (*LogicalExpression) node()   {}
-func (*ArrayExpression) node()     {}
-func (*Property) node()            {}
-func (*Identifier) node()          {}
-func (*Literal) node()             {}
+func (*BaseNode) node()              {}
+func (*ExpressionStatement) node()   {}
+func (*VariableDeclaration) node()   {}
+func (*VariableDeclarator) node()    {}
+func (*FunctionExpression) node()    {}
+func (*SequenceExpression) node()    {}
+func (*BinaryExpression) node()      {}
+func (*LogicalExpression) node()     {}
+func (*ConditionalExpression) node() {}
+func (*ArrayExpression) node()       {}
+func (*Property) node()              {}
+func (*Identifier) node()            {}
+func (*Literal) node()               {}
+
+// BaseNode holds the attributes every expression or statement should have
+type BaseNode struct {
+	loc *SourceLocation
+}
+
+// Location is the source location of the Node
+func (b *BaseNode) Location() *SourceLocation { return b.loc }
 
 // Program represents a complete program source tree
 type Program struct {
+	*BaseNode
 	Body []Statement
-	Loc  *SourceLocation
 }
 
-func (*Program) Type() string                { return "Program" }
-func (p *Program) Location() *SourceLocation { return p.Loc }
+func (*Program) Type() string { return "Program" }
 
-// Perhaps we don't even want statements nor expression statements
+// Statement Perhaps we don't even want statements nor expression statements
 type Statement interface {
 	Node
 	stmt()
@@ -71,21 +80,19 @@ type Declaration interface {
 func (*VariableDeclaration) declaration() {}
 
 type VariableDeclaration struct {
+	*BaseNode
 	Declarations []VariableDeclarator
-	Loc          *SourceLocation
 }
 
-func (*VariableDeclaration) Type() string                { return "VariableDeclaration" }
-func (v *VariableDeclaration) Location() *SourceLocation { return v.Loc }
+func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
 
 type VariableDeclarator struct {
+	*BaseNode
 	ID   Identifier
 	Init Expression
-	Loc  *SourceLocation
 }
 
-func (*VariableDeclarator) Type() string                { return "VariableDeclarator" }
-func (v *VariableDeclarator) Location() *SourceLocation { return v.Loc }
+func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
 
 // Expression represents an action that can be performed by InfluxDB that can be evaluated to a value.
 type Expression interface {
@@ -93,125 +100,128 @@ type Expression interface {
 	expression()
 }
 
-func (*FunctionExpression) expression() {}
-func (*SequenceExpression) expression() {}
-func (*BinaryExpression) expression()   {}
-func (*LogicalExpression) expression()  {}
-func (*ArrayExpression) expression()    {}
+func (*FunctionExpression) expression()    {}
+func (*SequenceExpression) expression()    {}
+func (*BinaryExpression) expression()      {}
+func (*LogicalExpression) expression()     {}
+func (*ConditionalExpression) expression() {}
+func (*ArrayExpression) expression()       {}
 
 type FunctionExpression struct {
+	*BaseNode
 	ID     Identifier
 	Params []Property
 	Loc    *SourceLocation
 	Chains []*FunctionExpression
 }
 
-func (*FunctionExpression) Type() string                { return "FunctionExpression" }
-func (f *FunctionExpression) Location() *SourceLocation { return f.Loc }
+func (*FunctionExpression) Type() string { return "FunctionExpression" }
 
 type SequenceExpression struct {
+	*BaseNode
 	Expressions []Expression
-	Loc         *SourceLocation
 }
 
-func (*SequenceExpression) Type() string                { return "SequenceExpression" }
-func (s *SequenceExpression) Location() *SourceLocation { return s.Loc }
+func (*SequenceExpression) Type() string { return "SequenceExpression" }
 
 type OperatorKind int
 
 // TODO: fill out operatorkind
 type BinaryExpression struct {
+	*BaseNode
 	Operator OperatorKind
 	Left     Expression
 	Right    Expression
-	Loc      *SourceLocation
 }
 
-func (*BinaryExpression) Type() string                { return "BinaryExpression" }
-func (b *BinaryExpression) Location() *SourceLocation { return b.Loc }
+func (*BinaryExpression) Type() string { return "BinaryExpression" }
 
 type LogicalOperatorKind int
 
 // TODO Define logicaloperator kind
 type LogicalExpression struct {
+	*BaseNode
 	Operator LogicalOperatorKind
 	Left     Expression
 	Right    Expression
-	Loc      *SourceLocation
 }
 
-func (*LogicalExpression) Type() string                { return "LogicalExpression" }
-func (l *LogicalExpression) Location() *SourceLocation { return l.Loc }
+func (*LogicalExpression) Type() string { return "LogicalExpression" }
 
 type ArrayExpression struct {
+	*BaseNode
 	Elements []Expression
-	Loc      *SourceLocation
 }
 
-func (*ArrayExpression) Type() string                { return "ArrayExpression" }
-func (a *ArrayExpression) Location() *SourceLocation { return a.Loc }
+func (*ArrayExpression) Type() string { return "ArrayExpression" }
+
+type ConditionalExpression struct {
+	*BaseNode
+	Test       Expression
+	Alternate  Expression
+	Consequent Expression
+}
+
+func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
 
 type Property struct {
+	*BaseNode
 	Key   interface{} // Literal or Identifier
 	Value Expression
-	Loc   *SourceLocation
 }
 
-func (*Property) Type() string                { return "Property" }
-func (p *Property) Location() *SourceLocation { return p.Loc }
+func (*Property) Type() string { return "Property" }
 
 // Identifier represents a name that identifies a unique Node
 type Identifier struct {
+	*BaseNode
 	Name string
-	Loc  *SourceLocation
 }
 
 // Type of an identifier
 func (*Identifier) Type() string { return "Identifier" }
 
 // Location is the optional location of the Identifier
-func (i *Identifier) Location() *SourceLocation { return i.Loc }
 
 // TODO: Should this be an interface?
 type Literal struct {
-	Loc *SourceLocation
+	*BaseNode
 }
 
-func (*Literal) Type() string                { return "Literal" }
-func (l *Literal) Location() *SourceLocation { return l.Loc }
+func (*Literal) Type() string { return "Literal" }
 
 type StringLiteral struct {
-	Literal
+	*Literal
 	Value string
 }
 
 type BooleanLiteral struct {
-	Literal
+	*Literal
 	Value bool
 }
 
 type NumberLiteral struct {
-	Literal
+	*Literal
 	Value float64
 }
 
 type RegExpLiteral struct {
-	Literal
+	*Literal
 	Value regexp.Regexp
 }
 
 type DurationLiteral struct {
-	Literal
+	*Literal
 	Value time.Duration
 }
 
 type DateTimeLiteral struct {
-	Literal
+	*Literal
 	Value time.Time
 }
 
 type FieldLiteral struct {
-	Literal
+	*Literal
 	Value string
 }
 
