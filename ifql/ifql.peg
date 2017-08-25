@@ -131,7 +131,7 @@ Duration = SingleDuration+ {
     return &Duration{d}, nil
 }
 
-StringLiteral ← ( '"' DoubleStringChar* '"' ) {
+StringLiteral = ( '"' DoubleStringChar* '"' ) {
     s, err := strconv.Unquote(string(c.text))
     if err != nil {
         return nil, err
@@ -141,9 +141,9 @@ StringLiteral ← ( '"' DoubleStringChar* '"' ) {
     return "", errors.New("string literal not terminated")
 }
 
-DoubleStringChar ← !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
+DoubleStringChar = !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
 
-DoubleStringEscape ←  '"' / ( SourceChar / EOL / EOF ) {
+DoubleStringEscape =  '"' / ( SourceChar / EOL / EOF ) {
     return nil, errors.New("invalid escape character")
 }
 
@@ -153,7 +153,7 @@ String = StringChar+ {
 
 StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / "," / "$") SourceChar
 
-Number ← '-'? Integer ( '.' Digit+ )? {
+Number = '-'? Integer ( '.' Digit+ )? {
     n, err := strconv.ParseFloat(string(c.text), 64)
     if err != nil {
         return nil, err
@@ -161,9 +161,9 @@ Number ← '-'? Integer ( '.' Digit+ )? {
     return &Number{n}, nil
 }
 
-Integer ← '0' / NonZeroDigit Digit*
-NonZeroDigit ← [1-9]
-Digit ← [0-9]
+Integer = '0' / NonZeroDigit Digit*
+NonZeroDigit = [1-9]
+Digit = [0-9]
 
 Field = field:'$' {
     return &Field{}, nil
@@ -171,13 +171,13 @@ Field = field:'$' {
 
 Regex = '/' expr:StringLiteral '/' {
     // TODO: perhaps we should not check regex here?
-    return NewRegex(expr)
+    return NewRegex(expr.(*StringLiteral))
 }
 
-SourceChar ← .
+SourceChar = .
 
-__ ← ( ws / EOL )*
-ws ← [ \t\r\n]
+__ = ( ws / EOL )*
+ws = [ \t\r\n]
 
-EOL ← '\n'
-EOF ← !.
+EOL = '\n'
+EOF = !.
