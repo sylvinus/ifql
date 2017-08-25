@@ -1,6 +1,7 @@
 package ifql
 
 import (
+	"regexp"
 	"time"
 )
 
@@ -18,6 +19,7 @@ const (
 	NumberKind
 	StringKind
 	FieldKind
+	RegexKind
 	NumKinds int = iota
 )
 
@@ -71,6 +73,28 @@ func (s *StringLiteral) Type() ArgKind {
 
 func (s *StringLiteral) Value() interface{} {
 	return s.String
+}
+
+// Regex represents a regular expression function argument
+type Regex struct {
+	Regexp *regexp.Regexp
+}
+
+// NewRegex compiles the regular expression and returns the regex
+func NewRegex(expr string) (*Regex, error) {
+	r, err := regexp.Compile(expr)
+	if err != nil {
+		return nil, err
+	}
+	return &Regex{r}, nil
+}
+
+func (r *Regex) Type() ArgKind {
+	return RegexKind
+}
+
+func (r *Regex) Value() interface{} {
+	return r.Regexp
 }
 
 type Duration struct {
@@ -133,9 +157,10 @@ func (f *Field) Value() interface{} {
 	return "_field"
 }
 
+// Update left and right to be expr interfaces... add expr interface to all the correct types
 type BinaryExpression struct {
 	Left     interface{} `json:"left,omitempty"`
-	Operator interface{} `json:"operator,omitempty"`
+	Operator string      `json:"operator,omitempty"`
 	Right    interface{} `json:"right,omitempty"`
 }
 
@@ -146,7 +171,7 @@ func NewBinaryExpression(head, tails interface{}) (interface{}, error) {
 		res = &BinaryExpression{
 			Left:     res,
 			Right:    right[3],
-			Operator: right[1],
+			Operator: right[1].(string),
 		}
 	}
 	return res, nil

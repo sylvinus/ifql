@@ -41,7 +41,7 @@ FunctionArg = name:String __  ":" __ arg:FunctionArgValues {
     }, nil
 }
 
-FunctionArgValues =  WhereExpr / StringLiteral / Duration / DateTime / Number
+FunctionArgValues =  WhereExpr / StringLiteral / Regex / Duration / DateTime / Number
 
 WhereExpr = "{" __ expr:Expr __  "}" {
     return &WhereExpr{Expr: expr.(*BinaryExpression)}, nil
@@ -74,7 +74,7 @@ Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* { r
 Primary = '(' __ expr:Logical __ ')' {
         return expr.(*BinaryExpression), nil
     }
-    / StringLiteral / Duration / DateTime / Number / Field
+    / StringLiteral / Regex / Duration / DateTime / Number / Field
 
 DateFullYear = Digit Digit Digit Digit
 
@@ -167,6 +167,11 @@ Digit ← [0-9]
 
 Field = field:'$' {
     return &Field{}, nil
+}
+
+Regex = '/' expr:StringLiteral '/' {
+    // TODO: perhaps we should not check regex here?
+    return NewRegex(expr)
 }
 
 SourceChar ← .
