@@ -81,8 +81,8 @@ type Regex struct {
 }
 
 // NewRegex compiles the regular expression and returns the regex
-func NewRegex(expr string) (*Regex, error) {
-	r, err := regexp.Compile(expr)
+func NewRegex(expr *StringLiteral) (*Regex, error) {
+	r, err := regexp.Compile(expr.String)
 	if err != nil {
 		return nil, err
 	}
