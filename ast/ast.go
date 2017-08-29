@@ -20,22 +20,23 @@ type SourceLocation struct {
 
 // Node represents a node in the InfluxDB abstract syntax tree.
 type Node interface {
-	// node is unexported to ensure implementations of Node
-	// can only originate in this package.
 	node()
 	Type() string // Type property is a string that contains the variant type of the node
 	Location() *SourceLocation
 }
 
-func (*BaseNode) node()            {}
+func (*BaseNode) node() {}
+
 func (*ExpressionStatement) node() {}
 func (*VariableDeclaration) node() {}
 func (*VariableDeclarator) node()  {}
 
-func (*FunctionExpression) node()    {}
+func (*CallExpression) node()        {}
+func (*MemberExpression) node()      {}
 func (*SequenceExpression) node()    {}
 func (*BinaryExpression) node()      {}
 func (*LogicalExpression) node()     {}
+func (*ObjectExpression) node()      {}
 func (*ConditionalExpression) node() {}
 func (*ArrayExpression) node()       {}
 
@@ -95,7 +96,7 @@ func (*VariableDeclaration) declaration() {}
 // VariableDeclaration declares one or more variables using assignment
 type VariableDeclaration struct {
 	*BaseNode
-	Declarations []VariableDeclarator
+	Declarations []*VariableDeclarator
 }
 
 // Type is the abstract type
@@ -104,7 +105,7 @@ func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
 // VariableDeclarator represents the declaration of a variable
 type VariableDeclarator struct {
 	*BaseNode
-	ID   Identifier
+	ID   *Identifier
 	Init Expression
 }
 
@@ -117,13 +118,16 @@ type Expression interface {
 	expression()
 }
 
-func (*FunctionExpression) expression()    {}
+func (*CallExpression) expression()        {}
+func (*MemberExpression) expression()      {}
 func (*SequenceExpression) expression()    {}
 func (*BinaryExpression) expression()      {}
 func (*LogicalExpression) expression()     {}
+func (*ObjectExpression) expression()      {}
 func (*ConditionalExpression) expression() {}
 func (*ArrayExpression) expression()       {}
 
+func (*Identifier) expression()      {}
 func (*StringLiteral) expression()   {}
 func (*BooleanLiteral) expression()  {}
 func (*NumberLiteral) expression()   {}
@@ -132,17 +136,25 @@ func (*DurationLiteral) expression() {}
 func (*DateTimeLiteral) expression() {}
 func (*FieldLiteral) expression()    {}
 
-// FunctionExpression represents a function call with an identifier and properties.
-type FunctionExpression struct {
+// CallExpression represents a function all whose callee may be an Identifier or MemberExpression
+type CallExpression struct {
 	*BaseNode
-	ID     Identifier
-	Params []Property
-	Loc    *SourceLocation
-	Chains []*FunctionExpression
+	Callee    Expression
+	Arguments []Expression
 }
 
 // Type is the abstract type
-func (*FunctionExpression) Type() string { return "FunctionExpression" }
+func (*CallExpression) Type() string { return "CallExpression" }
+
+// CallExpression represents a function all whose callee may be an Identifier or MemberExpression
+type MemberExpression struct {
+	*BaseNode
+	Object   CallExpression
+	Property Identifier
+}
+
+// Type is the abstract type
+func (*MemberExpression) Type() string { return "MemberExpression" }
 
 // SequenceExpression uses comma operator to include multiple expressions
 // in a location that requires a single expression.  Typically, multiple
@@ -155,7 +167,38 @@ type SequenceExpression struct {
 // Type is the abstract type
 func (*SequenceExpression) Type() string { return "SequenceExpression" }
 
+// OperatorKind are Equality and Arithmatic operators.
+// Result of evaluating an equality operator is always of type Boolean based on whether the
+// comparison is true
+// Arithmetic operators take numerical values (either literals or variables) as their operands
+//  and return a single numerical value.
 type OperatorKind int
+
+const (
+	opBegin OperatorKind = iota
+	AdditionOperator
+	SubtractionOperator
+	DivisionOperator
+	MultiplicationOperator
+	GreaterThanOperator
+	GreaterThanEqualOperator
+	LessThanOperator
+	LessThanEqualOperator
+	InOperator
+	EmptyOperator
+	NotEmptyOperator
+	StartsWithOperator
+	opEnd
+)
+
+func (o OperatorKind) String() string {
+	return OperatorTokens[o]
+}
+
+// OperatorLookup converts the operators to OperatorKind
+func OperatorLookup(op string) OperatorKind {
+	return operators[op]
+}
 
 // BinaryExpression use binary operators act on two operands in an expression.
 // BinaryExpression includes relational and arithmatic operators
@@ -169,8 +212,24 @@ type BinaryExpression struct {
 // Type is the abstract type
 func (*BinaryExpression) Type() string { return "BinaryExpression" }
 
-// TODO Define logicaloperator kind
+// LogicalOperatorKind are used with boolean (logical) values
 type LogicalOperatorKind int
+
+const (
+	logOpBegin LogicalOperatorKind = iota
+	AndOperator
+	OrOperator
+	logOpEnd
+)
+
+func (o LogicalOperatorKind) String() string {
+	return LogicalOperatorTokens[o]
+}
+
+// LogicalOperatorLookup converts the operators to LogicalOperatorKind
+func LogicalOperatorLookup(op string) LogicalOperatorKind {
+	return logOperators[op]
+}
 
 // LogicalExpression represent the rule conditions that collectively evaluate to either true or false.
 // `or` expressions compute the disjunction of two boolean expressions and return boolean values.
@@ -194,6 +253,15 @@ type ArrayExpression struct {
 // Type is the abstract type
 func (*ArrayExpression) Type() string { return "ArrayExpression" }
 
+// ObjectExpression allows the declaration of an anonymous object within a declaration.
+type ObjectExpression struct {
+	*BaseNode
+	Properties []*Property
+}
+
+// Type is the abstract type
+func (*ObjectExpression) Type() string { return "ObjectExpression" }
+
 // ConditionalExpression selects one of two expressions, `Alternate` or `Consequent`
 // depending on a third, boolean, expression, `Test`.
 type ConditionalExpression struct {
@@ -209,7 +277,7 @@ func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
 // Property is the value associated with a key
 type Property struct {
 	*BaseNode
-	Key   interface{} // Literal or Identifier
+	Key   *Identifier
 	Value Expression
 }
 
@@ -268,13 +336,15 @@ func (*NumberLiteral) Type() string { return "NumberLiteral" }
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
-	Value regexp.Regexp
+	Value *regexp.Regexp
 }
 
 // Type is the abstract type
 func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
 
-// DurationLiteral represents the elapsed time between two instants as an int64 nanosecond count with syntax of golang's time.Duration
+// DurationLiteral represents the elapsed time between two instants as an
+// int64 nanosecond count with syntax of golang's time.Duration
+// TODO: this may be better as a class initialization
 type DurationLiteral struct {
 	*BaseNode
 	Value time.Duration
@@ -283,7 +353,9 @@ type DurationLiteral struct {
 // Type is the abstract type
 func (*DurationLiteral) Type() string { return "DurationLiteral" }
 
-// DateTimeLiteral represents an instant in time with nanosecond precision using the syntax of golang's RFC3339 Nanosecond variant
+// DateTimeLiteral represents an instant in time with nanosecond precision using
+// the syntax of golang's RFC3339 Nanosecond variant
+// TODO: this may be better as a class initialization
 type DateTimeLiteral struct {
 	*BaseNode
 	Value time.Time
@@ -293,6 +365,7 @@ type DateTimeLiteral struct {
 func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
 
 // FieldLiteral represents the point at a time and tagset with syntax `$`
+// TODO: Should field literals be an identifier?
 type FieldLiteral struct {
 	*BaseNode
 	Value string
@@ -301,15 +374,39 @@ type FieldLiteral struct {
 // Type is the abstract type
 func (*FieldLiteral) Type() string { return "FieldLiteral" }
 
-/*
-enum BinaryOperator {
-    "==" | "!=" | "===" | "!=="
-         | "<" | "<=" | ">" | ">="
-         | "<<" | ">>" | ">>>"
-         | "+" | "-" | "*" | "/" | "%"
-         | "|" | "^" | "&" | "in"
+// OperatorTokens converts OperatorKind to string
+var OperatorTokens = map[OperatorKind]string{
+	AdditionOperator:         "+",
+	SubtractionOperator:      "-",
+	DivisionOperator:         "/",
+	MultiplicationOperator:   "*",
+	GreaterThanOperator:      ">",
+	GreaterThanEqualOperator: ">=",
+	LessThanOperator:         "<",
+	LessThanEqualOperator:    "<=",
+	InOperator:               "in",
+	EmptyOperator:            "empty",
+	NotEmptyOperator:         "not empty",
+	StartsWithOperator:       "startswith",
 }
 
-enum LogicalOperator {
-    "||" | "&&"
-}*/
+// LogicalOperatorTokens converts LogicalOperatorKind to string
+var LogicalOperatorTokens = map[LogicalOperatorKind]string{
+	AndOperator: "and",
+	OrOperator:  "or",
+}
+
+var operators map[string]OperatorKind
+var logOperators map[string]LogicalOperatorKind
+
+func init() {
+	operators = make(map[string]OperatorKind)
+	for op := opBegin + 1; op < opEnd; op++ {
+		operators[OperatorTokens[op]] = op
+	}
+
+	logOperators = make(map[string]LogicalOperatorKind)
+	for op := logOpBegin + 1; op < logOpEnd; op++ {
+		logOperators[LogicalOperatorTokens[op]] = op
+	}
+}

@@ -2,7 +2,11 @@ package ifql
 
 import (
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/influxdata/ifql/ast"
 )
 
 type Arg interface {
@@ -46,6 +50,10 @@ func NewFunction(name string, args, children interface{}) (*Function, error) {
 		Args:     funcArgs,
 		Children: chain,
 	}, nil
+}
+
+func howdy(name string, args, children interface{}) {
+
 }
 
 type FunctionArg struct {
@@ -209,3 +217,167 @@ func (b *BinaryExpression) String() string {
 	}
 	return res
 }*/
+
+func call(name, args, children interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	if children == nil {
+		return &ast.CallExpression{
+			Callee:    name.(*ast.Identifier),
+			Arguments: []ast.Expression{args.(*ast.ObjectExpression)},
+		}, nil
+	}
+	/*
+		for _, child := range toIfaceSlice(children) {
+			chain = append(chain, child.(*Function))
+		}
+	*/
+	return nil, nil
+}
+
+func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
+	props := []*ast.Property{first.(*ast.Property)}
+	if rest != nil {
+		for _, prop := range toIfaceSlice(rest) {
+			props = append(props, prop.(*ast.Property))
+		}
+	}
+	return &ast.ObjectExpression{
+		Properties: props,
+		BaseNode:   base(text, pos),
+	}, nil
+}
+
+func property(key, value interface{}, text []byte, pos position) (*ast.Property, error) {
+	return &ast.Property{
+		Key:      key.(*ast.Identifier),
+		Value:    value.(ast.Expression),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func identifier(text []byte, pos position) (*ast.Identifier, error) {
+	return &ast.Identifier{
+		Name:     string(text),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func logicalExpression(head, tails interface{}) (ast.Expression, error) {
+	res := head.(ast.Expression)
+	for _, tail := range toIfaceSlice(tails) {
+		right := toIfaceSlice(tail)
+		res = &ast.LogicalExpression{
+			Left:     res,
+			Right:    right[3].(ast.Expression),
+			Operator: right[1].(ast.LogicalOperatorKind),
+		}
+	}
+	return res, nil
+}
+
+func logicalOp(text []byte) (ast.LogicalOperatorKind, error) {
+	return ast.LogicalOperatorLookup(strings.ToLower(string(text))), nil
+}
+
+func binaryExpression(head, tails interface{}) (ast.Expression, error) {
+	res := head.(ast.Expression)
+	for _, tail := range toIfaceSlice(tails) {
+		right := toIfaceSlice(tail)
+		res = &ast.BinaryExpression{
+			Left:     res,
+			Right:    right[3].(ast.Expression),
+			Operator: right[1].(ast.OperatorKind),
+		}
+	}
+	return res, nil
+}
+
+func binaryOp(text []byte) (ast.OperatorKind, error) {
+	return ast.OperatorLookup(strings.ToLower(string(text))), nil
+}
+
+func stringLiteral(text []byte, pos position) (*ast.StringLiteral, error) {
+	s, err := strconv.Unquote(string(text))
+	if err != nil {
+		return nil, err
+	}
+	return &ast.StringLiteral{
+		BaseNode: base(text, pos),
+		Value:    s,
+	}, nil
+}
+
+func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
+	n, err := strconv.ParseFloat(string(text), 64)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.NumberLiteral{
+		BaseNode: base(text, pos),
+		Value:    n,
+	}, nil
+}
+
+func fieldLiteral(text []byte, pos position) (*ast.FieldLiteral, error) {
+	return &ast.FieldLiteral{
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func regexLiteral(chars interface{}, text []byte, pos position) (*ast.RegexpLiteral, error) {
+	var regex string
+	for _, char := range toIfaceSlice(chars) {
+		regex += char.(string)
+	}
+
+	r, err := regexp.Compile(regex)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.RegexpLiteral{
+		BaseNode: base(text, pos),
+		Value:    r,
+	}, nil
+}
+
+func durationLiteral(text []byte, pos position) (*ast.DurationLiteral, error) {
+	d, err := time.ParseDuration(string(text))
+	if err != nil {
+		return nil, err
+	}
+	return &ast.DurationLiteral{
+		BaseNode: base(text, pos),
+		Value:    d,
+	}, nil
+}
+
+func datetime(text []byte, pos position) (*ast.DateTimeLiteral, error) {
+	t, err := time.Parse(time.RFC3339Nano, string(text))
+	if err != nil {
+		return nil, err
+	}
+	return &ast.DateTimeLiteral{
+		BaseNode: base(text, pos),
+		Value:    t,
+	}, nil
+}
+
+func base(text []byte, pos position) *ast.BaseNode {
+	return &ast.BaseNode{
+		Loc: &ast.SourceLocation{
+			Start: ast.Position{
+				Line:   pos.line,
+				Column: pos.col,
+			},
+			End: ast.Position{
+				Line:   pos.line,
+				Column: pos.col + len(text),
+			},
+			Source: source(text),
+		},
+	}
+}
+
+func source(text []byte) *string {
+	str := string(text)
+	return &str
+}
