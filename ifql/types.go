@@ -81,8 +81,13 @@ type Regex struct {
 }
 
 // NewRegex compiles the regular expression and returns the regex
-func NewRegex(expr *StringLiteral) (*Regex, error) {
-	r, err := regexp.Compile(expr.String)
+func NewRegex(chars interface{}) (*Regex, error) {
+	var regex string
+	for _, char := range toIfaceSlice(chars) {
+		regex += char.(string)
+	}
+
+	r, err := regexp.Compile(regex)
 	if err != nil {
 		return nil, err
 	}

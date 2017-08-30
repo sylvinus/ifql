@@ -41,7 +41,7 @@ FunctionArg = name:String __  ":" __ arg:FunctionArgValues {
     }, nil
 }
 
-FunctionArgValues =  WhereExpr / StringLiteral / Regex / Duration / DateTime / Number
+FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number
 
 WhereExpr = "{" __ expr:Expr __  "}" {
     return &WhereExpr{Expr: expr.(*BinaryExpression)}, nil
@@ -74,7 +74,7 @@ Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* { r
 Primary = '(' __ expr:Logical __ ')' {
         return expr.(*BinaryExpression), nil
     }
-    / StringLiteral / Regex / Duration / DateTime / Number / Field
+    / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
 
 DateFullYear = Digit Digit Digit Digit
 
@@ -169,15 +169,39 @@ Field = field:'$' {
     return &Field{}, nil
 }
 
-Regex = '/' expr:StringLiteral '/' {
-    // TODO: perhaps we should not check regex here?
-    return NewRegex(expr.(*StringLiteral))
-}
+RegularExpressionLiteral "regular expression"
+  = "/" pattern:RegularExpressionBody "/" {
+         return pattern, nil
+    }
+
+RegularExpressionBody
+  = chars:RegularExpressionChar+ {
+      return NewRegex(chars)
+  }
+
+RegularExpressionChar
+  = ![\\/] re:RegularExpressionNonTerminator {
+      return re, nil
+  }
+  / RegularExpressionBackslashSequence
+
+RegularExpressionBackslashSequence
+  = "\\/" {
+      return "/", nil
+  }
+  / "\\" RegularExpressionNonTerminator
+
+RegularExpressionNonTerminator
+  = !LineTerminator SourceChar {
+      return string(c.text), nil
+  }
 
 SourceChar = .
 
 __ = ( ws / EOL )*
 ws = [ \t\r\n]
+LineTerminator
+  = [\n\r]
 
 EOL = '\n'
 EOF = !.
