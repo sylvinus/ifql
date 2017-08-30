@@ -723,6 +723,33 @@ func TestNewQuery(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select with window",
+			raw:  `select(database:"mydb").window(start:-4h, every:1h)`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select",
+						Spec: &query.SelectOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "window",
+						Spec: &query.WindowOpSpec{
+							Start: query.Time{
+								Relative: -4 * time.Hour,
+							},
+							Every:  query.Duration(time.Hour),
+							Period: query.Duration(time.Hour),
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select", Child: "window"},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt

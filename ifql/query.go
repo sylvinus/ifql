@@ -78,6 +78,10 @@ func NewOperation(function *Function, parent string) (*query.Operation, query.Ed
 		edge.Child = query.OperationID(function.Name)
 		op, err := NewWhereOperation(function.Args)
 		return op, edge, err
+	case "window":
+		edge.Child = query.OperationID(function.Name)
+		op, err := NewWindowOperation(function.Args)
+		return op, edge, err
 	default:
 		return nil, query.Edge{}, fmt.Errorf("Unknown function")
 	}
@@ -161,6 +165,54 @@ func NewWhereOperation(args []*FunctionArg) (*query.Operation, error) {
 				},
 			},
 		},
+	}, nil
+}
+
+func NewWindowOperation(args []*FunctionArg) (*query.Operation, error) {
+	if len(args) > 4 {
+		return nil, fmt.Errorf("Invalid window, too many arguments... also I should make this error better")
+	}
+	spec := &query.WindowOpSpec{}
+	everySet := false
+	periodSet := false
+	for _, farg := range args {
+		arg := farg.Arg
+		switch farg.Name {
+		case "every":
+			everySet = true
+			if arg.Type() != DurationKind {
+				return nil, fmt.Errorf("every argument must be a duration")
+			}
+			spec.Every = query.Duration(arg.Value().(time.Duration))
+		case "period":
+			periodSet = true
+			if arg.Type() != DurationKind {
+				return nil, fmt.Errorf("period argument must be a duration")
+			}
+			spec.Period = query.Duration(arg.Value().(time.Duration))
+		case "round":
+			if arg.Type() != DurationKind {
+				return nil, fmt.Errorf("round argument must be a duration")
+			}
+			spec.Round = query.Duration(arg.Value().(time.Duration))
+		case "start":
+			t, err := NewTime(arg)
+			if err != nil {
+				return nil, err
+			}
+			spec.Start = t
+		}
+	}
+	// Apply defaults
+	if !everySet {
+		spec.Every = spec.Period
+	}
+	if !periodSet {
+		spec.Period = spec.Every
+	}
+	return &query.Operation{
+		ID:   "window", // TODO: Change this to a UUID
+		Spec: spec,
 	}, nil
 }
 
