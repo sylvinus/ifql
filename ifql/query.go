@@ -166,7 +166,7 @@ func NewWhereOperation(args []*FunctionArg) (*query.Operation, error) {
 
 func NewBinaryNode(expr *BinaryExpression) (node *storage.Node, err error) {
 	switch expr.Operator {
-	case "=", "!=", "startswith":
+	case "==", "!=", "startswith":
 		node, err = NewComparisonNode(expr)
 	case "and", "or":
 		node, err = NewLogicalNode(expr)
@@ -223,7 +223,7 @@ func NewLogicalNode(expr *BinaryExpression) (*storage.Node, error) {
 func NewComparisonOperator(op string, isRegex bool) (storage.Node_Comparison, error) {
 	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
 	switch op {
-	case "=":
+	case "==":
 		if isRegex {
 			return storage.ComparisonRegex, nil
 		}

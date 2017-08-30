@@ -124,7 +124,7 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database where and range",
-			raw:  `select(database:"mydb").where(exp:{("t1"="val1") and ("t2"="val2")}).range(start:-4h, stop:-2h).count()`,
+			raw:  `select(database:"mydb").where(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -212,12 +212,12 @@ func TestNewQuery(t *testing.T) {
 			raw: `select(database:"mydb")
 						.where(exp:{
 								(
-									("t1"="val1")
+									("t1"=="val1")
 									and
-									("t2"="val2")
+									("t2"=="val2")
 								)
 								or
-								("t3"="val3")
+								("t3"=="val3")
 							})
 						.range(start:-4h, stop:-2h)
 						.count()`,
@@ -331,9 +331,9 @@ func TestNewQuery(t *testing.T) {
 			name: "select with database where including fields",
 			raw: `select(database:"mydb")
 						.where(exp:{
-							("t1"="val1")
+							("t1"=="val1")
 							and
-							($ = 10)
+							($ == 10)
 						})
 						.range(start:-4h, stop:-2h)
 						.count()`,
@@ -423,9 +423,9 @@ func TestNewQuery(t *testing.T) {
 			name: "select with database where with no parens including fields",
 			raw: `select(database:"mydb")
 						.where(exp:{
-							"t1"="val1"
+							"t1"=="val1"
 							and
-							$ = 10
+							$ == 10
 						})
 						.range(start:-4h, stop:-2h)
 						.count()`,
@@ -515,9 +515,9 @@ func TestNewQuery(t *testing.T) {
 			name: "select with database where with no parens including regex and field",
 			raw: `select(database:"mydb")
 						.where(exp:{
-							"t1"=/val1/
+							"t1"==/val1/
 							and
-							$ = 10
+							$ == 10
 						})
 						.range(start:-4h, stop:-2h)
 						.count()`,
@@ -607,7 +607,7 @@ func TestNewQuery(t *testing.T) {
 			name: "select with database regex with escape",
 			raw: `select(database:"mydb")
 						.where(exp:{
-							"t1"=/va\/l1/
+							"t1"==/va\/l1/
 						})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{

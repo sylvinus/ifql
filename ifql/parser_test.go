@@ -38,7 +38,7 @@ func TestNewAST(t *testing.T) {
 		},
 		{
 			name: "select with where with no parens",
-			raw:  `select(database:"telegraf").where(exp:{"other"="mem" and "this"="that" or "these"!="those"})`,
+			raw:  `select(database:"telegraf").where(exp:{"other"=="mem" and "this"=="that" or "these"!="those"})`,
 			want: &Function{
 				Name: "select",
 				Args: []*FunctionArg{
@@ -62,7 +62,7 @@ func TestNewAST(t *testing.T) {
 												Left: &StringLiteral{
 													String: "other",
 												},
-												Operator: "=",
+												Operator: "==",
 												Right: &StringLiteral{
 													String: "mem",
 												},
@@ -71,7 +71,7 @@ func TestNewAST(t *testing.T) {
 											Right: &BinaryExpression{
 												Left: &StringLiteral{
 													String: "this",
-												}, Operator: "=",
+												}, Operator: "==",
 												Right: &StringLiteral{
 													String: "that",
 												},

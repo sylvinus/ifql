@@ -49,7 +49,7 @@ WhereExpr = "{" __ expr:Expr __  "}" {
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
-// = != 
+// == != 
 // and or 
 // Lowest to Highest Priority.
 // Highest Priority includes the valid primary
@@ -59,7 +59,7 @@ Expr = Logical
 LogicalOperators =  ("or"i / "and"i) { return strings.ToLower(string(c.text)), nil }
 Logical = head:Equality tail:( __  LogicalOperators __  Equality )* { return NewBinaryExpression(head, tail) }
 
-EqualityOperators =  ("=" / "!=" ) { return string(c.text), nil }
+EqualityOperators =  ("==" / "!=" ) { return string(c.text), nil }
 Equality = head:Relational tail:( __ EqualityOperators __ Relational )* { return NewBinaryExpression(head, tail) }
 
 RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) { return strings.ToLower(string(c.text)), nil }
