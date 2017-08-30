@@ -650,6 +650,79 @@ func TestNewQuery(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select with database with to regex",
+			raw: `select(database:"mydb")
+						.where(exp:{
+							"t1"==/va\/l1/
+							and
+							"t2" != /val2/
+						})`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select",
+						Spec: &query.SelectOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "where",
+						Spec: &query.WhereOpSpec{
+							Exp: &query.WhereExpressionSpec{
+								Predicate: &storage.Predicate{
+									Root: &storage.Node{
+										NodeType: storage.NodeTypeGroupExpression,
+										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
+										Children: []*storage.Node{
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "t1",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_RegexValue{
+															RegexValue: "va/l1",
+														},
+													},
+												},
+											},
+											&storage.Node{
+												NodeType: storage.NodeTypeBooleanExpression,
+												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonNotRegex},
+												Children: []*storage.Node{
+													&storage.Node{
+														NodeType: storage.NodeTypeRef,
+														Value: &storage.Node_RefValue{
+															RefValue: "t2",
+														},
+													},
+													&storage.Node{
+														NodeType: storage.NodeTypeLiteral,
+														Value: &storage.Node_RegexValue{
+															RegexValue: "val2",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select", Child: "where"},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
