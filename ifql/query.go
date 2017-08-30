@@ -2,7 +2,7 @@ package ifql
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -145,17 +145,153 @@ func NewWhereOperation(args []*FunctionArg) (*query.Operation, error) {
 		return nil, fmt.Errorf("Invalid Where clause... also I should make this error better")
 	}
 	arg := args[0].Arg
-	node := arg.Value().(*storage.Node)
+	expr := arg.Value().(*BinaryExpression)
+
+	root, err := NewBinaryNode(expr)
+	if err != nil {
+		return nil, err
+	}
+
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &query.WhereOpSpec{
 			Exp: &query.WhereExpressionSpec{
 				Predicate: &storage.Predicate{
-					Root: node,
+					Root: root,
 				},
 			},
 		},
 	}, nil
+}
+
+func NewBinaryNode(expr *BinaryExpression) (node *storage.Node, err error) {
+	switch expr.Operator {
+	case "==", "!=", "startswith":
+		node, err = NewComparisonNode(expr)
+	case "and", "or":
+		node, err = NewLogicalNode(expr)
+	case "<=", "<", ">=", ">", "in", "not empty", "empty":
+		err = fmt.Errorf("Operator %s has not been implemented yet", expr.Operator)
+	default:
+		err = fmt.Errorf("Unsupported operator %s", expr.Operator)
+	}
+	return
+}
+
+func NewLogicalOperator(op string) (storage.Node_Logical, error) {
+	if op == "and" {
+		return storage.LogicalAnd, nil
+	} else if op == "or" {
+		return storage.LogicalOr, nil
+	}
+	return 0, fmt.Errorf("Unknown logical operator %s", op)
+}
+
+func NewLogicalNode(expr *BinaryExpression) (*storage.Node, error) {
+	lhs, ok := expr.Left.(*BinaryExpression)
+	if !ok {
+		return nil, fmt.Errorf("Left-hand side of logical expression not binary")
+	}
+
+	left, err := NewBinaryNode(lhs)
+	if err != nil {
+		return nil, err
+	}
+
+	rhs, ok := expr.Right.(*BinaryExpression)
+	if !ok {
+		return nil, fmt.Errorf("Right-hand side of logical expression not binary")
+	}
+
+	right, err := NewBinaryNode(rhs)
+	if err != nil {
+		return nil, err
+	}
+
+	op, err := NewLogicalOperator(expr.Operator)
+	if err != nil {
+		return nil, err
+	}
+
+	return &storage.Node{
+		NodeType: storage.NodeTypeGroupExpression,
+		Value:    &storage.Node_Logical_{Logical: op},
+		Children: []*storage.Node{left, right},
+	}, nil
+}
+
+func NewComparisonOperator(op string, isRegex bool) (storage.Node_Comparison, error) {
+	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
+	switch op {
+	case "==":
+		if isRegex {
+			return storage.ComparisonRegex, nil
+		}
+		return storage.ComparisonEqual, nil
+	case "!=":
+		if isRegex {
+			return storage.ComparisonNotRegex, nil
+		}
+		return storage.ComparisonNotEqual, nil
+	case "startswith":
+		return storage.ComparisonStartsWith, nil
+	case "<=", "<", ">=", ">", "in", "not empty", "empty":
+		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)
+	default:
+		return 0, fmt.Errorf("Unknown comparison operator %s", op)
+	}
+}
+
+func NewComparisonNode(expr *BinaryExpression) (*storage.Node, error) {
+	if _, ok := expr.Left.(*BinaryExpression); ok {
+		return nil, fmt.Errorf("Left-hand side of comparison expression cannot be a binary expression")
+	}
+	if _, ok := expr.Right.(*BinaryExpression); ok {
+		return nil, fmt.Errorf("Right-hand side of comparison expression cannot be a binary expression")
+	}
+
+	var isRegex bool
+	var left *storage.Node
+	switch lhs := expr.Left.(type) {
+	case *StringLiteral, *Field:
+		// If the string literal or field is on the left side we assume this is a reference
+		left = NewNodeRef(lhs)
+	case *Regex:
+		isRegex = true
+		left = NewNodeLiteral(lhs)
+	case *Number:
+		left = NewNodeLiteral(lhs)
+	case *Duration, *DateTime:
+		return nil, fmt.Errorf("We don't support left-hand side durations or date times yet. sorry")
+	default:
+		return nil, fmt.Errorf("Unknown left-hand side expression")
+	}
+
+	var right *storage.Node
+	switch rhs := expr.Right.(type) {
+	case *StringLiteral, *Field, *Number:
+		// If the string literal or field is on the left side we assume this is a reference
+		right = NewNodeLiteral(rhs)
+	case *Regex:
+		isRegex = true
+		right = NewNodeLiteral(rhs)
+	case *Duration, *DateTime:
+		return nil, fmt.Errorf("We don't support right-hand side durations or date times yet. sorry")
+	default:
+		return nil, fmt.Errorf("Unknown righthand side expression")
+	}
+
+	op, err := NewComparisonOperator(expr.Operator, isRegex)
+	if err != nil {
+		return nil, err
+	}
+
+	return &storage.Node{
+		NodeType: storage.NodeTypeBooleanExpression,
+		Value:    &storage.Node_Comparison_{Comparison: op},
+		Children: []*storage.Node{left, right},
+	}, nil
+
 }
 
 func NewRangeOperation(args []*FunctionArg) (*query.Operation, error) {
@@ -280,90 +416,13 @@ func NewNodeLiteral(val interface{}) *storage.Node {
 				FloatValue: v.Value().(float64),
 			},
 		}
+	case *Regex:
+		return &storage.Node{
+			NodeType: storage.NodeTypeLiteral,
+			Value: &storage.Node_RegexValue{
+				RegexValue: v.Value().(*regexp.Regexp).String(),
+			},
+		}
 	}
 	return nil
-}
-
-func NewComparisonOperator(text []byte) (storage.Node_Comparison, error) {
-	op := strings.ToLower(string(text))
-	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
-	switch op {
-	case "=":
-		return storage.ComparisonEqual, nil
-	case "!=":
-		return storage.ComparisonNotEqual, nil
-	case "startswith":
-		return storage.ComparisonStartsWith, nil
-	case "<=", "<", ">=", ">", "in", "not empty", "empty":
-		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)
-	default:
-		return 0, fmt.Errorf("Unknown comparison operator %s", op)
-	}
-}
-
-func NewLogicalOperator(text []byte) (storage.Node_Logical, error) {
-	op := strings.ToLower(string(text))
-	if op == "and" {
-		return storage.LogicalAnd, nil
-	} else if op == "or" {
-		return storage.LogicalOr, nil
-	}
-	return 0, fmt.Errorf("Unknown logical operator %s", op)
-}
-
-func NewRHS(op, rhs interface{}) (*storage.Node, error) {
-	r, ok := rhs.(*storage.Node)
-	if !ok {
-		if r = NewNodeLiteral(rhs); r == nil {
-			return nil, fmt.Errorf("Invalid RHS: not a storage.Node")
-		}
-	}
-	switch o := op.(type) {
-	case storage.Node_Comparison:
-		return &storage.Node{
-			NodeType: storage.NodeTypeBooleanExpression,
-			Value:    &storage.Node_Comparison_{Comparison: o},
-			Children: []*storage.Node{r},
-		}, nil
-	case storage.Node_Logical:
-		return &storage.Node{
-			NodeType: storage.NodeTypeGroupExpression,
-			Value:    &storage.Node_Logical_{Logical: o},
-			Children: []*storage.Node{r},
-		}, nil
-	default:
-		return nil, fmt.Errorf("Unknown operator type %t %#+v", op, op)
-	}
-}
-
-func NewExpr(lhs, rhs interface{}) (*storage.Node, error) {
-	right := toIfaceSlice(rhs)
-	top := right[0].(*storage.Node)
-	switch l := lhs.(type) {
-	case *storage.Node:
-		top.Children = append([]*storage.Node{l}, top.Children...)
-	case *StringLiteral, *Field:
-		// TODO: we are assuming LHS is always a tag or field
-		left := NewNodeRef(l)
-		top.Children = append([]*storage.Node{left}, top.Children...)
-	case *Duration, *DateTime, *Number:
-		return nil, fmt.Errorf("We don't support LHS durations, date times or numbers yet. sorry")
-	default:
-		return nil, fmt.Errorf("Unknown LHS %t", lhs)
-	}
-
-	for _, next := range right[1:] {
-		// if op is the same as the top, then this is a child.  Otherwise,
-		// we create a new top node where the current top will be left and
-		// right will be the top.
-		r := next.(*storage.Node)
-		if top.NodeType != r.NodeType {
-			left := *top
-			top = r
-			top.Children = append([]*storage.Node{&left}, top.Children...)
-			continue
-		}
-		top.Children = append(top.Children, r)
-	}
-	return top, nil
 }
