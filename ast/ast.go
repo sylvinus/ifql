@@ -7,15 +7,15 @@ import (
 
 // Position represents a specific location in the source
 type Position struct {
-	Line   int // Line is the line in the source marked by this position
-	Column int // Column is the column in the source marked by this position
+	Line   int `json:"line"`   // Line is the line in the source marked by this position
+	Column int `json:"column"` // Column is the column in the source marked by this position
 }
 
 // SourceLocation represents the location of a node in the AST
 type SourceLocation struct {
-	Start  Position // Start is the location in the source the node starts
-	End    Position // End is the location in the source the node ends
-	Source *string  // Source is optional raw source
+	Start  Position `json:"start"`            // Start is the location in the source the node starts
+	End    Position `json:"end"`              // End is the location in the source the node ends
+	Source *string  `json:"source,omitempty"` // Source is optional raw source
 }
 
 // Node represents a node in the InfluxDB abstract syntax tree.
@@ -53,7 +53,7 @@ func (*FieldLiteral) node()    {}
 
 // BaseNode holds the attributes every expression or statement should have
 type BaseNode struct {
-	Loc *SourceLocation
+	Loc *SourceLocation `json:"location,omitempty"`
 }
 
 // Location is the source location of the Node
@@ -62,7 +62,7 @@ func (b *BaseNode) Location() *SourceLocation { return b.Loc }
 // Program represents a complete program source tree
 type Program struct {
 	*BaseNode
-	Body []Statement
+	Body []Statement `json:"body"`
 }
 
 // Type is the abstract type
@@ -79,7 +79,8 @@ func (*VariableDeclaration) stmt() {}
 
 // ExpressionStatement may consist of an expression that does not return a value and is executed solely for its side-effects.
 type ExpressionStatement struct {
-	Expression Expression
+	*BaseNode
+	Expression Expression `json:"expression"`
 }
 
 // Type is the abstract type
@@ -96,7 +97,7 @@ func (*VariableDeclaration) declaration() {}
 // VariableDeclaration declares one or more variables using assignment
 type VariableDeclaration struct {
 	*BaseNode
-	Declarations []*VariableDeclarator
+	Declarations []*VariableDeclarator `json:"declarations"`
 }
 
 // Type is the abstract type
@@ -105,8 +106,8 @@ func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
 // VariableDeclarator represents the declaration of a variable
 type VariableDeclarator struct {
 	*BaseNode
-	ID   *Identifier
-	Init Expression
+	ID   *Identifier `json:"id"`
+	Init Expression  `json:"init"`
 }
 
 // Type is the abstract type
@@ -139,8 +140,8 @@ func (*FieldLiteral) expression()    {}
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
 	*BaseNode
-	Callee    Expression
-	Arguments []Expression
+	Callee    Expression   `json:"callee"`
+	Arguments []Expression `json:"arguments"`
 }
 
 // Type is the abstract type
@@ -149,8 +150,8 @@ func (*CallExpression) Type() string { return "CallExpression" }
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type MemberExpression struct {
 	*BaseNode
-	Object   CallExpression
-	Property Identifier
+	Object   *CallExpression `json:"object"`
+	Property *Identifier     `json:"property"`
 }
 
 // Type is the abstract type
@@ -161,7 +162,7 @@ func (*MemberExpression) Type() string { return "MemberExpression" }
 // select statements on one line.
 type SequenceExpression struct {
 	*BaseNode
-	Expressions []Expression
+	Expressions []Expression `json:"expressions"`
 }
 
 // Type is the abstract type
@@ -204,9 +205,9 @@ func OperatorLookup(op string) OperatorKind {
 // BinaryExpression includes relational and arithmatic operators
 type BinaryExpression struct {
 	*BaseNode
-	Operator OperatorKind
-	Left     Expression
-	Right    Expression
+	Operator OperatorKind `json:"operator"`
+	Left     Expression   `json:"left"`
+	Right    Expression   `json:"right"`
 }
 
 // Type is the abstract type
@@ -236,9 +237,9 @@ func LogicalOperatorLookup(op string) LogicalOperatorKind {
 // `and`` expressions compute the conjunction of two boolean expressions and return boolean values.
 type LogicalExpression struct {
 	*BaseNode
-	Operator LogicalOperatorKind
-	Left     Expression
-	Right    Expression
+	Operator LogicalOperatorKind `json:"operator"`
+	Left     Expression          `json:"left"`
+	Right    Expression          `json:"right"`
 }
 
 // Type is the abstract type
@@ -247,7 +248,7 @@ func (*LogicalExpression) Type() string { return "LogicalExpression" }
 // ArrayExpression is used to create and directly specify the elements of an array object
 type ArrayExpression struct {
 	*BaseNode
-	Elements []Expression
+	Elements []Expression `json:"elements"`
 }
 
 // Type is the abstract type
@@ -256,7 +257,7 @@ func (*ArrayExpression) Type() string { return "ArrayExpression" }
 // ObjectExpression allows the declaration of an anonymous object within a declaration.
 type ObjectExpression struct {
 	*BaseNode
-	Properties []*Property
+	Properties []*Property `json:"properties"`
 }
 
 // Type is the abstract type
@@ -266,9 +267,9 @@ func (*ObjectExpression) Type() string { return "ObjectExpression" }
 // depending on a third, boolean, expression, `Test`.
 type ConditionalExpression struct {
 	*BaseNode
-	Test       Expression
-	Alternate  Expression
-	Consequent Expression
+	Test       Expression `json:"test"`
+	Alternate  Expression `json:"alternate"`
+	Consequent Expression `json:"consequent"`
 }
 
 // Type is the abstract type
@@ -277,8 +278,8 @@ func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
 // Property is the value associated with a key
 type Property struct {
 	*BaseNode
-	Key   *Identifier
-	Value Expression
+	Key   *Identifier `json:"key"`
+	Value Expression  `json:"value"`
 }
 
 // Type is the abstract type
@@ -287,7 +288,7 @@ func (*Property) Type() string { return "Property" }
 // Identifier represents a name that identifies a unique Node
 type Identifier struct {
 	*BaseNode
-	Name string
+	Name string `json:"name"`
 }
 
 // Type is the abstract type
@@ -312,13 +313,15 @@ func (*FieldLiteral) literal()    {}
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {
 	*BaseNode
-	Value string
+	Value string `json:"value"`
 }
+
+func (*StringLiteral) Type() string { return "StringLiteral" }
 
 // BooleanLiteral represent boolean values
 type BooleanLiteral struct {
 	*BaseNode
-	Value bool
+	Value bool `json:"value"`
 }
 
 // Type is the abstract type
@@ -327,7 +330,7 @@ func (*BooleanLiteral) Type() string { return "BooleanLiteral" }
 // NumberLiteral  represent floating point numbers according to the double representations defined by the IEEE-754-1985
 type NumberLiteral struct {
 	*BaseNode
-	Value float64
+	Value float64 `json:"value"`
 }
 
 // Type is the abstract type
@@ -336,7 +339,7 @@ func (*NumberLiteral) Type() string { return "NumberLiteral" }
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
-	Value *regexp.Regexp
+	Value *regexp.Regexp `json:"value"`
 }
 
 // Type is the abstract type
@@ -347,7 +350,7 @@ func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
 // TODO: this may be better as a class initialization
 type DurationLiteral struct {
 	*BaseNode
-	Value time.Duration
+	Value time.Duration `json:"value"`
 }
 
 // Type is the abstract type
@@ -358,7 +361,7 @@ func (*DurationLiteral) Type() string { return "DurationLiteral" }
 // TODO: this may be better as a class initialization
 type DateTimeLiteral struct {
 	*BaseNode
-	Value time.Time
+	Value time.Time `json:"value"`
 }
 
 // Type is the abstract type
@@ -368,7 +371,7 @@ func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
 // TODO: Should field literals be an identifier?
 type FieldLiteral struct {
 	*BaseNode
-	Value string
+	Value string `json:"value"`
 }
 
 // Type is the abstract type

@@ -1,7 +1,9 @@
 package ifql
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"time"
 
@@ -14,14 +16,19 @@ func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	ops, edges, err := NewOperations(function, "")
-	if err != nil {
-		return nil, err
-	}
-	return &query.QuerySpec{
-		Operations: ops,
-		Edges:      edges,
-	}, nil
+	b, _ := json.MarshalIndent(function, "", "    ")
+	log.Printf("%s", string(b))
+	return nil, err
+	/*
+		ops, edges, err := NewOperations(function, "")
+		if err != nil {
+			return nil, err
+		}
+		return &query.QuerySpec{
+			Operations: ops,
+			Edges:      edges,
+		}, nil
+	*/
 }
 
 func NewOperations(function *Function, parent string) ([]*query.Operation, []query.Edge, error) {

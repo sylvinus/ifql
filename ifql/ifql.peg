@@ -4,21 +4,18 @@ package ifql
 //go:generate pigeon -o ifql.go ifql.peg
 }
 
-Grammar = __ fn:Function EOF {
-    return fn.(*Function), nil
+Grammar = __ call:CallExpression EOF {
+    return call.(*ast.CallExpression), nil
 }
 
-Tests =  Function / StringLiteral / Duration / DateTime / Number
-
-Function = name:FunctionName __  "(" __ args:FunctionArgs? __ ")" children:FunctionChain* {
-    return NewFunction(name.(string), args, children)
+CallExpression = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
+    return callchain(callee, args, members, c.text, c.pos)
 }
 
-FunctionChain = __ "." __ child:Function {
-    return child, nil
+Arguments = "(" __ args:(FunctionArgs)? __ ")" {
+    return args, nil
 }
 
-FunctionName = String
 FunctionArgs = first:FunctionArg __ rest:FunctionArgsRest* {
     return object(first, rest, c.text, c.pos)
 }
@@ -27,7 +24,7 @@ FunctionArgsRest = "," __  arg:FunctionArg {
     return arg, nil
 }
 
-FunctionArg = key:String __  ":" __ value:FunctionArgValue {
+FunctionArg = key:String __  ":" __ value:FunctionArgValues {
     return property(key, value, c.text, c.pos)
 }
 
@@ -115,7 +112,7 @@ TimeOffset = ("Z"i / TimeNumOffset)
 PartialTime = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
 FullDate = DateFullYear "-" DateMonth "-" DateMDay
 FullTime = PartialTime TimeOffset
-DateTime = FullDate "T"i FullTime {
+DateTime = FullDate "T" FullTime {
     return datetime(c.text, c.pos)
 }
 
@@ -198,23 +195,3 @@ LineTerminator
 
 EOL = '\n'
 EOF = !.
-
-/*
-MemberExpression
-  = base:(
-        PrimaryExpression
-    )
-    accessors:(
-      / __ "." __ name:IdentifierName
-    )*
-
-CallExpression
-  = base:(
-      name:MemberExpression __ arguments:Arguments 
-    )
-    argumentsOrAccessors:(__ "." __ name:IdentifierName
-    )*
-
-Arguments
-  = "(" __ arguments:FunctionArgs? __ ")"
-*/

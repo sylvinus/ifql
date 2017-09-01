@@ -52,10 +52,6 @@ func NewFunction(name string, args, children interface{}) (*Function, error) {
 	}, nil
 }
 
-func howdy(name string, args, children interface{}) {
-
-}
-
 type FunctionArg struct {
 	Name string `json:"name,omitempty"`
 	Arg  Arg    `json:"arg,omitempty"`
@@ -190,47 +186,63 @@ func NewBinaryExpression(head, tails interface{}) (interface{}, error) {
 	return res, nil
 }
 
-/*
-func (b *BinaryExpression) String() string {
-	res := ""
-	switch l := b.Left.(type) {
-	case *BinaryExpression:
-		res += "(" + l.String() + ")"
-	case *StringLiteral:
-		res += `"` + l.String + `"`
-	case *Number:
-		res += fmt.Sprintf("%f", l.Val)
-	case *Field:
-		res += "$"
-	}
-	res += " " + b.Operator.(string) + " "
+func program(exprstmt interface{}, text []byte, pos position) (*ast.Program, error) {
+	return &ast.Program{
+		Body:     []ast.Statement{exprstmt.(ast.Statement)},
+		BaseNode: base(text, pos),
+	}, nil
+}
 
-	switch r := b.Right.(type) {
-	case *BinaryExpression:
-		res += "(" + r.String() + ")"
-	case *StringLiteral:
-		res += `"` + r.String + `"`
-	case *Number:
-		res += fmt.Sprintf("%f", r.Val)
-	case *Field:
-		res += "$"
-	}
-	return res
-}*/
+func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
+	return &ast.ExpressionStatement{
+		Expression: call.(ast.Expression),
+		BaseNode:   base(text, pos),
+	}, nil
+}
 
-func call(name, args, children interface{}, text []byte, pos position) (*ast.CallExpression, error) {
-	if children == nil {
-		return &ast.CallExpression{
-			Callee:    name.(*ast.Identifier),
-			Arguments: []ast.Expression{args.(*ast.ObjectExpression)},
-		}, nil
+func callchain(callee, args, members interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	res, err := call(callee, args, text, pos)
+	if err != nil {
+		return nil, err
 	}
-	/*
-		for _, child := range toIfaceSlice(children) {
-			chain = append(chain, child.(*Function))
+
+	for _, memexprs := range toIfaceSlice(members) {
+		memexpr := toIfaceSlice(memexprs)
+		if memexpr == nil {
+			continue
 		}
-	*/
-	return nil, nil
+
+		m, err := member(res, memexpr[3], text, pos)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err = call(m, memexpr[5], text, pos)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func call(callee, args interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	var a *ast.ObjectExpression
+	if args != nil {
+		a = args.(*ast.ObjectExpression)
+	}
+	return &ast.CallExpression{
+		Callee:    callee.(ast.Expression),
+		Arguments: []ast.Expression{a},
+		BaseNode:  base(text, pos),
+	}, nil
+}
+
+func member(callee, property interface{}, text []byte, pos position) (*ast.MemberExpression, error) {
+	return &ast.MemberExpression{
+		Object:   callee.(*ast.CallExpression),
+		Property: property.(*ast.Identifier),
+		BaseNode: base(text, pos),
+	}, nil
 }
 
 func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
@@ -362,6 +374,7 @@ func datetime(text []byte, pos position) (*ast.DateTimeLiteral, error) {
 }
 
 func base(text []byte, pos position) *ast.BaseNode {
+	return nil
 	return &ast.BaseNode{
 		Loc: &ast.SourceLocation{
 			Start: ast.Position{
