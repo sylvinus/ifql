@@ -147,7 +147,7 @@ type CallExpression struct {
 // Type is the abstract type
 func (*CallExpression) Type() string { return "CallExpression" }
 
-// CallExpression represents a function all whose callee may be an Identifier or MemberExpression
+// MemberExpression represents calling a property of a CallExpression
 type MemberExpression struct {
 	*BaseNode
 	Object   *CallExpression `json:"object"`
@@ -177,18 +177,20 @@ type OperatorKind int
 
 const (
 	opBegin OperatorKind = iota
+	MultiplicationOperator
+	DivisionOperator
 	AdditionOperator
 	SubtractionOperator
-	DivisionOperator
-	MultiplicationOperator
-	GreaterThanOperator
-	GreaterThanEqualOperator
-	LessThanOperator
 	LessThanEqualOperator
-	InOperator
-	EmptyOperator
-	NotEmptyOperator
+	LessThanOperator
+	GreaterThanEqualOperator
+	GreaterThanOperator
 	StartsWithOperator
+	InOperator
+	NotEmptyOperator
+	EmptyOperator
+	EqualOperator
+	NotEqualOperator
 	opEnd
 )
 
@@ -379,18 +381,20 @@ func (*FieldLiteral) Type() string { return "FieldLiteral" }
 
 // OperatorTokens converts OperatorKind to string
 var OperatorTokens = map[OperatorKind]string{
+	MultiplicationOperator:   "*",
+	DivisionOperator:         "/",
 	AdditionOperator:         "+",
 	SubtractionOperator:      "-",
-	DivisionOperator:         "/",
-	MultiplicationOperator:   "*",
+	LessThanEqualOperator:    "<=",
+	LessThanOperator:         "<",
 	GreaterThanOperator:      ">",
 	GreaterThanEqualOperator: ">=",
-	LessThanOperator:         "<",
-	LessThanEqualOperator:    "<=",
 	InOperator:               "in",
-	EmptyOperator:            "empty",
 	NotEmptyOperator:         "not empty",
+	EmptyOperator:            "empty",
 	StartsWithOperator:       "startswith",
+	EqualOperator:            "==",
+	NotEqualOperator:         "!=",
 }
 
 // LogicalOperatorTokens converts LogicalOperatorKind to string

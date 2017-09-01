@@ -2,13 +2,9 @@ package ifql
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
-	"regexp"
-	"time"
 
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
@@ -31,6 +27,7 @@ func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
 	*/
 }
 
+/*
 func NewOperations(function *Function, parent string) ([]*query.Operation, []query.Edge, error) {
 	ops := []*query.Operation{}
 	edges := []query.Edge{}
@@ -54,7 +51,9 @@ func NewOperations(function *Function, parent string) ([]*query.Operation, []que
 	}
 	return ops, edges, nil
 }
+*/
 
+/*
 func NewOperation(function *Function, parent string) (*query.Operation, query.Edge, error) {
 	edge := query.Edge{
 		Parent: query.OperationID(parent),
@@ -94,191 +93,6 @@ func NewOperation(function *Function, parent string) (*query.Operation, query.Ed
 	}
 }
 
-func NewSumOperation(args []*FunctionArg) (*query.Operation, error) {
-	// TODO: Validate
-	if len(args) != 0 {
-		return nil, fmt.Errorf("Sum takes no args yo!")
-	}
-	return &query.Operation{
-		ID:   "sum",
-		Spec: &query.SumOpSpec{},
-	}, nil
-}
-
-func NewCountOperation(args []*FunctionArg) (*query.Operation, error) {
-	// TODO: Validate
-	if len(args) != 0 {
-		return nil, fmt.Errorf("Count takes no args yo!")
-	}
-	return &query.Operation{
-		ID:   "count",
-		Spec: &query.CountOpSpec{},
-	}, nil
-}
-
-func NewClearOperation(args []*FunctionArg) (*query.Operation, error) {
-	// TODO: Validate
-	if len(args) != 0 {
-		return nil, fmt.Errorf("Clear takes no args yo!")
-	}
-	return &query.Operation{
-		ID:   "clear",
-		Spec: &query.ClearOpSpec{},
-	}, nil
-}
-
-func NewSelectOperation(args []*FunctionArg) (*query.Operation, error) {
-	// TODO: Validate
-	if len(args) != 1 {
-		return nil, fmt.Errorf("Please specify database")
-	}
-
-	arg := args[0]
-	if arg.Name != "database" {
-		return nil, fmt.Errorf("Argument is not database: %s", arg.Name)
-	}
-
-	if arg.Arg.Type() != StringKind {
-		return nil, fmt.Errorf("You are not a string!")
-	}
-
-	database := arg.Arg.Value().(string)
-	return &query.Operation{
-		ID: "select", // TODO: Change this to a UUID
-		Spec: &query.SelectOpSpec{
-			Database: database,
-		},
-	}, nil
-}
-
-func NewWhereOperation(args []*FunctionArg) (*query.Operation, error) {
-	if len(args) != 1 || args[0].Name != "exp" {
-		return nil, fmt.Errorf("Invalid Where clause... also I should make this error better")
-	}
-	arg := args[0].Arg
-	expr := arg.Value().(*BinaryExpression)
-
-	root, err := NewBinaryNode(expr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &query.Operation{
-		ID: "where", // TODO: Change this to a UUID
-		Spec: &query.WhereOpSpec{
-			Exp: &query.WhereExpressionSpec{
-				Predicate: &storage.Predicate{
-					Root: root,
-				},
-			},
-		},
-	}, nil
-}
-
-func NewWindowOperation(args []*FunctionArg) (*query.Operation, error) {
-	if len(args) > 4 {
-		return nil, fmt.Errorf("Invalid window, too many arguments... also I should make this error better")
-	}
-	spec := &query.WindowOpSpec{}
-	everySet := false
-	periodSet := false
-	for _, farg := range args {
-		arg := farg.Arg
-		switch farg.Name {
-		case "every":
-			everySet = true
-			if arg.Type() != DurationKind {
-				return nil, fmt.Errorf("every argument must be a duration")
-			}
-			spec.Every = query.Duration(arg.Value().(time.Duration))
-		case "period":
-			periodSet = true
-			if arg.Type() != DurationKind {
-				return nil, fmt.Errorf("period argument must be a duration")
-			}
-			spec.Period = query.Duration(arg.Value().(time.Duration))
-		case "round":
-			if arg.Type() != DurationKind {
-				return nil, fmt.Errorf("round argument must be a duration")
-			}
-			spec.Round = query.Duration(arg.Value().(time.Duration))
-		case "start":
-			t, err := NewTime(arg)
-			if err != nil {
-				return nil, err
-			}
-			spec.Start = t
-		}
-	}
-	// Apply defaults
-	if !everySet {
-		spec.Every = spec.Period
-	}
-	if !periodSet {
-		spec.Period = spec.Every
-	}
-	return &query.Operation{
-		ID:   "window", // TODO: Change this to a UUID
-		Spec: spec,
-	}, nil
-}
-
-func NewBinaryNode(expr *BinaryExpression) (node *storage.Node, err error) {
-	switch expr.Operator {
-	case "==", "!=", "startswith":
-		node, err = NewComparisonNode(expr)
-	case "and", "or":
-		node, err = NewLogicalNode(expr)
-	case "<=", "<", ">=", ">", "in", "not empty", "empty":
-		err = fmt.Errorf("Operator %s has not been implemented yet", expr.Operator)
-	default:
-		err = fmt.Errorf("Unsupported operator %s", expr.Operator)
-	}
-	return
-}
-
-func NewLogicalOperator(op string) (storage.Node_Logical, error) {
-	if op == "and" {
-		return storage.LogicalAnd, nil
-	} else if op == "or" {
-		return storage.LogicalOr, nil
-	}
-	return 0, fmt.Errorf("Unknown logical operator %s", op)
-}
-
-func NewLogicalNode(expr *BinaryExpression) (*storage.Node, error) {
-	lhs, ok := expr.Left.(*BinaryExpression)
-	if !ok {
-		return nil, fmt.Errorf("Left-hand side of logical expression not binary")
-	}
-
-	left, err := NewBinaryNode(lhs)
-	if err != nil {
-		return nil, err
-	}
-
-	rhs, ok := expr.Right.(*BinaryExpression)
-	if !ok {
-		return nil, fmt.Errorf("Right-hand side of logical expression not binary")
-	}
-
-	right, err := NewBinaryNode(rhs)
-	if err != nil {
-		return nil, err
-	}
-
-	op, err := NewLogicalOperator(expr.Operator)
-	if err != nil {
-		return nil, err
-	}
-
-	return &storage.Node{
-		NodeType: storage.NodeTypeGroupExpression,
-		Value:    &storage.Node_Logical_{Logical: op},
-		Children: []*storage.Node{left, right},
-	}, nil
-}
-
 func NewComparisonOperator(op string, isRegex bool) (storage.Node_Comparison, error) {
 	// "<=" / "<" / ">=" / ">" / "=" / "!=" / "startsWith"i / "in"i / "not empty"i / "empty"i
 	switch op {
@@ -301,6 +115,7 @@ func NewComparisonOperator(op string, isRegex bool) (storage.Node_Comparison, er
 	}
 }
 
+/*
 func NewComparisonNode(expr *BinaryExpression) (*storage.Node, error) {
 	if _, ok := expr.Left.(*BinaryExpression); ok {
 		return nil, fmt.Errorf("Left-hand side of comparison expression cannot be a binary expression")
@@ -353,92 +168,6 @@ func NewComparisonNode(expr *BinaryExpression) (*storage.Node, error) {
 
 }
 
-func NewRangeOperation(args []*FunctionArg) (*query.Operation, error) {
-	// TODO: Validate
-	if len(args) == 1 && args[0].Name == "start" {
-		start, err := NewTime(args[0].Arg)
-		if err != nil {
-			return nil, err
-		}
-		return &query.Operation{
-			ID: "range", // TODO: Change this to a UUID
-			Spec: &query.RangeOpSpec{
-				Start: start,
-				Stop: query.Time{
-					Absolute: time.Now(),
-				},
-			},
-		}, nil
-	} else if len(args) == 1 && args[0].Name == "stop" {
-		return nil, fmt.Errorf("Must specify a start time")
-	} else if len(args) == 2 {
-		// TODO: fix this logic to prevent 2 start times
-		var start query.Time
-		var stop query.Time
-		var err error
-		// TODO: oh boy this is getting bad...
-		switch args[0].Name {
-		case "start":
-			start, err = NewTime(args[0].Arg)
-			if err != nil {
-				return nil, err
-			}
-		case "stop":
-			stop, err = NewTime(args[0].Arg)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, fmt.Errorf("Unknown range argument: %s", args[0].Name)
-		}
-
-		switch args[1].Name {
-		case "start":
-			start, err = NewTime(args[1].Arg)
-			if err != nil {
-				return nil, err
-			}
-		case "stop":
-			stop, err = NewTime(args[1].Arg)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, fmt.Errorf("Unknown range argument: %s", args[1].Name)
-		}
-		return &query.Operation{
-			ID: "range", // TODO: Change this to a UUID
-			Spec: &query.RangeOpSpec{
-				Start: start,
-				Stop:  stop,
-			},
-		}, nil
-
-	}
-	return nil, fmt.Errorf("no idea what this error is... chris, what is going on?")
-}
-
-func NewTime(arg Arg) (query.Time, error) {
-	kind := arg.Type()
-	switch kind {
-	case DateTimeKind:
-		return query.Time{
-			Absolute: arg.Value().(time.Time),
-		}, nil
-	case DurationKind:
-		return query.Time{
-			Relative: arg.Value().(time.Duration),
-		}, nil
-		// TODO: convert from float64 to time.time
-	case NumberKind:
-		return query.Time{
-			Absolute: time.Now(),
-		}, nil
-	default:
-		return query.Time{}, fmt.Errorf("Unknown time type")
-	}
-}
-
 func NewNodeRef(val interface{}) *storage.Node {
 	switch v := val.(type) {
 	case *StringLiteral:
@@ -485,3 +214,4 @@ func NewNodeLiteral(val interface{}) *storage.Node {
 	}
 	return nil
 }
+*/
