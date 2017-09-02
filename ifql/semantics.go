@@ -10,6 +10,7 @@ import (
 	"github.com/influxdata/ifql/query/execute/storage"
 )
 
+// NewQuerySpec validates and converts an ast.Program to a query
 func NewQuerySpec(program *ast.Program) (*query.QuerySpec, error) {
 	// TODO: There are other possible expression/variable statements
 	for _, stmt := range program.Body {
@@ -29,23 +30,30 @@ func NewQuerySpec(program *ast.Program) (*query.QuerySpec, error) {
 func fromExpression(expr ast.Expression) (*query.QuerySpec, error) {
 	switch e := expr.(type) {
 	case *ast.CallExpression:
-		function, err := callFunction(e, nil)
+		fn, err := callFunction(e, nil)
 		if err != nil {
 			return nil, err
 		}
-	// TODO: return the query spec from this callchain
+		return fn.QuerySpec(), nil
 	default:
 		return nil, fmt.Errorf("Unsupport expression %t", e)
 	}
-	// FIXME: return the query spec from this callchain
-	return nil, nil
 }
 
+// CallChain is an intermediate structure to build QuerySpecs during recursion through the AST
 type CallChain struct {
 	Operators  []*query.Operation
-	Edges      []*query.Edge
+	Edges      []query.Edge
 	ParentName string
 	ParentID   string
+}
+
+// QuerySpec converts the CallChain into a query.QuerySpec
+func (c *CallChain) QuerySpec() *query.QuerySpec {
+	return &query.QuerySpec{
+		Operations: c.Operators,
+		Edges:      c.Edges,
+	}
 }
 
 func callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
@@ -55,10 +63,9 @@ func callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error
 		if err != nil {
 			return nil, err
 		}
-
 		return &CallChain{
 			Operators:  []*query.Operation{op},
-			Edges:      []*query.Edge{},
+			Edges:      []query.Edge{},
 			ParentName: callee.Name,
 			ParentID:   callee.Name, // TODO make this a real ID
 		}, nil
@@ -91,7 +98,7 @@ func memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain,
 	// TODO: make these IDs uniquer-er-er
 	childID := child
 
-	edge := &query.Edge{
+	edge := query.Edge{
 		Parent: query.OperationID(chain.ParentID),
 		Child:  query.OperationID(childID),
 	}
