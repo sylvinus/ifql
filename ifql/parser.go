@@ -9,10 +9,11 @@ func toIfaceSlice(v interface{}) []interface{} {
 	return v.([]interface{})
 }
 
-func NewAST(ifql string, opts ...Option) (*ast.CallExpression, error) {
+// NewAST parses ifql query and produces an ast.Program
+func NewAST(ifql string, opts ...Option) (*ast.Program, error) {
 	f, err := Parse("", []byte(ifql), opts...)
 	if err != nil {
 		return nil, err
 	}
-	return f.(*ast.CallExpression), nil
+	return f.(*ast.Program), nil
 }

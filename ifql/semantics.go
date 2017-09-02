@@ -94,7 +94,6 @@ func memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain,
 	}
 
 	child := member.Property.Name
-	parent := chain.ParentName
 	// TODO: make these IDs uniquer-er-er
 	childID := child
 
@@ -360,7 +359,7 @@ func comparisonOp(op ast.OperatorKind, isRegex bool) (storage.Node_Comparison, e
 		return storage.ComparisonStartsWith, nil
 	case ast.MultiplicationOperator, ast.DivisionOperator, ast.AdditionOperator, ast.SubtractionOperator:
 		fallthrough
-	case ast.LessThanEqualOperator, ast.LessThanOperator, ast.GreaterThanEqualOperator, ast.GreaterThanEqualOperator:
+	case ast.LessThanEqualOperator, ast.LessThanOperator, ast.GreaterThanEqualOperator, ast.GreaterThanOperator:
 		fallthrough
 	case ast.InOperator, ast.NotEmptyOperator:
 		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)

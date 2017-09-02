@@ -9,6 +9,14 @@ import (
 	"github.com/influxdata/ifql/ast"
 )
 
+func buildProgram(call interface{}, text []byte, pos position) (*ast.Program, error) {
+	expr, err := exprstmt(call, text, pos)
+	if err != nil {
+		return nil, nil
+	}
+	return program(expr, text, pos)
+}
+
 func program(exprstmt interface{}, text []byte, pos position) (*ast.Program, error) {
 	return &ast.Program{
 		Body:     []ast.Statement{exprstmt.(ast.Statement)},
@@ -49,15 +57,14 @@ func callchain(callee, args, members interface{}, text []byte, pos position) (*a
 }
 
 func call(callee, args interface{}, text []byte, pos position) (*ast.CallExpression, error) {
-	var a *ast.ObjectExpression
-	if args != nil {
-		a = args.(*ast.ObjectExpression)
+	c := &ast.CallExpression{
+		Callee:   callee.(ast.Expression),
+		BaseNode: base(text, pos),
 	}
-	return &ast.CallExpression{
-		Callee:    callee.(ast.Expression),
-		Arguments: []ast.Expression{a},
-		BaseNode:  base(text, pos),
-	}, nil
+	if args != nil {
+		c.Arguments = []ast.Expression{args.(*ast.ObjectExpression)}
+	}
+	return c, nil
 }
 
 func member(callee, property interface{}, text []byte, pos position) (*ast.MemberExpression, error) {
@@ -75,6 +82,7 @@ func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpr
 			props = append(props, prop.(*ast.Property))
 		}
 	}
+
 	return &ast.ObjectExpression{
 		Properties: props,
 		BaseNode:   base(text, pos),
@@ -96,7 +104,7 @@ func identifier(text []byte, pos position) (*ast.Identifier, error) {
 	}, nil
 }
 
-func logicalExpression(head, tails interface{}) (ast.Expression, error) {
+func logicalExpression(head, tails interface{}, text []byte, pos position) (ast.Expression, error) {
 	res := head.(ast.Expression)
 	for _, tail := range toIfaceSlice(tails) {
 		right := toIfaceSlice(tail)
@@ -104,6 +112,7 @@ func logicalExpression(head, tails interface{}) (ast.Expression, error) {
 			Left:     res,
 			Right:    right[3].(ast.Expression),
 			Operator: right[1].(ast.LogicalOperatorKind),
+			BaseNode: base(text, pos),
 		}
 	}
 	return res, nil
@@ -113,7 +122,7 @@ func logicalOp(text []byte) (ast.LogicalOperatorKind, error) {
 	return ast.LogicalOperatorLookup(strings.ToLower(string(text))), nil
 }
 
-func binaryExpression(head, tails interface{}) (ast.Expression, error) {
+func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.Expression, error) {
 	res := head.(ast.Expression)
 	for _, tail := range toIfaceSlice(tails) {
 		right := toIfaceSlice(tail)
@@ -121,6 +130,7 @@ func binaryExpression(head, tails interface{}) (ast.Expression, error) {
 			Left:     res,
 			Right:    right[3].(ast.Expression),
 			Operator: right[1].(ast.OperatorKind),
+			BaseNode: base(text, pos),
 		}
 	}
 	return res, nil

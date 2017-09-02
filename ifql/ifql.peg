@@ -5,7 +5,7 @@ package ifql
 }
 
 Grammar = __ call:CallExpression EOF {
-    return call.(*ast.CallExpression), nil
+    return buildProgram(call, c.text, c.pos)
 }
 
 CallExpression = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
@@ -31,7 +31,7 @@ FunctionArg = key:String __  ":" __ value:FunctionArgValues {
 FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number
 
 WhereExpr = "{" __ expr:Expr __  "}" {
-    return expr.(ast.Expression), nil
+    return expr, nil
 }
 
 // + -
@@ -47,39 +47,39 @@ LogicalOperators =  ("or"i / "and"i) {
     return logicalOp(c.text)
 }
 Logical = head:Equality tail:( __  LogicalOperators __  Equality )* {
-    return logicalExpression(head, tail) // TODO: Add source
+    return logicalExpression(head, tail, c.text, c.pos)
 }
 
 EqualityOperators =  ("==" / "!=" ) {
     return binaryOp(c.text)
 }
 Equality = head:Relational tail:( __ EqualityOperators __ Relational )* {
-    return binaryExpression(head, tail)// TODO: Add source
+    return binaryExpression(head, tail, c.text, c.pos)
 }
 
 RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) {
     return binaryOp(c.text)
 }
 Relational = head:Additive tail:( __ RelationalOperators __ Additive )* {
-    return binaryExpression(head, tail)// TODO: Add source
+    return binaryExpression(head, tail, c.text, c.pos)
 }
 
 AdditiveOperator = ("+" / "-") {
     return binaryOp(c.text)
 }
 Additive = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { 
-    return binaryExpression(head, tail)// TODO: Add source
+    return binaryExpression(head, tail, c.text, c.pos)
 }
 
 MultiplicativeOperator = ("*" / "/") {
     return binaryOp(c.text)
 }
 Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
-    return binaryExpression(head, tail)// TODO: Add source
+    return binaryExpression(head, tail, c.text, c.pos)
 }
 
 Primary = '(' __ expr:Logical __ ')' {
-    return expr.(ast.Expression), nil
+    return expr, nil
 } / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
 
 DateFullYear = Digit Digit Digit Digit
