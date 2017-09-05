@@ -8,6 +8,33 @@ Grammar = __ call:CallExpression EOF {
     return buildProgram(call, c.text, c.pos)
 }
 
+Program = body:SourceElements?
+SourceElements = head:SourceElement tail:(__ SourceElement)*
+SourceElement = Statement
+
+Statement
+  = VariableStatement
+  / ExpressionStatement
+
+VariableStatement
+  = VarToken __ declarations:VariableDeclarationList
+
+VariableDeclarationList
+  = head:VariableDeclaration tail:(__ "," __ VariableDeclaration)*
+
+VarToken = "var"
+
+VariableDeclaration
+  = id:String initExpr:( __ Initializer)?
+
+Initializer
+  = "=" !"=" __ expression:VariableExpression
+
+// TODO: Perhaps this should be modeled like an AssignmentExpresssion
+VariableExpression = CallExpression / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
+
+// TODO: Add MemberExpression to chain from a Variable
+
 CallExpression = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
     return callchain(callee, args, members, c.text, c.pos)
 }
@@ -28,7 +55,7 @@ FunctionArg = key:String __  ":" __ value:FunctionArgValues {
     return property(key, value, c.text, c.pos)
 }
 
-FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number
+FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / String
 
 WhereExpr = "{" __ expr:Expr __  "}" {
     return expr, nil
@@ -36,8 +63,8 @@ WhereExpr = "{" __ expr:Expr __  "}" {
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
-// == != 
-// and or 
+// == !=
+// and or
 // Lowest to Highest Priority.
 // Highest Priority includes the valid primary
 // primary contains the Lowest Priority
@@ -80,7 +107,7 @@ Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
 
 Primary = '(' __ expr:Logical __ ')' {
     return expr, nil
-} / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
+} / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field / String
 
 DateFullYear = Digit Digit Digit Digit
 
