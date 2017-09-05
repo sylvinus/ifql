@@ -9,18 +9,32 @@ import (
 	"github.com/influxdata/ifql/ast"
 )
 
-func buildProgram(call interface{}, text []byte, pos position) (*ast.Program, error) {
-	expr, err := exprstmt(call, text, pos)
-	if err != nil {
-		return nil, nil
-	}
-	return program(expr, text, pos)
-}
-
 func program(exprstmt interface{}, text []byte, pos position) (*ast.Program, error) {
 	return &ast.Program{
 		Body:     []ast.Statement{exprstmt.(ast.Statement)},
 		BaseNode: base(text, pos),
+	}, nil
+}
+
+func varstmt(declarations interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
+	return &ast.VariableDeclaration{
+		Declarations: declarations.([]*ast.VariableDeclarator),
+		BaseNode:     base(text, pos),
+	}, nil
+}
+
+func vardecls(head, tails interface{}) ([]*ast.VariableDeclarator, error) {
+	decls := []*ast.VariableDeclarator{head.(*ast.VariableDeclarator)}
+	for _, decl := range toIfaceSlice(tails) {
+		decls = append(decls, decl.(*ast.VariableDeclarator))
+	}
+	return decls, nil
+}
+
+func vardecl(id, initializer interface{}, text []byte, pos position) (*ast.VariableDeclarator, error) {
+	return &ast.VariableDeclarator{
+		ID:   id.(*ast.Identifier),
+		Init: initializer.(ast.Expression),
 	}, nil
 }
 

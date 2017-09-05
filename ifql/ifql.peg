@@ -4,37 +4,49 @@ package ifql
 //go:generate pigeon -o ifql.go ifql.peg
 }
 
-Grammar
-  = __ call:CallExpression EOF {
-      return buildProgram(call, c.text, c.pos)
+Start
+  = __ program:Program __ {
+      return program, nil
     }
 
 Program
-  = body:SourceElements?
+  = body:SourceElements {
+      return program(body, c.text, c.pos)
+    }
 
 SourceElements
-  = head:SourceElement tail:(__ SourceElement)*
+  = head:SourceElement tail:(__ SourceElement)* {
+      return head, nil
+    }
 
 SourceElement
   = Statement
 
 Statement
-  = VariableStatement
-  / ExpressionStatement
+  = varstmt:VariableStatement
+  / exprstmt:ExpressionStatement
 
 VariableStatement
-  = VarToken __ declarations:VariableDeclarationList
+  = VarToken __ declarations:VariableDeclarationList {
+      return varstmt(declarations, c.text, c.pos)
+    }
 
 VariableDeclarationList
-  = head:VariableDeclaration tail:(__ "," __ VariableDeclaration)*
+  = head:VariableDeclaration tail:(__ "," __ VariableDeclaration)* {
+        return vardecls(head, tail)
+    }
 
 VarToken = "var"
 
 VariableDeclaration
-  = id:String initExpr:( __ Initializer)?
+  = id:String __ initExpr:Initializer {
+      return vardecl(id, initExpr, c.text, c.pos)
+    }
 
 Initializer
-  = "=" !"=" __ expression:VariableExpression
+  = "=" !"=" __ expression:VariableExpression {
+      return expression, nil
+    }
 
 // TODO: Perhaps this should be modeled like an AssignmentExpresssion
 VariableExpression
@@ -49,7 +61,9 @@ VariableExpression
 // TODO: Add MemberExpression to chain from a Variable
 
 ExpressionStatement
-  = CallExpression
+  = call:CallExpression {
+        return exprstmt(call, c.text, c.pos)
+    }
 
 CallExpression
   = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
