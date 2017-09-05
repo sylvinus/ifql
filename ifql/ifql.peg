@@ -175,7 +175,7 @@ AdditiveOperator
       }
 
 Additive
-  = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { 
+  = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* {
       return binaryExpression(head, tail, c.text, c.pos)
     }
 
