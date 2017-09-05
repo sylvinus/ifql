@@ -25,20 +25,11 @@ func srcElems(head, tails interface{}) ([]ast.Statement, error) {
 	return elems, nil
 }
 
-func varstmt(declarations interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
+func varstmt(declaration interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
 	return &ast.VariableDeclaration{
-		Declarations: declarations.([]*ast.VariableDeclarator),
+		Declarations: []*ast.VariableDeclarator{declaration.(*ast.VariableDeclarator)},
 		BaseNode:     base(text, pos),
 	}, nil
-}
-
-func vardecls(head, tails interface{}) ([]*ast.VariableDeclarator, error) {
-	decls := []*ast.VariableDeclarator{head.(*ast.VariableDeclarator)}
-	for _, tail := range toIfaceSlice(tails) {
-		decl := toIfaceSlice(tail)[3] // Skip whitespace and comma
-		decls = append(decls, decl.(*ast.VariableDeclarator))
-	}
-	return decls, nil
 }
 
 func vardecl(id, initializer interface{}, text []byte, pos position) (*ast.VariableDeclarator, error) {

@@ -27,13 +27,8 @@ Statement
   / exprstmt:ExpressionStatement
 
 VariableStatement
-  = VarToken __ declarations:VariableDeclarationList {
-      return varstmt(declarations, c.text, c.pos)
-    }
-
-VariableDeclarationList
-  = head:VariableDeclaration tail:(__ "," __ VariableDeclaration)* {
-        return vardecls(head, tail)
+  = VarToken __ declaration:VariableDeclaration {
+      return varstmt(declaration, c.text, c.pos)
     }
 
 VarToken = "var"

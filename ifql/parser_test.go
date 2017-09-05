@@ -90,6 +90,70 @@ func TestNewAST(t *testing.T) {
 			},
 		},
 		{
+			name: "two variables for two selects",
+			raw: `var howdy = select()
+			var doody = select()
+			howdy.count()
+			doody.sum()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{
+							&ast.VariableDeclarator{
+								ID: &ast.Identifier{
+									Name: "howdy",
+								},
+								Init: &ast.CallExpression{
+									Callee: &ast.Identifier{
+										Name: "select",
+									},
+								},
+							},
+						},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{
+							&ast.VariableDeclarator{
+								ID: &ast.Identifier{
+									Name: "doody",
+								},
+								Init: &ast.CallExpression{
+									Callee: &ast.Identifier{
+										Name: "select",
+									},
+								},
+							},
+						},
+					},
+
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.Identifier{
+									Name: "howdy",
+								},
+								Property: &ast.Identifier{
+									Name: "count",
+								},
+							},
+						},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.Identifier{
+									Name: "doody",
+								},
+								Property: &ast.Identifier{
+									Name: "sum",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "select with database",
 			raw:  `select(database:"telegraf")`,
 			want: &ast.Program{
@@ -225,7 +289,7 @@ func TestNewAST(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			g, err := Parse("", []byte(tt.raw))
+			got, err := Parse("", []byte(tt.raw))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -233,8 +297,8 @@ func TestNewAST(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if !cmp.Equal(tt.want, g) {
-				t.Errorf("Parse() = %s", cmp.Diff(tt.want, g))
+			if !cmp.Equal(tt.want, got) {
+				t.Errorf("Parse() = -got/+want %s", cmp.Diff(tt.want, got))
 			}
 		})
 	}
