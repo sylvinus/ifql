@@ -4,13 +4,19 @@ package ifql
 //go:generate pigeon -o ifql.go ifql.peg
 }
 
-Grammar = __ call:CallExpression EOF {
-    return buildProgram(call, c.text, c.pos)
-}
+Grammar
+  = __ call:CallExpression EOF {
+      return buildProgram(call, c.text, c.pos)
+    }
 
-Program = body:SourceElements?
-SourceElements = head:SourceElement tail:(__ SourceElement)*
-SourceElement = Statement
+Program
+  = body:SourceElements?
+
+SourceElements
+  = head:SourceElement tail:(__ SourceElement)*
+
+SourceElement
+  = Statement
 
 Statement
   = VariableStatement
@@ -31,35 +37,55 @@ Initializer
   = "=" !"=" __ expression:VariableExpression
 
 // TODO: Perhaps this should be modeled like an AssignmentExpresssion
-VariableExpression = CallExpression / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
+VariableExpression
+  = CallExpression
+  / StringLiteral
+  / RegularExpressionLiteral
+  / Duration
+  / DateTime
+  / Number
+  / Field
 
 // TODO: Add MemberExpression to chain from a Variable
 
-CallExpression = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
-    return callchain(callee, args, members, c.text, c.pos)
-}
+CallExpression
+  = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
+      return callchain(callee, args, members, c.text, c.pos)
+    }
 
-Arguments = "(" __ args:(FunctionArgs)? __ ")" {
-    return args, nil
-}
+Arguments
+  = "(" __ args:(FunctionArgs)? __ ")" {
+      return args, nil
+    }
 
-FunctionArgs = first:FunctionArg __ rest:FunctionArgsRest* {
-    return object(first, rest, c.text, c.pos)
-}
+FunctionArgs
+  = first:FunctionArg __ rest:FunctionArgsRest* {
+      return object(first, rest, c.text, c.pos)
+    }
 
-FunctionArgsRest = "," __  arg:FunctionArg {
-    return arg, nil
-}
+FunctionArgsRest
+  = "," __  arg:FunctionArg {
+      return arg, nil
+    }
 
-FunctionArg = key:String __  ":" __ value:FunctionArgValues {
-    return property(key, value, c.text, c.pos)
-}
+FunctionArg
+  = key:String __  ":" __ value:FunctionArgValues {
+      return property(key, value, c.text, c.pos)
+    }
 
-FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / String
+FunctionArgValues
+  = WhereExpr
+  / StringLiteral
+  / RegularExpressionLiteral
+  / Duration
+  / DateTime
+  / Number
+  / String
 
-WhereExpr = "{" __ expr:Expr __  "}" {
-    return expr, nil
-}
+WhereExpr
+  = "{" __ expr:Expr __  "}" {
+      return expr, nil
+    }
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
@@ -68,48 +94,81 @@ WhereExpr = "{" __ expr:Expr __  "}" {
 // Lowest to Highest Priority.
 // Highest Priority includes the valid primary
 // primary contains the Lowest Priority
-Expr = Logical
+Expr
+  = Logical
 
-LogicalOperators =  ("or"i / "and"i) {
-    return logicalOp(c.text)
-}
-Logical = head:Equality tail:( __  LogicalOperators __  Equality )* {
-    return logicalExpression(head, tail, c.text, c.pos)
-}
+LogicalOperators
+  = ("or"i / "and"i) {
+        return logicalOp(c.text)
+      }
 
-EqualityOperators =  ("==" / "!=" ) {
-    return binaryOp(c.text)
-}
-Equality = head:Relational tail:( __ EqualityOperators __ Relational )* {
-    return binaryExpression(head, tail, c.text, c.pos)
-}
+Logical
+  = head:Equality tail:( __  LogicalOperators __  Equality )* {
+      return logicalExpression(head, tail, c.text, c.pos)
+    }
 
-RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) {
-    return binaryOp(c.text)
-}
-Relational = head:Additive tail:( __ RelationalOperators __ Additive )* {
-    return binaryExpression(head, tail, c.text, c.pos)
-}
+EqualityOperators
+  = ("==" / "!=" ) {
+      return binaryOp(c.text)
+    }
 
-AdditiveOperator = ("+" / "-") {
-    return binaryOp(c.text)
-}
-Additive = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { 
-    return binaryExpression(head, tail, c.text, c.pos)
-}
+Equality
+  = head:Relational tail:( __ EqualityOperators __ Relational )* {
+      return binaryExpression(head, tail, c.text, c.pos)
+    }
 
-MultiplicativeOperator = ("*" / "/") {
-    return binaryOp(c.text)
-}
-Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
-    return binaryExpression(head, tail, c.text, c.pos)
-}
+RelationalOperators
+  = (   "<="
+      / "<"
+      / ">="
+      / ">"
+      / "startsWith"i
+      / "IN"i
+      / "NOT EMPTY"i
+      / "EMPTY"i
+    ) {
+        return binaryOp(c.text)
+      }
 
-Primary = '(' __ expr:Logical __ ')' {
-    return expr, nil
-} / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field / String
+Relational
+  = head:Additive tail:( __ RelationalOperators __ Additive )* {
+      return binaryExpression(head, tail, c.text, c.pos)
+    }
 
-DateFullYear = Digit Digit Digit Digit
+AdditiveOperator
+  = ("+" / "-") {
+        return binaryOp(c.text)
+      }
+
+Additive
+  = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { 
+      return binaryExpression(head, tail, c.text, c.pos)
+    }
+
+MultiplicativeOperator
+  = ("*" / "/") {
+      return binaryOp(c.text)
+    }
+
+Multiplicative
+  = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
+      return binaryExpression(head, tail, c.text, c.pos)
+    }
+
+Primary
+  = '(' __ expr:Logical __ ')' {
+      return expr, nil
+    }
+  / StringLiteral
+  / RegularExpressionLiteral
+  / Duration
+  / DateTime
+  / Number
+  / Field
+  / String
+
+DateFullYear
+  = Digit Digit Digit Digit
 
 DateMonth
   // 01-12
@@ -133,58 +192,110 @@ TimeSecond
   // rules
   = Digit Digit
 
-TimeSecFrac = "." Digit+
-TimeNumOffset = ("+" / "-") TimeHour ":" TimeMinute
-TimeOffset = ("Z"i / TimeNumOffset)
-PartialTime = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
-FullDate = DateFullYear "-" DateMonth "-" DateMDay
-FullTime = PartialTime TimeOffset
-DateTime = FullDate "T" FullTime {
-    return datetime(c.text, c.pos)
-}
+TimeSecFrac
+  = "." Digit+
 
-NanoSecondUnits = "ns"
-MicroSecondUnits = ("us" / "µs" / "μs")
-MilliSecondUnits = "ms"
-SecondUnits = "s"
-MinuteUnits = "m"
-HourUnits = "h"
-DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondUnits / MinuteUnits / HourUnits)
+TimeNumOffset
+  = ("+" / "-") TimeHour ":" TimeMinute
 
-SingleDuration = Number DurationUnits
-Duration = SingleDuration+ {
-    return durationLiteral(c.text, c.pos)
-}
+TimeOffset
+  = ("Z" / TimeNumOffset)
 
-StringLiteral = ( '"' DoubleStringChar* '"' ) {
-    return stringLiteral(c.text, c.pos)
-} / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
-    return "", errors.New("string literal not terminated")
-}
+PartialTime
+  = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
 
-DoubleStringChar = !( '"' / "\\" / EOL ) SourceChar / "\\" DoubleStringEscape
+FullDate
+  = DateFullYear "-" DateMonth "-" DateMDay
 
-DoubleStringEscape =  '"' / ( SourceChar / EOL / EOF ) {
-    return nil, errors.New("invalid escape character")
-}
+FullTime
+  = PartialTime TimeOffset
 
-String = StringChar+ {
-    return identifier(c.text, c.pos)
-}
+DateTime
+  = FullDate "T" FullTime {
+      return datetime(c.text, c.pos)
+    }
 
-StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / "," / "$") SourceChar
+NanoSecondUnits
+  = "ns"
 
-Number = '-'? Integer ( '.' Digit+ )? {
-    return numberLiteral(c.text, c.pos)
-}
+MicroSecondUnits
+  = ("us" / "µs" / "μs")
 
-Integer = '0' / NonZeroDigit Digit*
-NonZeroDigit = [1-9]
-Digit = [0-9]
+MilliSecondUnits
+  = "ms"
 
-Field = field:'$' {
-    return fieldLiteral(c.text, c.pos)
-}
+SecondUnits
+  = "s"
+
+MinuteUnits
+  = "m"
+
+HourUnits
+  = "h"
+
+DurationUnits
+  = (
+        NanoSecondUnits
+      / MicroSecondUnits
+      / MilliSecondUnits
+      / SecondUnits
+      / MinuteUnits
+      / HourUnits
+    )
+
+SingleDuration
+  = Number DurationUnits
+
+Duration
+  = SingleDuration+ {
+      return durationLiteral(c.text, c.pos)
+    }
+
+StringLiteral
+  = ( '"' DoubleStringChar* '"' ) {
+        return stringLiteral(c.text, c.pos)
+      }
+  / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
+        return "", errors.New("string literal not terminated")
+      }
+
+DoubleStringChar
+  = !( '"' / "\\" / EOL ) SourceChar
+  / "\\" DoubleStringEscape
+
+DoubleStringEscape
+  = '"'
+  / ( SourceChar / EOL / EOF ) {
+      return nil, errors.New("invalid escape character")
+    }
+
+String
+  = StringChar+ {
+      return identifier(c.text, c.pos)
+    }
+
+StringChar
+  = !('"' / "(" / ")" / ":" / "{" / "}" / "," / "$") SourceChar
+
+Number
+  = '-'? Integer ( '.' Digit+ )? {
+      return numberLiteral(c.text, c.pos)
+    }
+
+Integer
+  = '0'
+  / NonZeroDigit Digit*
+
+NonZeroDigit
+  = [1-9]
+
+Digit
+  = [0-9]
+
+Field
+  = field:'$' {
+      return fieldLiteral(c.text, c.pos)
+    }
 
 RegularExpressionLiteral "regular expression"
   = "/" pattern:RegularExpressionBody "/" {
@@ -213,12 +324,20 @@ RegularExpressionNonTerminator
       return string(c.text), nil
   }
 
-SourceChar = .
+SourceChar
+  = .
 
-__ = ( ws / EOL )*
-ws = [ \t\r\n]
+__
+  = ( ws / EOL )*
+
+ws
+  = [ \t\r\n]
+
 LineTerminator
   = [\n\r]
 
-EOL = '\n'
-EOF = !.
+EOL
+  = '\n'
+
+EOF
+  = !.
