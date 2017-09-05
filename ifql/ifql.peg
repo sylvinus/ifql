@@ -16,7 +16,7 @@ Program
 
 SourceElements
   = head:SourceElement tail:(__ SourceElement)* {
-      return head, nil
+      return srcElems(head, tail)
     }
 
 SourceElement
@@ -292,7 +292,16 @@ String
     }
 
 StringChar
-  = !('"' / "(" / ")" / ":" / "{" / "}" / "," / "$") SourceChar
+  = !('"'
+      / "("
+      / ")"
+      / ":"
+      / "{"
+      / "}"
+      / ","
+      / "$"
+      / ws
+    ) SourceChar
 
 Number
   = '-'? Integer ( '.' Digit+ )? {

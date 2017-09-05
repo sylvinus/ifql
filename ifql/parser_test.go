@@ -31,6 +31,30 @@ func TestNewAST(t *testing.T) {
 			},
 		},
 		{
+			name: "use variable to declare something",
+			raw: `var howdy = 1
+			select()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{
+							&ast.VariableDeclarator{
+								ID:   &ast.Identifier{Name: "howdy"},
+								Init: &ast.NumberLiteral{Value: 1},
+							},
+						},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "select",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "select with database",
 			raw:  `select(database:"telegraf")`,
 			want: &ast.Program{

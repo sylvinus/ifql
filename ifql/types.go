@@ -9,11 +9,20 @@ import (
 	"github.com/influxdata/ifql/ast"
 )
 
-func program(exprstmt interface{}, text []byte, pos position) (*ast.Program, error) {
+func program(body interface{}, text []byte, pos position) (*ast.Program, error) {
 	return &ast.Program{
-		Body:     []ast.Statement{exprstmt.(ast.Statement)},
+		Body:     body.([]ast.Statement),
 		BaseNode: base(text, pos),
 	}, nil
+}
+
+func srcElems(head, tails interface{}) ([]ast.Statement, error) {
+	elems := []ast.Statement{head.(ast.Statement)}
+	for _, tail := range toIfaceSlice(tails) {
+		elem := toIfaceSlice(tail)[1] // Skip whitespace
+		elems = append(elems, elem.(ast.Statement))
+	}
+	return elems, nil
 }
 
 func varstmt(declarations interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
@@ -25,7 +34,8 @@ func varstmt(declarations interface{}, text []byte, pos position) (*ast.Variable
 
 func vardecls(head, tails interface{}) ([]*ast.VariableDeclarator, error) {
 	decls := []*ast.VariableDeclarator{head.(*ast.VariableDeclarator)}
-	for _, decl := range toIfaceSlice(tails) {
+	for _, tail := range toIfaceSlice(tails) {
+		decl := toIfaceSlice(tail)[3] // Skip whitespace and comma
 		decls = append(decls, decl.(*ast.VariableDeclarator))
 	}
 	return decls, nil
