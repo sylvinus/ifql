@@ -141,7 +141,7 @@ func (*FieldLiteral) expression()    {}
 type CallExpression struct {
 	*BaseNode
 	Callee    Expression   `json:"callee"`
-	Arguments []Expression `json:"arguments"`
+	Arguments []Expression `json:"arguments,omitempty"`
 }
 
 // Type is the abstract type
@@ -150,8 +150,8 @@ func (*CallExpression) Type() string { return "CallExpression" }
 // MemberExpression represents calling a property of a CallExpression
 type MemberExpression struct {
 	*BaseNode
-	Object   *CallExpression `json:"object"`
-	Property *Identifier     `json:"property"`
+	Object   Expression  `json:"object"`
+	Property *Identifier `json:"property"`
 }
 
 // Type is the abstract type

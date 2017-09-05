@@ -65,9 +65,33 @@ ExpressionStatement
         return exprstmt(call, c.text, c.pos)
     }
 
+MemberExpression
+  = head:String // TODO: should be primary
+    tail:(
+        __ "." __ property:String {
+          return property, nil
+        }
+    )*
+    {
+      return memberexprs(head, tail, c.text, c.pos)
+    }
+
 CallExpression
-  = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
-      return callchain(callee, args, members, c.text, c.pos)
+  = head:(
+      callee:MemberExpression __ args:Arguments {
+        return callexpr(callee, args, c.text, c.pos)
+      }
+    )
+    tail:(
+        __ args:Arguments {
+          return callexpr(nil, args, c.text, c.pos)
+        }
+      / __ "." __ property:String {
+          return memberexpr(nil, property, c.text, c.pos)
+        }
+    )*
+    {
+      return callexprs(head, tail, c.text, c.pos)
     }
 
 Arguments
@@ -300,6 +324,7 @@ StringChar
       / "}"
       / ","
       / "$"
+      / "."
       / ws
     ) SourceChar
 

@@ -88,9 +88,17 @@ func callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error
 }
 
 func memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain, error) {
-	chain, err := callFunction(member.Object, chain)
-	if err != nil {
-		return nil, err
+	switch obj := member.Object.(type) {
+	case *ast.CallExpression:
+		var err error
+		chain, err = callFunction(obj, chain)
+		if err != nil {
+			return nil, err
+		}
+	case *ast.Identifier:
+		return nil, fmt.Errorf("Variables not support yet in member expression object type")
+	default:
+		return nil, fmt.Errorf("Unsupported member expression object type %t", obj)
 	}
 
 	child := member.Property.Name

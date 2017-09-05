@@ -55,48 +55,62 @@ func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionState
 	}, nil
 }
 
-func callchain(callee, args, members interface{}, text []byte, pos position) (*ast.CallExpression, error) {
-	res, err := call(callee, args, text, pos)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, memexprs := range toIfaceSlice(members) {
-		memexpr := toIfaceSlice(memexprs)
-		if memexpr == nil {
-			continue
-		}
-
-		m, err := member(res, memexpr[3], text, pos)
-		if err != nil {
-			return nil, err
-		}
-
-		res, err = call(m, memexpr[5], text, pos)
-		if err != nil {
-			return nil, err
+func memberexprs(head, tail interface{}, text []byte, pos position) (ast.Expression, error) {
+	res := head.(ast.Expression)
+	for _, prop := range toIfaceSlice(tail) {
+		res = &ast.MemberExpression{
+			Object:   res,
+			Property: prop.(*ast.Identifier),
+			BaseNode: base(text, pos),
 		}
 	}
 	return res, nil
 }
 
-func call(callee, args interface{}, text []byte, pos position) (*ast.CallExpression, error) {
-	c := &ast.CallExpression{
-		Callee:   callee.(ast.Expression),
+func memberexpr(object, property interface{}, text []byte, pos position) (*ast.MemberExpression, error) {
+	m := &ast.MemberExpression{
 		BaseNode: base(text, pos),
 	}
+
+	if object != nil {
+		m.Object = object.(ast.Expression)
+	}
+
+	if property != nil {
+		m.Property = property.(*ast.Identifier)
+	}
+
+	return m, nil
+}
+
+func callexpr(callee, args interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	c := &ast.CallExpression{
+		BaseNode: base(text, pos),
+	}
+
+	if callee != nil {
+		c.Callee = callee.(ast.Expression)
+	}
+
 	if args != nil {
 		c.Arguments = []ast.Expression{args.(*ast.ObjectExpression)}
 	}
 	return c, nil
 }
 
-func member(callee, property interface{}, text []byte, pos position) (*ast.MemberExpression, error) {
-	return &ast.MemberExpression{
-		Object:   callee.(*ast.CallExpression),
-		Property: property.(*ast.Identifier),
-		BaseNode: base(text, pos),
-	}, nil
+func callexprs(head, tail interface{}, text []byte, pos position) (ast.Expression, error) {
+	expr := head.(ast.Expression)
+	for _, i := range toIfaceSlice(tail) {
+		switch elem := i.(type) {
+		case *ast.CallExpression:
+			elem.Callee = expr
+			expr = elem
+		case *ast.MemberExpression:
+			elem.Object = expr
+			expr = elem
+		}
+	}
+	return expr, nil
 }
 
 func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
