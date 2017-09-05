@@ -39,7 +39,7 @@ VariableDeclarationList
 VarToken = "var"
 
 VariableDeclaration
-  = id:String __ initExpr:Initializer {
+  = id:Identifier __ initExpr:Initializer {
       return vardecl(id, initExpr, c.text, c.pos)
     }
 
@@ -58,17 +58,15 @@ VariableExpression
   / Number
   / Field
 
-// TODO: Add MemberExpression to chain from a Variable
-
 ExpressionStatement
   = call:CallExpression {
         return exprstmt(call, c.text, c.pos)
     }
 
 MemberExpression
-  = head:String // TODO: should be primary
+  = head:Identifier // TODO: should be primary
     tail:(
-        __ "." __ property:String {
+        __ "." __ property:Identifier {
           return property, nil
         }
     )*
@@ -86,7 +84,7 @@ CallExpression
         __ args:Arguments {
           return callexpr(nil, args, c.text, c.pos)
         }
-      / __ "." __ property:String {
+      / __ "." __ property:Identifier {
           return memberexpr(nil, property, c.text, c.pos)
         }
     )*
@@ -110,7 +108,7 @@ FunctionArgsRest
     }
 
 FunctionArg
-  = key:String __  ":" __ value:FunctionArgValues {
+  = key:Identifier __  ":" __ value:FunctionArgValues {
       return property(key, value, c.text, c.pos)
     }
 
@@ -121,7 +119,7 @@ FunctionArgValues
   / Duration
   / DateTime
   / Number
-  / String
+  / Identifier
 
 WhereExpr
   = "{" __ expr:Expr __  "}" {
@@ -206,7 +204,7 @@ Primary
   / DateTime
   / Number
   / Field
-  / String
+  / Identifier
 
 DateFullYear
   = Digit Digit Digit Digit
@@ -310,7 +308,7 @@ DoubleStringEscape
       return nil, errors.New("invalid escape character")
     }
 
-String
+Identifier
   = StringChar+ {
       return identifier(c.text, c.pos)
     }
