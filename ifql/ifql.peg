@@ -48,6 +48,9 @@ VariableExpression
 
 // TODO: Add MemberExpression to chain from a Variable
 
+ExpressionStatement
+  = CallExpression
+
 CallExpression
   = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
       return callchain(callee, args, members, c.text, c.pos)
