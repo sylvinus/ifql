@@ -266,7 +266,12 @@ func (s *MergeProcedureSpec) Kind() ProcedureKind {
 }
 
 func (s *MergeProcedureSpec) SetSpec(qs query.OperationSpec) error {
+	mq := qs.(*query.MergeOpSpec)
+	s.Keys = mq.Keys
+	s.Keep = mq.Keep
 	return nil
+}
+func (s *MergeProcedureSpec) NewChild(ds *Dataset) {
 }
 
 type KeysProcedureSpec struct {

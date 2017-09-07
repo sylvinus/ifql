@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -32,7 +33,8 @@ func transformationFromProcedureSpec(d Dataset, spec plan.ProcedureSpec, now tim
 			Start:  Time(s.Window.Start.Time(now).UnixNano()),
 		})
 	default:
-		return nil
+		//TODO add proper error handling
+		panic(fmt.Sprintf("unsupported procedure %v", spec.Kind()))
 	}
 }
 
