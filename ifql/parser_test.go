@@ -2,8 +2,10 @@ package ifql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/ifql/ast"
 )
 
 func TestNewAST(t *testing.T) {
@@ -16,93 +18,149 @@ func TestNewAST(t *testing.T) {
 		{
 			name: "select",
 			raw:  `select()`,
-			want: &Function{
-				Name:     "select",
-				Args:     []*FunctionArg{},
-				Children: []*Function{},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "select",
+							},
+						},
+					},
+				},
 			},
 		},
 		{
 			name: "select with database",
 			raw:  `select(database:"telegraf")`,
-			want: &Function{
-				Name: "select",
-				Args: []*FunctionArg{
-					{
-						Name: "database",
-						Arg:  &StringLiteral{"telegraf"},
-					},
-				},
-				Children: []*Function{},
-			},
-		},
-		{
-			name: "select with where with no parens",
-			raw:  `select(database:"telegraf").where(exp:{"other"=="mem" and "this"=="that" or "these"!="those"})`,
-			want: &Function{
-				Name: "select",
-				Args: []*FunctionArg{
-					&FunctionArg{
-						Name: "database",
-						Arg: &StringLiteral{
-							String: "telegraf",
-						},
-					},
-				},
-				Children: []*Function{
-					&Function{
-						Name: "where",
-						Args: []*FunctionArg{
-							&FunctionArg{
-								Name: "exp",
-								Arg: &WhereExpr{
-									Expr: &BinaryExpression{
-										Left: &BinaryExpression{
-											Left: &BinaryExpression{
-												Left: &StringLiteral{
-													String: "other",
-												},
-												Operator: "==",
-												Right: &StringLiteral{
-													String: "mem",
-												},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "select",
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										&ast.Property{
+											Key: &ast.Identifier{
+												Name: "database",
 											},
-											Operator: "and",
-											Right: &BinaryExpression{
-												Left: &StringLiteral{
-													String: "this",
-												}, Operator: "==",
-												Right: &StringLiteral{
-													String: "that",
-												},
+											Value: &ast.StringLiteral{
+												Value: "telegraf",
 											},
-										},
-										Operator: "or",
-										Right: &BinaryExpression{
-											Left: &StringLiteral{
-												String: "these",
-											},
-											Operator: "!=",
-											Right: &StringLiteral{
-												String: "those"},
 										},
 									},
 								},
 							},
 						},
-						Children: []*Function{},
 					},
 				},
 			},
 		},
-		/*{
-			name: "select with range",
-			raw:  `select(database:"telegraf").range(start:-1h, end:10m)`,
+		{
+			name: "select with where with no parens",
+			raw:  `select(database:"telegraf").where(exp:{"other"=="mem" and "this"=="that" or "these"!="those"})`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Property: &ast.Identifier{Name: "where"},
+								Object: &ast.CallExpression{
+									Callee: &ast.Identifier{
+										Name: "select",
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "database"},
+													Value: &ast.StringLiteral{Value: "telegraf"},
+												},
+											},
+										},
+									},
+								},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										&ast.Property{
+											Key: &ast.Identifier{Name: "exp"},
+											Value: &ast.LogicalExpression{
+												Operator: ast.OrOperator,
+												Left: &ast.LogicalExpression{
+													Operator: ast.AndOperator,
+													Left: &ast.BinaryExpression{
+														Operator: ast.EqualOperator,
+														Left:     &ast.StringLiteral{Value: "other"},
+														Right:    &ast.StringLiteral{Value: "mem"},
+													},
+													Right: &ast.BinaryExpression{
+														Operator: ast.EqualOperator,
+														Left:     &ast.StringLiteral{Value: "this"},
+														Right:    &ast.StringLiteral{Value: "that"},
+													},
+												},
+												Right: &ast.BinaryExpression{
+													Operator: ast.NotEqualOperator,
+													Left:     &ast.StringLiteral{Value: "these"},
+													Right:    &ast.StringLiteral{Value: "those"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "select with range",
-			raw:  `select(database:"telegraf").where(exp:{(("other"="mem") and ("this"="that")) or ("this"!="that")}).range(start:-1h, end:10m).window(period:1m).count()`,
-		},*/
+			raw:  `select(database:"telegraf").range(start:-1h, end:10m)`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "select"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "database"},
+													Value: &ast.StringLiteral{Value: "telegraf"},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "range"},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										&ast.Property{
+											Key:   &ast.Identifier{Name: "start"},
+											Value: &ast.DurationLiteral{Value: -time.Hour},
+										},
+										&ast.Property{
+											Key:   &ast.Identifier{Name: "end"},
+											Value: &ast.DurationLiteral{Value: 10 * time.Minute},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt

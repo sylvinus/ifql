@@ -2,86 +2,174 @@ package ifql
 
 import (
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/influxdata/ifql/ast"
 )
 
-type Arg interface {
-	Type() ArgKind
-	Value() interface{}
+func buildProgram(call interface{}, text []byte, pos position) (*ast.Program, error) {
+	expr, err := exprstmt(call, text, pos)
+	if err != nil {
+		return nil, nil
+	}
+	return program(expr, text, pos)
 }
 
-type ArgKind int
-
-const (
-	DateTimeKind ArgKind = iota
-	DurationKind
-	ExprKind
-	NumberKind
-	StringKind
-	FieldKind
-	RegexKind
-	NumKinds int = iota
-)
-
-// TODO: Convert to QuerySpec
-type Function struct {
-	Name     string         `json:"name,omitempty"`
-	Args     []*FunctionArg `json:"args,omitempty"`
-	Children []*Function    `json:"children,omitempty"`
-}
-
-func NewFunction(name string, args, children interface{}) (*Function, error) {
-	chain := []*Function{}
-	if children != nil {
-		for _, child := range toIfaceSlice(children) {
-			chain = append(chain, child.(*Function))
-		}
-	}
-	funcArgs := []*FunctionArg{}
-	if args != nil {
-		funcArgs = args.([]*FunctionArg)
-	}
-	return &Function{
-		Name:     name,
-		Args:     funcArgs,
-		Children: chain,
+func program(exprstmt interface{}, text []byte, pos position) (*ast.Program, error) {
+	return &ast.Program{
+		Body:     []ast.Statement{exprstmt.(ast.Statement)},
+		BaseNode: base(text, pos),
 	}, nil
 }
 
-type FunctionArg struct {
-	Name string `json:"name,omitempty"`
-	Arg  Arg    `json:"arg,omitempty"`
+func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
+	return &ast.ExpressionStatement{
+		Expression: call.(ast.Expression),
+		BaseNode:   base(text, pos),
+	}, nil
 }
 
-func NewFunctionArgs(first, rest interface{}) ([]*FunctionArg, error) {
-	args := []*FunctionArg{first.(*FunctionArg)}
-	if rest != nil {
-		for _, arg := range toIfaceSlice(rest) {
-			args = append(args, arg.(*FunctionArg))
+func callchain(callee, args, members interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	res, err := call(callee, args, text, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, memexprs := range toIfaceSlice(members) {
+		memexpr := toIfaceSlice(memexprs)
+		if memexpr == nil {
+			continue
+		}
+
+		m, err := member(res, memexpr[3], text, pos)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err = call(m, memexpr[5], text, pos)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return args, nil
+	return res, nil
 }
 
-type StringLiteral struct {
-	String string `json:"string,omitempty"`
+func call(callee, args interface{}, text []byte, pos position) (*ast.CallExpression, error) {
+	c := &ast.CallExpression{
+		Callee:   callee.(ast.Expression),
+		BaseNode: base(text, pos),
+	}
+	if args != nil {
+		c.Arguments = []ast.Expression{args.(*ast.ObjectExpression)}
+	}
+	return c, nil
 }
 
-func (s *StringLiteral) Type() ArgKind {
-	return StringKind
+func member(callee, property interface{}, text []byte, pos position) (*ast.MemberExpression, error) {
+	return &ast.MemberExpression{
+		Object:   callee.(*ast.CallExpression),
+		Property: property.(*ast.Identifier),
+		BaseNode: base(text, pos),
+	}, nil
 }
 
-func (s *StringLiteral) Value() interface{} {
-	return s.String
+func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
+	props := []*ast.Property{first.(*ast.Property)}
+	if rest != nil {
+		for _, prop := range toIfaceSlice(rest) {
+			props = append(props, prop.(*ast.Property))
+		}
+	}
+
+	return &ast.ObjectExpression{
+		Properties: props,
+		BaseNode:   base(text, pos),
+	}, nil
 }
 
-// Regex represents a regular expression function argument
-type Regex struct {
-	Regexp *regexp.Regexp
+func property(key, value interface{}, text []byte, pos position) (*ast.Property, error) {
+	return &ast.Property{
+		Key:      key.(*ast.Identifier),
+		Value:    value.(ast.Expression),
+		BaseNode: base(text, pos),
+	}, nil
 }
 
-// NewRegex compiles the regular expression and returns the regex
-func NewRegex(chars interface{}) (*Regex, error) {
+func identifier(text []byte, pos position) (*ast.Identifier, error) {
+	return &ast.Identifier{
+		Name:     string(text),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func logicalExpression(head, tails interface{}, text []byte, pos position) (ast.Expression, error) {
+	res := head.(ast.Expression)
+	for _, tail := range toIfaceSlice(tails) {
+		right := toIfaceSlice(tail)
+		res = &ast.LogicalExpression{
+			Left:     res,
+			Right:    right[3].(ast.Expression),
+			Operator: right[1].(ast.LogicalOperatorKind),
+			BaseNode: base(text, pos),
+		}
+	}
+	return res, nil
+}
+
+func logicalOp(text []byte) (ast.LogicalOperatorKind, error) {
+	return ast.LogicalOperatorLookup(strings.ToLower(string(text))), nil
+}
+
+func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.Expression, error) {
+	res := head.(ast.Expression)
+	for _, tail := range toIfaceSlice(tails) {
+		right := toIfaceSlice(tail)
+		res = &ast.BinaryExpression{
+			Left:     res,
+			Right:    right[3].(ast.Expression),
+			Operator: right[1].(ast.OperatorKind),
+			BaseNode: base(text, pos),
+		}
+	}
+	return res, nil
+}
+
+func binaryOp(text []byte) (ast.OperatorKind, error) {
+	return ast.OperatorLookup(strings.ToLower(string(text))), nil
+}
+
+func stringLiteral(text []byte, pos position) (*ast.StringLiteral, error) {
+	s, err := strconv.Unquote(string(text))
+	if err != nil {
+		return nil, err
+	}
+	return &ast.StringLiteral{
+		BaseNode: base(text, pos),
+		Value:    s,
+	}, nil
+}
+
+func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
+	n, err := strconv.ParseFloat(string(text), 64)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.NumberLiteral{
+		BaseNode: base(text, pos),
+		Value:    n,
+	}, nil
+}
+
+func fieldLiteral(text []byte, pos position) (*ast.FieldLiteral, error) {
+	return &ast.FieldLiteral{
+		BaseNode: base(text, pos),
+		Value:    "_field",
+	}, nil
+}
+
+func regexLiteral(chars interface{}, text []byte, pos position) (*ast.RegexpLiteral, error) {
 	var regex string
 	for _, char := range toIfaceSlice(chars) {
 		regex += char.(string)
@@ -91,121 +179,52 @@ func NewRegex(chars interface{}) (*Regex, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Regex{r}, nil
+	return &ast.RegexpLiteral{
+		BaseNode: base(text, pos),
+		Value:    r,
+	}, nil
 }
 
-func (r *Regex) Type() ArgKind {
-	return RegexKind
-}
-
-func (r *Regex) Value() interface{} {
-	return r.Regexp
-}
-
-type Duration struct {
-	Dur time.Duration `json:"dur,omitempty"`
-}
-
-func (d *Duration) Type() ArgKind {
-	return DurationKind
-}
-
-func (d *Duration) Value() interface{} {
-	return d.Dur
-}
-
-type DateTime struct {
-	Date time.Time `json:"date,omitempty"`
-}
-
-func (d *DateTime) Type() ArgKind {
-	return DateTimeKind
-}
-
-func (d *DateTime) Value() interface{} {
-	return d.Date
-}
-
-type Number struct {
-	Val float64 `json:"val,omitempty"`
-}
-
-func (n *Number) Type() ArgKind {
-	return NumberKind
-}
-
-func (n *Number) Value() interface{} {
-	return n.Val
-}
-
-type WhereExpr struct {
-	Expr *BinaryExpression `json:"expr,omitempty"`
-}
-
-func (w *WhereExpr) Type() ArgKind {
-	return ExprKind
-}
-
-func (w *WhereExpr) Value() interface{} {
-	return w.Expr
-}
-
-// Field represents a value associated with a series
-type Field struct {
-}
-
-func (f *Field) Type() ArgKind {
-	return FieldKind
-}
-
-func (f *Field) Value() interface{} {
-	return "_field"
-}
-
-// Update left and right to be expr interfaces... add expr interface to all the correct types
-type BinaryExpression struct {
-	Left     interface{} `json:"left,omitempty"`
-	Operator string      `json:"operator,omitempty"`
-	Right    interface{} `json:"right,omitempty"`
-}
-
-func NewBinaryExpression(head, tails interface{}) (interface{}, error) {
-	res := head
-	for _, tail := range toIfaceSlice(tails) {
-		right := toIfaceSlice(tail)
-		res = &BinaryExpression{
-			Left:     res,
-			Right:    right[3],
-			Operator: right[1].(string),
-		}
+func durationLiteral(text []byte, pos position) (*ast.DurationLiteral, error) {
+	d, err := time.ParseDuration(string(text))
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+	return &ast.DurationLiteral{
+		BaseNode: base(text, pos),
+		Value:    d,
+	}, nil
 }
 
-/*
-func (b *BinaryExpression) String() string {
-	res := ""
-	switch l := b.Left.(type) {
-	case *BinaryExpression:
-		res += "(" + l.String() + ")"
-	case *StringLiteral:
-		res += `"` + l.String + `"`
-	case *Number:
-		res += fmt.Sprintf("%f", l.Val)
-	case *Field:
-		res += "$"
+func datetime(text []byte, pos position) (*ast.DateTimeLiteral, error) {
+	t, err := time.Parse(time.RFC3339Nano, string(text))
+	if err != nil {
+		return nil, err
 	}
-	res += " " + b.Operator.(string) + " "
+	return &ast.DateTimeLiteral{
+		BaseNode: base(text, pos),
+		Value:    t,
+	}, nil
+}
 
-	switch r := b.Right.(type) {
-	case *BinaryExpression:
-		res += "(" + r.String() + ")"
-	case *StringLiteral:
-		res += `"` + r.String + `"`
-	case *Number:
-		res += fmt.Sprintf("%f", r.Val)
-	case *Field:
-		res += "$"
+func base(text []byte, pos position) *ast.BaseNode {
+	return nil
+	return &ast.BaseNode{
+		Loc: &ast.SourceLocation{
+			Start: ast.Position{
+				Line:   pos.line,
+				Column: pos.col,
+			},
+			End: ast.Position{
+				Line:   pos.line,
+				Column: pos.col + len(text),
+			},
+			Source: source(text),
+		},
 	}
-	return res
-}*/
+}
+
+func source(text []byte) *string {
+	str := string(text)
+	return &str
+}

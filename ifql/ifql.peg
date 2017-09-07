@@ -3,48 +3,35 @@ package ifql
 
 //go:generate pigeon -o ifql.go ifql.peg
 }
-// TODO: Change the Literal duration, etc to be a type like this:
-/*
-type Primary struct {
-    Type LiteralType
-    Value interface{}
+
+Grammar = __ call:CallExpression EOF {
+    return buildProgram(call, c.text, c.pos)
 }
 
-*/
-Grammar = __ function:Function EOF {
-    return function.(*Function), nil
+CallExpression = callee:String __ args:Arguments members:( __ "." __ String __ Arguments)* {
+    return callchain(callee, args, members, c.text, c.pos)
 }
 
-Tests =  Function / StringLiteral / Duration / DateTime / Number
-
-Function = name:FunctionName __  "(" __ args:FunctionArgs? __ ")" children:FunctionChain* {
-    return NewFunction(name.(string), args, children)
+Arguments = "(" __ args:(FunctionArgs)? __ ")" {
+    return args, nil
 }
 
-FunctionChain = __ "." __ child:Function {
-    return child, nil
-}
-
-FunctionName = String
 FunctionArgs = first:FunctionArg __ rest:FunctionArgsRest* {
-    return NewFunctionArgs(first, rest)
+    return object(first, rest, c.text, c.pos)
 }
 
 FunctionArgsRest = "," __  arg:FunctionArg {
     return arg, nil
 }
 
-FunctionArg = name:String __  ":" __ arg:FunctionArgValues {
-    return &FunctionArg{
-        Name: name.(string),
-        Arg: arg.(Arg),
-    }, nil
+FunctionArg = key:String __  ":" __ value:FunctionArgValues {
+    return property(key, value, c.text, c.pos)
 }
 
 FunctionArgValues =  WhereExpr / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number
 
 WhereExpr = "{" __ expr:Expr __  "}" {
-    return &WhereExpr{Expr: expr.(*BinaryExpression)}, nil
+    return expr, nil
 }
 
 // + -
@@ -56,25 +43,44 @@ WhereExpr = "{" __ expr:Expr __  "}" {
 // primary contains the Lowest Priority
 Expr = Logical
 
-LogicalOperators =  ("or"i / "and"i) { return strings.ToLower(string(c.text)), nil }
-Logical = head:Equality tail:( __  LogicalOperators __  Equality )* { return NewBinaryExpression(head, tail) }
+LogicalOperators =  ("or"i / "and"i) {
+    return logicalOp(c.text)
+}
+Logical = head:Equality tail:( __  LogicalOperators __  Equality )* {
+    return logicalExpression(head, tail, c.text, c.pos)
+}
 
-EqualityOperators =  ("==" / "!=" ) { return string(c.text), nil }
-Equality = head:Relational tail:( __ EqualityOperators __ Relational )* { return NewBinaryExpression(head, tail) }
+EqualityOperators =  ("==" / "!=" ) {
+    return binaryOp(c.text)
+}
+Equality = head:Relational tail:( __ EqualityOperators __ Relational )* {
+    return binaryExpression(head, tail, c.text, c.pos)
+}
 
-RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) { return strings.ToLower(string(c.text)), nil }
-Relational = head:Additive tail:( __ RelationalOperators __ Additive )* { return NewBinaryExpression(head, tail) }
+RelationalOperators =  ( "<=" / "<" / ">=" / ">" / "startsWith"i / "IN"i / "NOT EMPTY"i / "EMPTY"i ) {
+    return binaryOp(c.text)
+}
+Relational = head:Additive tail:( __ RelationalOperators __ Additive )* {
+    return binaryExpression(head, tail, c.text, c.pos)
+}
 
-AdditiveOperator = ("+" / "-") { return string(c.text), nil }
-Additive = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { return NewBinaryExpression(head, tail) }
+AdditiveOperator = ("+" / "-") {
+    return binaryOp(c.text)
+}
+Additive = head:Multiplicative tail:( __ AdditiveOperator __ Multiplicative )* { 
+    return binaryExpression(head, tail, c.text, c.pos)
+}
 
-MultiplicativeOperator = ("*" / "/")  { return string(c.text), nil }
-Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* { return NewBinaryExpression(head, tail) }
+MultiplicativeOperator = ("*" / "/") {
+    return binaryOp(c.text)
+}
+Multiplicative = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
+    return binaryExpression(head, tail, c.text, c.pos)
+}
 
 Primary = '(' __ expr:Logical __ ')' {
-        return expr.(*BinaryExpression), nil
-    }
-    / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
+    return expr, nil
+} / StringLiteral / RegularExpressionLiteral / Duration / DateTime / Number / Field
 
 DateFullYear = Digit Digit Digit Digit
 
@@ -106,12 +112,8 @@ TimeOffset = ("Z"i / TimeNumOffset)
 PartialTime = TimeHour ":" TimeMinute ":" TimeSecond TimeSecFrac?
 FullDate = DateFullYear "-" DateMonth "-" DateMDay
 FullTime = PartialTime TimeOffset
-DateTime = FullDate "T"i FullTime {
-    t, err := time.Parse(time.RFC3339Nano, string(c.text))
-    if err != nil {
-        return nil, err
-    }
-    return &DateTime{t}, nil
+DateTime = FullDate "T" FullTime {
+    return datetime(c.text, c.pos)
 }
 
 NanoSecondUnits = "ns"
@@ -124,19 +126,11 @@ DurationUnits = (NanoSecondUnits / MicroSecondUnits / MilliSecondUnits / SecondU
 
 SingleDuration = Number DurationUnits
 Duration = SingleDuration+ {
-    d, err := time.ParseDuration(string(c.text))
-    if err != nil {
-        return nil, err
-    }
-    return &Duration{d}, nil
+    return durationLiteral(c.text, c.pos)
 }
 
 StringLiteral = ( '"' DoubleStringChar* '"' ) {
-    s, err := strconv.Unquote(string(c.text))
-    if err != nil {
-        return nil, err
-    }
-    return &StringLiteral{s}, nil
+    return stringLiteral(c.text, c.pos)
 } / ( '"' DoubleStringChar* ( EOL / EOF ) ) {
     return "", errors.New("string literal not terminated")
 }
@@ -148,17 +142,13 @@ DoubleStringEscape =  '"' / ( SourceChar / EOL / EOF ) {
 }
 
 String = StringChar+ {
-    return string(c.text), nil
+    return identifier(c.text, c.pos)
 }
 
 StringChar = !('"' / "(" / ")" / ":" / "{" / "}" / "," / "$") SourceChar
 
 Number = '-'? Integer ( '.' Digit+ )? {
-    n, err := strconv.ParseFloat(string(c.text), 64)
-    if err != nil {
-        return nil, err
-    }
-    return &Number{n}, nil
+    return numberLiteral(c.text, c.pos)
 }
 
 Integer = '0' / NonZeroDigit Digit*
@@ -166,7 +156,7 @@ NonZeroDigit = [1-9]
 Digit = [0-9]
 
 Field = field:'$' {
-    return &Field{}, nil
+    return fieldLiteral(c.text, c.pos)
 }
 
 RegularExpressionLiteral "regular expression"
@@ -176,7 +166,7 @@ RegularExpressionLiteral "regular expression"
 
 RegularExpressionBody
   = chars:RegularExpressionChar+ {
-      return NewRegex(chars)
+      return regexLiteral(chars, c.text, c.pos)
   }
 
 RegularExpressionChar
