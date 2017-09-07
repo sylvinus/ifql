@@ -1,6 +1,8 @@
 package ifql
 
-import "github.com/influxdata/ifql/ast"
+import (
+	"github.com/influxdata/ifql/ast"
+)
 
 func toIfaceSlice(v interface{}) []interface{} {
 	if v == nil {

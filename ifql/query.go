@@ -1,9 +1,6 @@
 package ifql
 
 import (
-	"encoding/json"
-	"log"
-
 	"github.com/influxdata/ifql/query"
 )
 
@@ -13,7 +10,5 @@ func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, _ := json.MarshalIndent(program, "", "    ")
-	log.Printf("%s", string(b))
 	return NewQuerySpec(program)
 }
