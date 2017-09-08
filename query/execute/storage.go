@@ -68,9 +68,10 @@ type storageBlockIterator struct {
 	blocks chan Block
 }
 
-func (bi *storageBlockIterator) NextBlock() (Block, bool) {
-	b, ok := <-bi.blocks
-	return b, ok
+func (bi *storageBlockIterator) Do(f func(Block)) {
+	for b := range bi.blocks {
+		f(b)
+	}
 }
 
 func (bi *storageBlockIterator) readBlocks() {

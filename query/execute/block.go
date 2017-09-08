@@ -54,15 +54,24 @@ type BlockBuilder interface {
 }
 
 type BlockIterator interface {
-	NextBlock() (Block, bool)
+	Do(f func(Block))
 }
 
 type CellIterator interface {
-	NextCell() (Cell, bool)
+	Do(f func([]Cell))
 }
 
+type T int
+
+const (
+	Float T = iota
+	Int
+	String
+	Bool
+)
+
 type ValueIterator interface {
-	NextValues() ([]float64, bool)
+	Do(f func([]float64))
 }
 
 type Cell struct {
@@ -256,36 +265,26 @@ type rowListValueIterator struct {
 	currentRow int
 }
 
-func (vi *rowListValueIterator) NextValues() ([]float64, bool) {
-	if vi.currentRow >= len(vi.blk.rows) {
-		return nil, false
+func (vi *rowListValueIterator) Do(f func([]float64)) {
+	for _, row := range vi.blk.rows {
+		f(row)
 	}
-	v := vi.blk.rows[vi.currentRow]
-	vi.currentRow++
-	return v, true
 }
 
 type rowListCellIterator struct {
 	blk *rowListBlock
-
-	currentRow, currentCol int
 }
 
-func (ci *rowListCellIterator) NextCell() (Cell, bool) {
-	if ci.currentCol >= len(ci.blk.colTimes) {
-		ci.currentCol = 0
-		ci.currentRow++
+func (ci *rowListCellIterator) Do(f func([]Cell)) {
+	for r, row := range ci.blk.rows {
+		for c, value := range row {
+			f([]Cell{{
+				Value: value,
+				Time:  ci.blk.colTimes[c],
+				Tags:  ci.blk.rowTags[r],
+			}})
+		}
 	}
-	if ci.currentRow >= len(ci.blk.rows) {
-		return Cell{}, false
-	}
-	col := ci.currentCol
-	ci.currentCol++
-	return Cell{
-		Value: ci.blk.rows[ci.currentRow][col],
-		Time:  ci.blk.colTimes[col],
-		Tags:  ci.blk.rowTags[ci.currentRow],
-	}, true
 }
 
 type denseBlock struct {
@@ -319,36 +318,26 @@ func (b *denseBlock) at(r, c int) float64 {
 }
 
 type denseBlockValueIterator struct {
-	blk  *denseBlock
-	done bool
+	blk *denseBlock
 }
 
-func (vi *denseBlockValueIterator) NextValues() ([]float64, bool) {
-	if vi.done {
-		return nil, false
-	}
-	vi.done = true
-	return vi.blk.data, true
+func (vi *denseBlockValueIterator) Do(f func([]float64)) {
+	f(vi.blk.data)
 }
 
 type denseBlockCellIterator struct {
-	blk                    *denseBlock
-	currentRow, currentCol int
+	blk *denseBlock
 }
 
-func (ci *denseBlockCellIterator) NextCell() (Cell, bool) {
-	if ci.currentCol >= len(ci.blk.colTimes) {
-		ci.currentCol = 0
-		ci.currentRow++
+func (ci *denseBlockCellIterator) Do(f func([]Cell)) {
+	stride := len(ci.blk.colTimes)
+	for i, value := range ci.blk.data {
+		r := i / stride
+		c := i % stride
+		f([]Cell{{
+			Value: value,
+			Time:  ci.blk.colTimes[c],
+			Tags:  ci.blk.rowTags[r],
+		}})
 	}
-	if ci.currentRow >= len(ci.blk.rowTags) {
-		return Cell{}, false
-	}
-	col := ci.currentCol
-	ci.currentCol++
-	return Cell{
-		Value: ci.blk.at(ci.currentRow, col),
-		Time:  ci.blk.colTimes[col],
-		Tags:  ci.blk.rowTags[ci.currentRow],
-	}, true
 }
