@@ -18,10 +18,10 @@ func (id ProcedureID) String() string {
 var ZeroProcedureID ProcedureID
 
 type Procedure struct {
-	ID       ProcedureID
-	Parents  []DatasetID
-	Children []DatasetID
-	Spec     ProcedureSpec
+	ID      ProcedureID
+	Parents []DatasetID
+	Child   DatasetID
+	Spec    ProcedureSpec
 }
 
 // ProcedureSpec specifies an operation as part of a query.
@@ -31,13 +31,6 @@ type ProcedureSpec interface {
 
 	// SetSpec applies the query.OperationSpec to this OperationSpec
 	SetSpec(query.OperationSpec) error
-}
-
-type NarrowProcedureSpec interface {
-	NewChild(*Dataset)
-}
-type WideProcedureSpec interface {
-	DetermineChildren() []*Dataset
 }
 
 // ProcedureKind denotes the kind of operations.
@@ -175,10 +168,6 @@ func (w *WhereProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
 
-func (w *WhereProcedureSpec) NewChild(ds *Dataset) {
-	// do nothing
-}
-
 type RangeProcedureSpec struct {
 	Bounds BoundsSpec
 }
@@ -201,9 +190,6 @@ func (s *RangeProcedureSpec) SetSpec(qs query.OperationSpec) error {
 		Stop:  spec.Stop,
 	}
 	return nil
-}
-func (s *RangeProcedureSpec) NewChild(ds *Dataset) {
-	ds.Bounds = s.Bounds
 }
 
 type ClearProcedureSpec struct {
@@ -249,9 +235,6 @@ func (s *WindowProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
 
-func (s *WindowProcedureSpec) NewChild(ds *Dataset) {
-}
-
 type MergeProcedureSpec struct {
 	Keys []string `json:"keys"`
 	Keep []string `json:"keep"`
@@ -270,8 +253,6 @@ func (s *MergeProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	s.Keys = mq.Keys
 	s.Keep = mq.Keep
 	return nil
-}
-func (s *MergeProcedureSpec) NewChild(ds *Dataset) {
 }
 
 type KeysProcedureSpec struct {
@@ -469,8 +450,6 @@ func (s *CountProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
 
-func (s *CountProcedureSpec) NewChild(ds *Dataset) {}
-
 type SumProcedureSpec struct {
 }
 
@@ -485,7 +464,6 @@ func (s *SumProcedureSpec) Kind() ProcedureKind {
 func (s *SumProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
-func (s *SumProcedureSpec) NewChild(ds *Dataset) {}
 
 type MeanProcedureSpec struct {
 }
@@ -501,7 +479,6 @@ func (s *MeanProcedureSpec) Kind() ProcedureKind {
 func (s *MeanProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
-func (s *MeanProcedureSpec) NewChild(ds *Dataset) {}
 
 type PercentileProcedureSpec struct {
 }

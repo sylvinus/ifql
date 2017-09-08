@@ -14,19 +14,10 @@ func (did DatasetID) String() string {
 var ZeroDatasetID DatasetID
 
 type Dataset struct {
-	ID          DatasetID
-	Bounds      BoundsSpec
-	Window      WindowSpec
-	Source      ProcedureID
-	Destination ProcedureID
-}
-
-func (d *Dataset) MakeNarrowChild(pid ProcedureID, name string) *Dataset {
-	c := new(Dataset)
-	*c = *d
-	c.ID = CreateDatasetID(pid, name)
-	c.Source = pid
-	return c
+	ID           DatasetID
+	Bounds       BoundsSpec
+	Source       ProcedureID
+	Destinations []ProcedureID
 }
 
 type BoundsSpec struct {

@@ -53,31 +53,27 @@ func TestExecutor_Execute(t *testing.T) {
 							},
 						},
 						Parents: nil,
-						Children: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
-						},
+						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
 						Spec: &plan.SumProcedureSpec{},
 						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
+							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
 						},
-						Children: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
-						},
+						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
 					},
 				},
 				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select"), "0"),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")): {
+						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
 						Source: plan.ProcedureIDFromOperationID("select"),
 						Bounds: plan.BoundsSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 						},
 					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")): {
+						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
 						Source: plan.ProcedureIDFromOperationID("sum"),
 						Bounds: plan.BoundsSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
@@ -85,7 +81,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 				},
 				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
+					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
 				},
 			},
 			exp: []blockList{{
