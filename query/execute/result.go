@@ -29,9 +29,10 @@ func (s *resultSink) Blocks() BlockIterator {
 	return s
 }
 
-func (s *resultSink) NextBlock() (Block, bool) {
-	b, ok := <-s.blocks
-	return b, ok
+func (s *resultSink) Do(f func(Block)) {
+	for b := range s.blocks {
+		f(b)
+	}
 }
 
 func (s *resultSink) UpdateWatermark(mark Time) {

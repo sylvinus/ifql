@@ -20,8 +20,8 @@ func transformationFromProcedureSpec(d Dataset, spec plan.ProcedureSpec, now tim
 	switch s := spec.(type) {
 	case *plan.SumProcedureSpec:
 		return &aggregateTransformation{
-			d:  d,
-			at: sumAT{},
+			d:   d,
+			agg: new(sumAgg),
 		}
 	case *plan.MergeProcedureSpec:
 		return newMergeTransformation(d, s)
@@ -63,22 +63,24 @@ func (t *fixedWindowTransformation) Process(b Block) {
 	tagKey := b.Tags().Key()
 
 	cells := b.Cells()
-	for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
-		found := false
-		t.d.ForEachBuilder(func(bk BlockKey, bld BlockBuilder) {
-			if bld.Bounds().Contains(c.Time) && tagKey == bld.Tags().Key() {
-				bld.AddCell(c)
-				found = true
-			}
-		})
-		if !found {
-			builder := t.d.BlockBuilder(blockMetadata{
-				tags:   b.Tags(),
-				bounds: t.getWindowBounds(c.Time),
+	cells.Do(func(cs []Cell) {
+		for _, c := range cs {
+			found := false
+			t.d.ForEachBuilder(func(bk BlockKey, bld BlockBuilder) {
+				if bld.Bounds().Contains(c.Time) && tagKey == bld.Tags().Key() {
+					bld.AddCell(c)
+					found = true
+				}
 			})
-			builder.AddCell(c)
+			if !found {
+				builder := t.d.BlockBuilder(blockMetadata{
+					tags:   b.Tags(),
+					bounds: t.getWindowBounds(c.Time),
+				})
+				builder.AddCell(c)
+			}
 		}
-	}
+	})
 }
 
 func (t *fixedWindowTransformation) getWindowBounds(time Time) Bounds {
@@ -97,41 +99,6 @@ func (t *fixedWindowTransformation) UpdateProcessingTime(pt Time) {
 	t.d.UpdateProcessingTime(pt)
 }
 func (t *fixedWindowTransformation) Finish() {
-	t.d.Finish()
-}
-
-type aggregateTransformation struct {
-	d  Dataset
-	at AggregateTransformation
-
-	trigger Trigger
-}
-
-func (t *aggregateTransformation) setTrigger(trigger Trigger) {
-	t.trigger = trigger
-}
-
-func (t *aggregateTransformation) IsPerfect() bool {
-	return false
-}
-
-func (t *aggregateTransformation) RetractBlock(meta BlockMetadata) {
-	key := ToBlockKey(meta)
-	t.d.RetractBlock(key)
-}
-
-func (t *aggregateTransformation) Process(b Block) {
-	builder := t.d.BlockBuilder(b)
-	t.at.Do(b, builder)
-}
-
-func (t *aggregateTransformation) UpdateWatermark(mark Time) {
-	t.d.UpdateWatermark(mark)
-}
-func (t *aggregateTransformation) UpdateProcessingTime(pt Time) {
-	t.d.UpdateProcessingTime(pt)
-}
-func (t *aggregateTransformation) Finish() {
 	t.d.Finish()
 }
 
@@ -163,9 +130,11 @@ func (t *mergeTransformation) Process(b Block) {
 		bounds: b.Bounds(),
 	})
 	cells := b.Cells()
-	for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
-		builder.AddCell(c)
-	}
+	cells.Do(func(cs []Cell) {
+		for _, c := range cs {
+			builder.AddCell(c)
+		}
+	})
 }
 
 func (t *mergeTransformation) UpdateWatermark(mark Time) {

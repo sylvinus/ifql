@@ -137,17 +137,13 @@ func (s storageReader) Read(string, *storage.Predicate, int64, bool, execute.Tim
 }
 
 type storageBlockIterator struct {
-	s   storageReader
-	idx int
+	s storageReader
 }
 
-func (bi *storageBlockIterator) NextBlock() (execute.Block, bool) {
-	idx := bi.idx
-	if idx >= len(bi.s.blocks) {
-		return nil, false
+func (bi *storageBlockIterator) Do(f func(execute.Block)) {
+	for _, b := range bi.s.blocks {
+		f(b)
 	}
-	bi.idx++
-	return bi.s.blocks[idx], true
 }
 
 type blockList struct {
@@ -166,9 +162,9 @@ func (df blockList) Blocks() execute.BlockIterator {
 func convertToBlockList(r execute.Result) blockList {
 	bl := blockList{}
 	blocks := r.Blocks()
-	for b, ok := blocks.NextBlock(); ok; b, ok = blocks.NextBlock() {
+	blocks.Do(func(b execute.Block) {
 		bl.blocks = append(bl.blocks, convertToTestBlock(b))
-	}
+	})
 	return bl
 }
 
@@ -176,13 +172,10 @@ type blockIterator struct {
 	blocks []block
 }
 
-func (bi *blockIterator) NextBlock() (execute.Block, bool) {
-	if len(bi.blocks) == 0 {
-		return nil, false
+func (bi *blockIterator) Do(f func(execute.Block)) {
+	for _, b := range bi.blocks {
+		f(b)
 	}
-	b := bi.blocks[0]
-	bi.blocks = bi.blocks[1:]
-	return b, true
 }
 
 type block struct {
@@ -211,26 +204,18 @@ type valueIterator struct {
 	cells []execute.Cell
 }
 
-func (vi *valueIterator) NextValues() ([]float64, bool) {
-	if len(vi.cells) == 0 {
-		return nil, false
+func (vi *valueIterator) Do(f func([]float64)) {
+	for _, c := range vi.cells {
+		f([]float64{c.Value})
 	}
-	v := vi.cells[0].Value
-	vi.cells = vi.cells[1:]
-	return []float64{v}, true
 }
 
 type cellIterator struct {
 	cells []execute.Cell
 }
 
-func (ci *cellIterator) NextCell() (execute.Cell, bool) {
-	if len(ci.cells) == 0 {
-		return execute.Cell{}, false
-	}
-	c := ci.cells[0]
-	ci.cells = ci.cells[1:]
-	return c, true
+func (ci *cellIterator) Do(f func([]execute.Cell)) {
+	f(ci.cells)
 }
 
 func convertToTestBlock(b execute.Block) block {
@@ -240,8 +225,8 @@ func convertToTestBlock(b execute.Block) block {
 	}
 	cells := b.Cells()
 
-	for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
-		blk.cells = append(blk.cells, c)
-	}
+	cells.Do(func(cs []execute.Cell) {
+		blk.cells = append(blk.cells, cs...)
+	})
 	return blk
 }

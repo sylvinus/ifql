@@ -63,12 +63,12 @@ func (s *storageSource) setTransformation(t Transformation) {
 
 func (s *storageSource) Run() {
 	for blocks, mark, ok := s.Next(); ok; blocks, mark, ok = s.Next() {
-		for b, ok := blocks.NextBlock(); ok; b, ok = blocks.NextBlock() {
+		blocks.Do(func(b Block) {
 			s.t.Process(b)
 			//TODO(nathanielc): Also add mechanism to send UpdateProcessingTime calls, when no data is arriving.
 			// This is probably not needed for this source, but other sources should do so.
 			s.t.UpdateProcessingTime(Now())
-		}
+		})
 		s.t.UpdateWatermark(mark)
 	}
 	s.t.Finish()

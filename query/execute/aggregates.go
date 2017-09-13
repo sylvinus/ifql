@@ -1,79 +1,67 @@
 package execute
 
-import (
-	"github.com/influxdata/ifql/query/plan"
-)
+type aggregateTransformation struct {
+	d   Dataset
+	agg aggFunc
 
-type AggregateTransformation interface {
-	Do(Block, BlockBuilder)
+	trigger Trigger
 }
 
-type sumAT struct {
-	spec *plan.SumProcedureSpec
+func (t *aggregateTransformation) setTrigger(trigger Trigger) {
+	t.trigger = trigger
 }
 
-func (sumAT) Do(b Block, builder BlockBuilder) {
+func (t *aggregateTransformation) IsPerfect() bool {
+	return false
+}
+
+func (t *aggregateTransformation) RetractBlock(meta BlockMetadata) {
+	key := ToBlockKey(meta)
+	t.d.RetractBlock(key)
+}
+
+func (t *aggregateTransformation) Process(b Block) {
+	builder := t.d.BlockBuilder(b)
+
 	values := b.Values()
-	sum := 0.0
-	for vs, ok := values.NextValues(); ok; vs, ok = values.NextValues() {
-		for _, v := range vs {
-			sum += v
-		}
-	}
+	values.Do(t.agg.Do)
 
 	builder.SetTags(b.Tags())
 	builder.SetBounds(b.Bounds())
 	builder.AddCol(b.Bounds().Stop)
 	builder.AddRow(b.Tags())
-	builder.Set(0, 0, sum)
+	builder.Set(0, 0, t.agg.Value())
+	t.agg.Reset()
 }
 
-//type mergeProc struct {
-//	spec *plan.MergeProcedureSpec
-//}
-//
-//func (mergeProc) Do(src DataFrame) (FrameIterator, bool) {
-//	dfBuilder := newDataFrameBuilder()
-//	dfBuilder.SetBounds(src.Bounds())
-//	blockBuilders := make(map[SeriesKey]BlockBuilder)
-//
-//	blocks := src.Blocks()
-//	for b, ok := blocks.NextBlock(); ok; b, ok = blocks.NextBlock() {
-//		cells := b.Cells()
-//		for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
-//			key := p.seriesKey(b.Tags())
-//			builder := blockBuilders[key]
-//			if builder != nil {
-//				builder = newRowListBlockBuilder()
-//				builder.SetBounds(b.Bounds())
-//				builder.SetTags(b.Tags)
-//
-//				blockBuilders[key] = builder
-//				dfBuilder.AddBlock(builder)
-//			}
-//
-//			builder.AddCell(c)
-//		}
-//	}
-//
-//	return newFrameIterator(dfBuilder.DataFrame()), true
-//}
-//
-//type SeriesKey string
-//
-//func (p mergeProc) seriesKey(tags Tags) SeriesKey {
-//	var buf bytes.Buffer
-//	for i, k := range p.Keys {
-//		if i != 0 {
-//			buf.WriteRune(',')
-//		}
-//		buf.WriteString(k)
-//		buf.WriteRune('=')
-//		buf.WriteString(tags[k])
-//	}
-//	return SeriesKey(buf.Bytes())
-//}
-//
-//func (p mergeProc) Spec() plan.ProcedureSpec {
-//	return p.spec
-//}
+func (t *aggregateTransformation) UpdateWatermark(mark Time) {
+	t.d.UpdateWatermark(mark)
+}
+func (t *aggregateTransformation) UpdateProcessingTime(pt Time) {
+	t.d.UpdateProcessingTime(pt)
+}
+func (t *aggregateTransformation) Finish() {
+	t.d.Finish()
+}
+
+type aggFunc interface {
+	Do([]float64)
+	Value() float64
+	Reset()
+}
+
+type sumAgg struct {
+	sum float64
+}
+
+func (a *sumAgg) Do(vs []float64) {
+	for _, v := range vs {
+		a.sum += v
+	}
+}
+func (a *sumAgg) Value() float64 {
+	return a.sum
+}
+func (a *sumAgg) Reset() {
+	a.sum = 0
+}

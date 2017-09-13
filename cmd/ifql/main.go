@@ -27,18 +27,20 @@ func main() {
 	}
 	for _, r := range results {
 		blocks := r.Blocks()
-		for b, ok := blocks.NextBlock(); ok; b, ok = blocks.NextBlock() {
+		blocks.Do(func(b execute.Block) {
 			fmt.Printf("Block Tags: %v Bounds: %v\nTime:\tValue:\tTags:\n", b.Tags(), b.Bounds())
 			cells := b.Cells()
-			for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
-				fmt.Print(c.Time)
-				fmt.Print("\t")
-				fmt.Print(c.Value)
-				fmt.Print("\t")
-				fmt.Print(c.Tags)
-				fmt.Println()
-			}
-		}
+			cells.Do(func(cs []execute.Cell) {
+				for _, c := range cs {
+					fmt.Print(c.Time)
+					fmt.Print("\t")
+					fmt.Print(c.Value)
+					fmt.Print("\t")
+					fmt.Print(c.Tags)
+					fmt.Println()
+				}
+			})
+		})
 	}
 
 }
