@@ -7,37 +7,39 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/plan"
 )
 
-var ignoreUnexportedDataFrame = cmpopts.IgnoreUnexported(dataFrame{})
+var allowUnexportedDataFrame = cmp.AllowUnexported(blockList{}, block{})
 
 var epoch = time.Unix(0, 0)
 
 func TestExecutor_Execute(t *testing.T) {
 	testCases := []struct {
-		src  []dataFrame
+		src  []block
 		plan *plan.PlanSpec
-		exp  []dataFrame
+		exp  []blockList
 	}{
 		{
-			src: []dataFrame{{
-				Data: []float64{1, 2, 3, 4, 5},
-				Rows: []execute.Tags{
-					{},
+			src: []block{
+				{
+					bounds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
+					},
+					tags: execute.Tags{},
+					cells: []execute.Cell{
+						{Value: 1, Time: 0},
+						{Value: 2, Time: 1},
+						{Value: 3, Time: 2},
+						{Value: 4, Time: 3},
+						{Value: 5, Time: 4},
+					},
 				},
-				Cols: []execute.Time{
-					1, 2, 3, 4, 5,
-				},
-				bounds: bounds{
-					start: 1,
-					stop:  5,
-				},
-			}},
+			},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
@@ -86,18 +88,17 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum"), "0"),
 				},
 			},
-			exp: []dataFrame{{
-				Data: []float64{15},
-				Rows: []execute.Tags{
-					{},
-				},
-				Cols: []execute.Time{
-					5,
-				},
-				bounds: bounds{
-					start: 1,
-					stop:  5,
-				},
+			exp: []blockList{{
+				blocks: []block{{
+					bounds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
+					},
+					tags: execute.Tags{},
+					cells: []execute.Cell{
+						{Value: 15, Time: 5, Tags: execute.Tags{}},
+					},
+				}},
 			}},
 		},
 	}
@@ -106,87 +107,141 @@ func TestExecutor_Execute(t *testing.T) {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			exe := execute.NewExecutor(&storageReader{
-				frames: tc.src,
+				blocks: tc.src,
 			})
 			results, err := exe.Execute(context.Background(), tc.plan)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := make([]dataFrame, len(results))
+			got := make([]blockList, len(results))
 			for i, r := range results {
-				got[i] = convertToLocalDataFrame(r)
+				got[i] = convertToBlockList(r)
 			}
 
-			if !cmp.Equal(got, tc.exp, ignoreUnexportedDataFrame) {
-				t.Error("unexpected results", cmp.Diff(got, tc.exp))
+			if !cmp.Equal(got, tc.exp, allowUnexportedDataFrame) {
+				t.Error("unexpected results", cmp.Diff(got, tc.exp, allowUnexportedDataFrame))
 			}
 		})
 	}
 }
 
 type storageReader struct {
-	frames []dataFrame
-	idx    int
+	blocks []block
 }
 
-func (s *storageReader) Close() {}
-func (s *storageReader) Read(string, *storage.Predicate, int64, bool, execute.Time, execute.Time) (execute.DataFrame, bool) {
-	idx := s.idx
-	if idx >= len(s.frames) {
+func (s storageReader) Close() {}
+func (s storageReader) Read(string, *storage.Predicate, int64, bool, execute.Time, execute.Time) (execute.BlockIterator, error) {
+	return &storageBlockIterator{
+		s: s,
+	}, nil
+}
+
+type storageBlockIterator struct {
+	s   storageReader
+	idx int
+}
+
+func (bi *storageBlockIterator) NextBlock() (execute.Block, bool) {
+	idx := bi.idx
+	if idx >= len(bi.s.blocks) {
 		return nil, false
 	}
-	s.idx++
-	return s.frames[idx], true
+	bi.idx++
+	return bi.s.blocks[idx], true
 }
 
-type dataFrame struct {
-	Data   []float64
-	Rows   []execute.Tags
-	Cols   []execute.Time
-	bounds bounds
+type blockList struct {
+	blocks []block
+	bounds execute.Bounds
 }
 
-type bounds struct {
-	start execute.Time
-	stop  execute.Time
-}
-
-func (b bounds) Start() execute.Time {
-	return b.start
-}
-func (b bounds) Stop() execute.Time {
-	return b.stop
-}
-
-func (df dataFrame) Bounds() execute.Bounds {
+func (df blockList) Bounds() execute.Bounds {
 	return df.bounds
 }
 
-func (df dataFrame) NRows() int {
-	return len(df.Rows)
+func (df blockList) Blocks() execute.BlockIterator {
+	return &blockIterator{df.blocks}
 }
 
-func (df dataFrame) NCols() int {
-	return len(df.Cols)
-}
-func (df dataFrame) ColsIndex() []execute.Time {
-	return df.Cols
-}
-
-func (df dataFrame) RowSlice(i int) ([]float64, execute.Tags) {
-	s := len(df.Cols)
-	return df.Data[i*s : (i+1)*s], df.Rows[i]
-}
-
-func convertToLocalDataFrame(d execute.DataFrame) dataFrame {
-	df := dataFrame{
-		Cols: d.ColsIndex(),
+func convertToBlockList(r execute.Result) blockList {
+	bl := blockList{}
+	blocks := r.Blocks()
+	for b, ok := blocks.NextBlock(); ok; b, ok = blocks.NextBlock() {
+		bl.blocks = append(bl.blocks, convertToTestBlock(b))
 	}
-	r := d.NRows()
-	for i := 0; i < r; i++ {
-		row, tags := d.RowSlice(i)
-		df.Data = append(df.Data, row...)
-		df.Rows = append(df.Rows, tags)
+	return bl
+}
+
+type blockIterator struct {
+	blocks []block
+}
+
+func (bi *blockIterator) NextBlock() (execute.Block, bool) {
+	if len(bi.blocks) == 0 {
+		return nil, false
 	}
-	return df
+	b := bi.blocks[0]
+	bi.blocks = bi.blocks[1:]
+	return b, true
+}
+
+type block struct {
+	bounds execute.Bounds
+	tags   execute.Tags
+	cells  []execute.Cell
+}
+
+func (b block) Bounds() execute.Bounds {
+	return b.bounds
+}
+
+func (b block) Tags() execute.Tags {
+	return b.tags
+}
+
+func (b block) Values() execute.ValueIterator {
+	return &valueIterator{b.cells}
+}
+
+func (b block) Cells() execute.CellIterator {
+	return &cellIterator{b.cells}
+}
+
+type valueIterator struct {
+	cells []execute.Cell
+}
+
+func (vi *valueIterator) NextValues() ([]float64, bool) {
+	if len(vi.cells) == 0 {
+		return nil, false
+	}
+	v := vi.cells[0].Value
+	vi.cells = vi.cells[1:]
+	return []float64{v}, true
+}
+
+type cellIterator struct {
+	cells []execute.Cell
+}
+
+func (ci *cellIterator) NextCell() (execute.Cell, bool) {
+	if len(ci.cells) == 0 {
+		return execute.Cell{}, false
+	}
+	c := ci.cells[0]
+	ci.cells = ci.cells[1:]
+	return c, true
+}
+
+func convertToTestBlock(b execute.Block) block {
+	blk := block{
+		bounds: b.Bounds(),
+		tags:   b.Tags(),
+	}
+	cells := b.Cells()
+
+	for c, ok := cells.NextCell(); ok; c, ok = cells.NextCell() {
+		blk.cells = append(blk.cells, c)
+	}
+	return blk
 }

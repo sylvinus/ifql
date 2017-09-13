@@ -372,17 +372,17 @@ func TestBuild(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_metric",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_metric",
 														},
 													},
 													&storage.Node{
@@ -394,13 +394,13 @@ func TestBuild(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "mode",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "mode",
 														},
 													},
 													&storage.Node{
@@ -412,13 +412,13 @@ func TestBuild(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "cpu",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "cpu",
 														},
 													},
 													&storage.Node{
@@ -472,17 +472,17 @@ func TestBuild(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_metric",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_metric",
 														},
 													},
 													&storage.Node{
@@ -494,13 +494,13 @@ func TestBuild(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "mode",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "mode",
 														},
 													},
 													&storage.Node{
@@ -552,17 +552,17 @@ func TestBuild(t *testing.T) {
 							Exp: &query.WhereExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
-										NodeType: storage.NodeTypeGroupExpression,
+										NodeType: storage.NodeTypeLogicalExpression,
 										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 										Children: []*storage.Node{
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_metric",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_metric",
 														},
 													},
 													&storage.Node{
@@ -574,13 +574,13 @@ func TestBuild(t *testing.T) {
 												},
 											},
 											&storage.Node{
-												NodeType: storage.NodeTypeBooleanExpression,
+												NodeType: storage.NodeTypeComparisonExpression,
 												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
 												Children: []*storage.Node{
 													&storage.Node{
-														NodeType: storage.NodeTypeRef,
-														Value: &storage.Node_RefValue{
-															RefValue: "_measurement",
+														NodeType: storage.NodeTypeTagRef,
+														Value: &storage.Node_TagRefValue{
+															TagRefValue: "_measurement",
 														},
 													},
 													&storage.Node{

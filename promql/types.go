@@ -208,19 +208,19 @@ var compareLookup = map[MatchKind]storage.Node_Comparison{
 func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operation, error) {
 	node := &storage.Predicate{
 		Root: &storage.Node{
-			NodeType: storage.NodeTypeGroupExpression,
+			NodeType: storage.NodeTypeLogicalExpression,
 			Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
 			Children: []*storage.Node{
 				&storage.Node{
-					NodeType: storage.NodeTypeBooleanExpression,
+					NodeType: storage.NodeTypeComparisonExpression,
 					Value: &storage.Node_Comparison_{
 						Comparison: storage.ComparisonEqual,
 					},
 					Children: []*storage.Node{
 						&storage.Node{
-							NodeType: storage.NodeTypeRef,
-							Value: &storage.Node_RefValue{
-								RefValue: "_metric",
+							NodeType: storage.NodeTypeTagRef,
+							Value: &storage.Node_TagRefValue{
+								TagRefValue: "_metric",
 							},
 						},
 						&storage.Node{
@@ -240,9 +240,9 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 			return nil, fmt.Errorf("Unknown label match kind %d", label.Kind)
 		}
 		ref := &storage.Node{
-			NodeType: storage.NodeTypeRef,
-			Value: &storage.Node_RefValue{
-				RefValue: label.Name,
+			NodeType: storage.NodeTypeTagRef,
+			Value: &storage.Node_TagRefValue{
+				TagRefValue: label.Name,
 			},
 		}
 		var value *storage.Node
@@ -262,7 +262,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 			}
 		}
 		child := &storage.Node{
-			NodeType: storage.NodeTypeBooleanExpression,
+			NodeType: storage.NodeTypeComparisonExpression,
 			Value: &storage.Node_Comparison_{
 				Comparison: cmp,
 			},

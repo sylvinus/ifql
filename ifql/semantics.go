@@ -132,6 +132,8 @@ func operation(name string, args []ast.Expression) (*query.Operation, error) {
 		return whereOperation(args)
 	case "window":
 		return windowOperation(args)
+	case "merge":
+		return mergeOperation(args)
 	default:
 		return nil, fmt.Errorf("Unknown function %s", name)
 	}
@@ -345,7 +347,7 @@ func comparisonNode(expr *ast.BinaryExpression) (*storage.Node, error) {
 	}
 
 	return &storage.Node{
-		NodeType: storage.NodeTypeBooleanExpression,
+		NodeType: storage.NodeTypeComparisonExpression,
 		Value:    &storage.Node_Comparison_{Comparison: op},
 		Children: []*storage.Node{lhs, rhs},
 	}, nil
@@ -381,9 +383,9 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 	case *ast.StringLiteral:
 		if isLeft {
 			return &storage.Node{
-				NodeType: storage.NodeTypeRef,
-				Value: &storage.Node_RefValue{
-					RefValue: lit.Value,
+				NodeType: storage.NodeTypeTagRef,
+				Value: &storage.Node_TagRefValue{
+					TagRefValue: lit.Value,
 				},
 			}, nil
 		}
@@ -410,9 +412,9 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 		}, nil
 	case *ast.FieldLiteral:
 		return &storage.Node{
-			NodeType: storage.NodeTypeRef,
-			Value: &storage.Node_RefValue{
-				RefValue: lit.Value,
+			NodeType: storage.NodeTypeTagRef,
+			Value: &storage.Node_TagRefValue{
+				TagRefValue: lit.Value,
 			},
 		}, nil
 	case *ast.DurationLiteral, *ast.DateTimeLiteral, *ast.BooleanLiteral:
@@ -441,7 +443,7 @@ func logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
 	}
 
 	return &storage.Node{
-		NodeType: storage.NodeTypeGroupExpression,
+		NodeType: storage.NodeTypeLogicalExpression,
 		Value:    value(expr.Operator),
 		Children: []*storage.Node{lhs, rhs},
 	}, nil
@@ -507,4 +509,35 @@ func windowOperation(args []ast.Expression) (*query.Operation, error) {
 		ID:   "window", // TODO: Change this to a UUID
 		Spec: spec,
 	}, nil
+}
+
+func mergeOperation(args []ast.Expression) (*query.Operation, error) {
+	spec := &query.MergeOpSpec{}
+	op := &query.Operation{
+		ID:   "merge", // TODO: Change this to a UUID
+		Spec: spec,
+	}
+	if len(args) == 0 {
+		return op, nil
+	}
+
+	params, ok := args[0].(*ast.ObjectExpression)
+	if !ok {
+		return nil, fmt.Errorf("Arguments not a valid object expression")
+	}
+	if len(params.Properties) > 2 {
+		return nil, fmt.Errorf(`merge operation has two options arguments "keys" and "keep"`)
+	}
+
+	for _, farg := range params.Properties {
+		name := farg.Key.Name
+		//arg := farg.Value
+		switch name {
+		case "keys":
+			//TODO(nathanielc): Get list of keys
+		case "keep":
+			//TODO(nathanielc): Get list of keep tags
+		}
+	}
+	return op, nil
 }

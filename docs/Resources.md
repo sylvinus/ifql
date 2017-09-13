@@ -20,3 +20,6 @@ This documents contains a list of papers articles etc. that are useful for under
      https://research.google.com/pubs/pub36632.html
 
 
+## DataFrames
+
+* Good overview on various sparse matrix implementations. https://en.wikipedia.org/wiki/Sparse_matrix
