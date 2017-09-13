@@ -201,7 +201,7 @@ func TestAbstractPlanner_Plan(t *testing.T) {
 					},
 					{
 						ID:   plan.ProcedureIDFromOperationID("join"),
-						Spec: &plan.JoinProcedureSpec{},
+						Spec: &plan.MergeJoinProcedureSpec{},
 						Parents: []plan.DatasetID{
 							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count0")),
 							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum1")),

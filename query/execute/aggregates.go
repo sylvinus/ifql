@@ -20,7 +20,7 @@ func (t *aggregateTransformation) RetractBlock(meta BlockMetadata) {
 	t.d.RetractBlock(key)
 }
 
-func (t *aggregateTransformation) Process(b Block) {
+func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	builder := t.d.BlockBuilder(b)
 
 	values := b.Values()
@@ -64,4 +64,18 @@ func (a *sumAgg) Value() float64 {
 }
 func (a *sumAgg) Reset() {
 	a.sum = 0
+}
+
+type countAgg struct {
+	count float64
+}
+
+func (a *countAgg) Do(vs []float64) {
+	a.count += float64(len(vs))
+}
+func (a *countAgg) Value() float64 {
+	return a.count
+}
+func (a *countAgg) Reset() {
+	a.count = 0
 }

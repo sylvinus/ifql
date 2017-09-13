@@ -8,6 +8,7 @@ type Result interface {
 // mapping the pushed based Transformation API to the pull based Result interface.
 type resultSink struct {
 	blocks chan Block
+	closed bool
 }
 
 func newResultSink() *resultSink {
@@ -21,7 +22,7 @@ func (s *resultSink) RetractBlock(BlockMetadata) {
 	//TODO implement
 }
 
-func (s *resultSink) Process(b Block) {
+func (s *resultSink) Process(id DatasetID, b Block) {
 	s.blocks <- b
 }
 

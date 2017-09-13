@@ -60,7 +60,7 @@ const (
 	CardinalityKind
 	ShiftKind
 	InterpolateKind
-	JoinKind
+	MergeJoinKind
 	UnionKind
 	FilterKind
 	SortKind
@@ -352,20 +352,20 @@ func (s *InterpolateProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
 
-type JoinProcedureSpec struct {
+type MergeJoinProcedureSpec struct {
 	Keys      []string      `json:"keys"`
 	Predicate PredicateSpec `json:"predicate"`
 }
 
 func init() {
-	registerProcedureSpec(JoinKind, query.JoinKind, "join", new(JoinProcedureSpec))
+	registerProcedureSpec(MergeJoinKind, query.JoinKind, "merge-join", new(MergeJoinProcedureSpec))
 }
 
-func (s *JoinProcedureSpec) Kind() ProcedureKind {
-	return JoinKind
+func (s *MergeJoinProcedureSpec) Kind() ProcedureKind {
+	return MergeJoinKind
 }
 
-func (s *JoinProcedureSpec) SetSpec(qs query.OperationSpec) error {
+func (s *MergeJoinProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	return nil
 }
 

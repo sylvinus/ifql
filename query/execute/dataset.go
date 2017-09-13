@@ -2,6 +2,7 @@ package execute
 
 import (
 	"github.com/influxdata/ifql/query"
+	uuid "github.com/satori/go.uuid"
 )
 
 type AccumulationMode int
@@ -13,6 +14,14 @@ const (
 )
 
 type BlockKey string
+
+type DatasetID uuid.UUID
+
+var ZeroDatasetID DatasetID
+
+func (id DatasetID) IsZero() bool {
+	return id == ZeroDatasetID
+}
 
 type Dataset interface {
 	Node
@@ -33,17 +42,19 @@ type Dataset interface {
 	setTriggerSpec(t query.TriggerSpec)
 }
 
-func newDataset(accMode AccumulationMode) Dataset {
+func newDataset(id DatasetID, accMode AccumulationMode) Dataset {
 	return &dataset{
+		id:      id,
 		accMode: accMode,
 		blocks:  make(map[BlockKey]blockState),
 	}
 }
 
 type dataset struct {
+	id DatasetID
 	// Stateful triggers per stop time bound?
 	blocks  map[BlockKey]blockState
-	t       Transformation
+	ts      []Transformation
 	accMode AccumulationMode
 
 	triggerSpec    query.TriggerSpec
@@ -56,8 +67,8 @@ type blockState struct {
 	trigger Trigger
 }
 
-func (d *dataset) setTransformation(t Transformation) {
-	d.t = t
+func (d *dataset) addTransformation(t Transformation) {
+	d.ts = append(d.ts, t)
 }
 func (d *dataset) setTriggerSpec(ts query.TriggerSpec) {
 	d.triggerSpec = ts
@@ -66,13 +77,17 @@ func (d *dataset) setTriggerSpec(ts query.TriggerSpec) {
 func (d *dataset) UpdateWatermark(mark Time) {
 	d.watermark = mark
 	d.evalTriggers()
-	d.t.UpdateWatermark(mark)
+	for _, t := range d.ts {
+		t.UpdateWatermark(mark)
+	}
 }
 
-func (d *dataset) UpdateProcessingTime(t Time) {
-	d.processingTime = t
+func (d *dataset) UpdateProcessingTime(time Time) {
+	d.processingTime = time
 	d.evalTriggers()
-	d.t.UpdateProcessingTime(t)
+	for _, t := range d.ts {
+		t.UpdateProcessingTime(time)
+	}
 }
 
 func (d *dataset) evalTriggers() {
@@ -123,23 +138,33 @@ func (d *dataset) TriggerBlock(key BlockKey) {
 	b := d.blocks[key].builder.Block()
 	switch d.accMode {
 	case DiscardingMode:
-		d.t.Process(b)
+		for _, t := range d.ts {
+			t.Process(d.id, b)
+		}
 		d.blocks[key].builder.ClearData()
 	case AccumulatingRetractingMode:
-		d.t.RetractBlock(b)
+		for _, t := range d.ts {
+			t.RetractBlock(b)
+		}
 		fallthrough
 	case AccumulatingMode:
-		d.t.Process(b)
+		for _, t := range d.ts {
+			t.Process(d.id, b)
+		}
 	}
 }
 
 func (d *dataset) RetractBlock(key BlockKey) {
-	d.t.RetractBlock(d.blocks[key].builder)
+	for _, t := range d.ts {
+		t.RetractBlock(d.blocks[key].builder)
+	}
 }
 
 func (d *dataset) Finish() {
 	for k := range d.blocks {
 		d.TriggerBlock(k)
 	}
-	d.t.Finish()
+	for _, t := range d.ts {
+		t.Finish()
+	}
 }
