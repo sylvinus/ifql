@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"log"
 	"time"
 )
 
@@ -78,11 +77,7 @@ func hasKind(kind ProcedureKind, kinds []ProcedureKind) bool {
 }
 
 func (p *planner) pushDownAndSearch(pr *Procedure, kind ProcedureKind, do func(parent *Procedure), validPushThroughKinds ...ProcedureKind) {
-	log.Println("Procedures", p.plan.Procedures)
-	log.Println("Datasets", p.plan.Datasets)
 	for _, parent := range pr.Parents {
-		log.Println("parent", parent)
-		log.Println("parent.Source", p.plan.Datasets[parent].Source)
 		pp := p.plan.Procedures[p.plan.Datasets[parent].Source]
 		pk := pp.Spec.Kind()
 		if pk == kind {

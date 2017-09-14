@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"log"
 	"reflect"
 
 	"github.com/influxdata/ifql/query"
@@ -79,7 +78,6 @@ func (p *abstractPlanner) walkQuery(o *query.Operation) error {
 		pr.Parents = append(pr.Parents, parentDS.ID)
 	}
 
-	log.Printf("%v %#v", o.ID, pr)
 	return nil
 }
 
