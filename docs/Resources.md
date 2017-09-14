@@ -23,3 +23,17 @@ This documents contains a list of papers articles etc. that are useful for under
 ## DataFrames
 
 * Good overview on various sparse matrix implementations. https://en.wikipedia.org/wiki/Sparse_matrix
+
+
+## Query Optimization
+
+* Volcano Optimizer Generator
+    https://pdfs.semanticscholar.org/a817/a3e74d1663d9eb35b4baf3161ab16f57df85.pdf
+* The Cascades Framework for Query Optimization
+    http://db.informatik.uni-mannheim.de/downloads/hauptstudium/seminare/papers/Cascades_01.PDF
+* Chapter 7: Query Optimization
+    From Readings in Database Systems, 5th Edition (2015)
+    http://www.redbook.io/pdf/ch7-queryoptimization.pdf
+    This chaper references various other valuable readings.
+* Cost-based Optimization in Parallel Data Frameworks
+    https://www.cse.iitb.ac.in/~pararth09/btp/report.pdf
