@@ -1,7 +1,6 @@
 package execute
 
 import (
-	"log"
 	"math"
 	"sort"
 
@@ -13,7 +12,7 @@ type mergeJoinTransformation struct {
 	parents []DatasetID
 
 	d     Dataset
-	cache *mergeJoinCache
+	cache MergeJoinCache
 
 	leftID  DatasetID
 	rightID DatasetID
@@ -23,7 +22,7 @@ type mergeJoinTransformation struct {
 	keys []string
 }
 
-func newMergeJoinTransformation(d Dataset, cache *mergeJoinCache, spec *plan.MergeJoinProcedureSpec) *mergeJoinTransformation {
+func newMergeJoinTransformation(d Dataset, cache MergeJoinCache, spec *plan.MergeJoinProcedureSpec) *mergeJoinTransformation {
 	return &mergeJoinTransformation{
 		d:           d,
 		cache:       cache,
@@ -42,14 +41,10 @@ func (t *mergeJoinTransformation) RetractBlock(id DatasetID, meta BlockMetadata)
 		tags:   meta.Tags().Subset(t.keys),
 		bounds: meta.Bounds(),
 	}
-	key := ToBlockKey(bm)
-	t.cache.DiscardBlock(key)
-	t.d.RetractBlock(key)
+	t.d.RetractBlock(ToBlockKey(bm))
 }
 
 func (t *mergeJoinTransformation) Process(id DatasetID, b Block) {
-	log.Println("Process", id)
-
 	bm := blockMetadata{
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
@@ -82,7 +77,7 @@ func (t *mergeJoinTransformation) UpdateWatermark(id DatasetID, mark Time) {
 		}
 	}
 
-	//t.d.UpdateWatermark(min)
+	t.d.UpdateWatermark(min)
 }
 
 func (t *mergeJoinTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
@@ -95,7 +90,7 @@ func (t *mergeJoinTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
 		}
 	}
 
-	//t.d.UpdateProcessingTime(min)
+	t.d.UpdateProcessingTime(min)
 }
 
 func (t *mergeJoinTransformation) Finish(id DatasetID) {
@@ -140,6 +135,10 @@ func (k joinKey) Less(o joinKey) bool {
 		return k.TagsKey < o.TagsKey
 	}
 	return false
+}
+
+type MergeJoinCache interface {
+	Tables(BlockMetadata) *joinTables
 }
 
 type mergeJoinCache struct {

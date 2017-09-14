@@ -5,6 +5,32 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// Dataset represents the set of data produced by a transformation.
+type Dataset interface {
+	Node
+
+	RetractBlock(key BlockKey)
+	UpdateProcessingTime(t Time)
+	UpdateWatermark(mark Time)
+	Finish()
+
+	setTriggerSpec(t query.TriggerSpec)
+}
+
+// DataCache holds all working data for a transformation.
+type DataCache interface {
+	BlockMetadata(BlockKey) BlockMetadata
+	Block(BlockKey) Block
+
+	ForEach(func(BlockKey))
+	ForEachWithContext(func(BlockKey, Trigger, BlockContext))
+
+	DiscardBlock(BlockKey)
+	ExpireBlock(BlockKey)
+
+	setTriggerSpec(t query.TriggerSpec)
+}
+
 type AccumulationMode int
 
 const (
@@ -19,32 +45,6 @@ var ZeroDatasetID DatasetID
 
 func (id DatasetID) IsZero() bool {
 	return id == ZeroDatasetID
-}
-
-type Dataset interface {
-	Node
-
-	RetractBlock(key BlockKey)
-	UpdateProcessingTime(t Time)
-	UpdateWatermark(mark Time)
-	Finish()
-
-	TriggerBlock(BlockKey)
-
-	setTriggerSpec(t query.TriggerSpec)
-}
-
-type DataCache interface {
-	BlockMetadata(BlockKey) BlockMetadata
-	Block(BlockKey) Block
-
-	ForEach(func(BlockKey))
-	ForEachWithContext(func(BlockKey, Trigger, BlockContext))
-
-	DiscardBlock(BlockKey)
-	ExpireBlock(BlockKey)
-
-	setTriggerSpec(t query.TriggerSpec)
 }
 
 type dataset struct {
@@ -100,15 +100,15 @@ func (d *dataset) evalTriggers() {
 		}
 
 		if trigger.Triggered(c) {
-			d.TriggerBlock(bk)
+			d.triggerBlock(bk)
 		}
 		if trigger.Finished() {
-			d.cache.ExpireBlock(bk)
+			d.expireBlock(bk)
 		}
 	})
 }
 
-func (d *dataset) TriggerBlock(key BlockKey) {
+func (d *dataset) triggerBlock(key BlockKey) {
 	b := d.cache.Block(key)
 	switch d.accMode {
 	case DiscardingMode:
@@ -128,7 +128,12 @@ func (d *dataset) TriggerBlock(key BlockKey) {
 	}
 }
 
+func (d *dataset) expireBlock(key BlockKey) {
+	d.cache.ExpireBlock(key)
+}
+
 func (d *dataset) RetractBlock(key BlockKey) {
+	d.cache.DiscardBlock(key)
 	for _, t := range d.ts {
 		t.RetractBlock(d.id, d.cache.BlockMetadata(key))
 	}
@@ -136,7 +141,7 @@ func (d *dataset) RetractBlock(key BlockKey) {
 
 func (d *dataset) Finish() {
 	d.cache.ForEach(func(bk BlockKey) {
-		d.TriggerBlock(bk)
+		d.triggerBlock(bk)
 		d.cache.ExpireBlock(bk)
 	})
 	for _, t := range d.ts {
@@ -144,15 +149,19 @@ func (d *dataset) Finish() {
 	}
 }
 
-type blockBuilderDataset struct {
-	// Stateful triggers per stop time bound?
+type BlockBuilderCache interface {
+	BlockBuilder(meta BlockMetadata) BlockBuilder
+	ForEachBuilder(f func(BlockKey, BlockBuilder))
+}
+
+type blockBuilderCache struct {
 	blocks map[BlockKey]blockState
 
 	triggerSpec query.TriggerSpec
 }
 
-func newBlockBuilderDataset() *blockBuilderDataset {
-	return &blockBuilderDataset{
+func newBlockBuilderCache() *blockBuilderCache {
+	return &blockBuilderCache{
 		blocks: make(map[BlockKey]blockState),
 	}
 }
@@ -162,20 +171,20 @@ type blockState struct {
 	trigger Trigger
 }
 
-func (d *blockBuilderDataset) setTriggerSpec(ts query.TriggerSpec) {
+func (d *blockBuilderCache) setTriggerSpec(ts query.TriggerSpec) {
 	d.triggerSpec = ts
 }
 
-func (d *blockBuilderDataset) Block(key BlockKey) Block {
+func (d *blockBuilderCache) Block(key BlockKey) Block {
 	return d.blocks[key].builder.Block()
 }
-func (d *blockBuilderDataset) BlockMetadata(key BlockKey) BlockMetadata {
+func (d *blockBuilderCache) BlockMetadata(key BlockKey) BlockMetadata {
 	return d.blocks[key].builder
 }
 
 // BlockBuilder will return the builder for the specified block.
 // If no builder exists, one will be created.
-func (d *blockBuilderDataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
+func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
@@ -192,26 +201,26 @@ func (d *blockBuilderDataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
 	return b.builder
 }
 
-func (d *blockBuilderDataset) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
+func (d *blockBuilderCache) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
 	for k, b := range d.blocks {
 		f(k, b.builder)
 	}
 }
 
-func (d *blockBuilderDataset) DiscardBlock(key BlockKey) {
+func (d *blockBuilderCache) DiscardBlock(key BlockKey) {
 	d.blocks[key].builder.ClearData()
 }
-func (d *blockBuilderDataset) ExpireBlock(key BlockKey) {
+func (d *blockBuilderCache) ExpireBlock(key BlockKey) {
 	delete(d.blocks, key)
 }
 
-func (d *blockBuilderDataset) ForEach(f func(BlockKey)) {
+func (d *blockBuilderCache) ForEach(f func(BlockKey)) {
 	for bk := range d.blocks {
 		f(bk)
 	}
 }
 
-func (d *blockBuilderDataset) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
+func (d *blockBuilderCache) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
 	for bk, b := range d.blocks {
 		f(bk, b.trigger, BlockContext{
 			Bounds: b.builder.Bounds(),

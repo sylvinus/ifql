@@ -2,7 +2,7 @@ package execute
 
 type aggregateTransformation struct {
 	d     Dataset
-	cache *blockBuilderDataset
+	cache BlockBuilderCache
 	agg   aggFunc
 
 	trigger Trigger
@@ -10,7 +10,7 @@ type aggregateTransformation struct {
 	parents []DatasetID
 }
 
-func newAggregateTransformation(d Dataset, cache *blockBuilderDataset, agg aggFunc) *aggregateTransformation {
+func newAggregateTransformation(d Dataset, cache *blockBuilderCache, agg aggFunc) *aggregateTransformation {
 	return &aggregateTransformation{
 		d:     d,
 		cache: cache,

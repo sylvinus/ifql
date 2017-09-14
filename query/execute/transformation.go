@@ -20,17 +20,17 @@ type Transformation interface {
 func createTransformationDatasetPair(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, now time.Time) (Transformation, Dataset) {
 	switch s := spec.(type) {
 	case *plan.SumProcedureSpec:
-		cache := newBlockBuilderDataset()
+		cache := newBlockBuilderCache()
 		d := newDataset(id, mode, cache)
 		t := newAggregateTransformation(d, cache, new(sumAgg))
 		return t, d
 	case *plan.CountProcedureSpec:
-		cache := newBlockBuilderDataset()
+		cache := newBlockBuilderCache()
 		d := newDataset(id, mode, cache)
 		t := newAggregateTransformation(d, cache, new(countAgg))
 		return t, d
 	case *plan.MergeProcedureSpec:
-		cache := newBlockBuilderDataset()
+		cache := newBlockBuilderCache()
 		d := newDataset(id, mode, cache)
 		t := newMergeTransformation(d, cache, s)
 		return t, d
@@ -40,7 +40,7 @@ func createTransformationDatasetPair(id DatasetID, mode AccumulationMode, spec p
 		t := newMergeJoinTransformation(d, cache, s)
 		return t, d
 	case *plan.WindowProcedureSpec:
-		cache := newBlockBuilderDataset()
+		cache := newBlockBuilderCache()
 		d := newDataset(id, mode, cache)
 		t := newFixedWindowTransformation(d, cache, Window{
 			Every:  Duration(s.Window.Every),
@@ -57,12 +57,12 @@ func createTransformationDatasetPair(id DatasetID, mode AccumulationMode, spec p
 
 type fixedWindowTransformation struct {
 	d       Dataset
-	cache   *blockBuilderDataset
+	cache   BlockBuilderCache
 	w       Window
 	parents []DatasetID
 }
 
-func newFixedWindowTransformation(d Dataset, cache *blockBuilderDataset, w Window) Transformation {
+func newFixedWindowTransformation(d Dataset, cache BlockBuilderCache, w Window) Transformation {
 	return &fixedWindowTransformation{
 		d:     d,
 		cache: cache,
@@ -127,12 +127,12 @@ func (t *fixedWindowTransformation) setParents(ids []DatasetID) {
 
 type mergeTransformation struct {
 	d       Dataset
-	cache   *blockBuilderDataset
+	cache   BlockBuilderCache
 	keys    []string
 	parents []DatasetID
 }
 
-func newMergeTransformation(d Dataset, cache *blockBuilderDataset, spec *plan.MergeProcedureSpec) *mergeTransformation {
+func newMergeTransformation(d Dataset, cache BlockBuilderCache, spec *plan.MergeProcedureSpec) *mergeTransformation {
 	sort.Strings(spec.Keys)
 	return &mergeTransformation{
 		d:     d,
