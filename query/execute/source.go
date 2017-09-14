@@ -70,15 +70,15 @@ func (s *storageSource) Run() {
 				t.Process(s.id, b)
 				//TODO(nathanielc): Also add mechanism to send UpdateProcessingTime calls, when no data is arriving.
 				// This is probably not needed for this source, but other sources should do so.
-				t.UpdateProcessingTime(Now())
+				t.UpdateProcessingTime(s.id, Now())
 			}
 		})
 		for _, t := range s.ts {
-			t.UpdateWatermark(mark)
+			t.UpdateWatermark(s.id, mark)
 		}
 	}
 	for _, t := range s.ts {
-		t.Finish()
+		t.Finish(s.id)
 	}
 }
 

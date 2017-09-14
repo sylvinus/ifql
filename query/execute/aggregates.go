@@ -1,10 +1,21 @@
 package execute
 
 type aggregateTransformation struct {
-	d   Dataset
-	agg aggFunc
+	d     Dataset
+	cache *blockBuilderDataset
+	agg   aggFunc
 
 	trigger Trigger
+
+	parents []DatasetID
+}
+
+func newAggregateTransformation(d Dataset, cache *blockBuilderDataset, agg aggFunc) *aggregateTransformation {
+	return &aggregateTransformation{
+		d:     d,
+		cache: cache,
+		agg:   agg,
+	}
 }
 
 func (t *aggregateTransformation) setTrigger(trigger Trigger) {
@@ -15,33 +26,34 @@ func (t *aggregateTransformation) IsPerfect() bool {
 	return false
 }
 
-func (t *aggregateTransformation) RetractBlock(meta BlockMetadata) {
+func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
 	key := ToBlockKey(meta)
 	t.d.RetractBlock(key)
 }
 
 func (t *aggregateTransformation) Process(id DatasetID, b Block) {
-	builder := t.d.BlockBuilder(b)
+	builder := t.cache.BlockBuilder(b)
 
 	values := b.Values()
 	values.Do(t.agg.Do)
 
-	builder.SetTags(b.Tags())
-	builder.SetBounds(b.Bounds())
 	builder.AddCol(b.Bounds().Stop)
 	builder.AddRow(b.Tags())
 	builder.Set(0, 0, t.agg.Value())
 	t.agg.Reset()
 }
 
-func (t *aggregateTransformation) UpdateWatermark(mark Time) {
+func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) {
 	t.d.UpdateWatermark(mark)
 }
-func (t *aggregateTransformation) UpdateProcessingTime(pt Time) {
+func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *aggregateTransformation) Finish() {
+func (t *aggregateTransformation) Finish(id DatasetID) {
 	t.d.Finish()
+}
+func (t *aggregateTransformation) setParents(ids []DatasetID) {
+	t.parents = ids
 }
 
 type aggFunc interface {

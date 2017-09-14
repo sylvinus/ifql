@@ -67,7 +67,7 @@ func (es *executionState) createNode(d *plan.Dataset) Node {
 		return s
 	}
 
-	ds := newDataset(DatasetID(d.ID), AccumulatingMode)
+	t, ds := createTransformationDatasetPair(DatasetID(d.ID), AccumulatingMode, src.Spec, es.p.Now)
 
 	// Setup triggering
 	if src.Spec.Kind() == plan.WindowKind {
@@ -78,11 +78,13 @@ func (es *executionState) createNode(d *plan.Dataset) Node {
 		ds.setTriggerSpec(nonWindowTriggerSpec)
 	}
 
-	t := transformationFromProcedureSpec(ds, src.Spec, es.p.Now)
-	for _, parentDS := range src.Parents {
+	parentIDs := make([]DatasetID, len(src.Parents))
+	for i, parentDS := range src.Parents {
 		parent := es.createNode(es.p.Datasets[parentDS])
 		parent.addTransformation(t)
+		parentIDs[i] = DatasetID(parentDS)
 	}
+	t.setParents(parentIDs)
 
 	return ds
 }

@@ -9,6 +9,8 @@ type Result interface {
 type resultSink struct {
 	blocks chan Block
 	closed bool
+
+	parents []DatasetID
 }
 
 func newResultSink() *resultSink {
@@ -18,7 +20,7 @@ func newResultSink() *resultSink {
 	}
 }
 
-func (s *resultSink) RetractBlock(BlockMetadata) {
+func (s *resultSink) RetractBlock(DatasetID, BlockMetadata) {
 	//TODO implement
 }
 
@@ -36,17 +38,20 @@ func (s *resultSink) Do(f func(Block)) {
 	}
 }
 
-func (s *resultSink) UpdateWatermark(mark Time) {
+func (s *resultSink) UpdateWatermark(id DatasetID, mark Time) {
 	//Nothing to do
 }
-func (s *resultSink) UpdateProcessingTime(t Time) {
+func (s *resultSink) UpdateProcessingTime(id DatasetID, t Time) {
 	//Nothing to do
+}
+func (s *resultSink) setParents(ids []DatasetID) {
+	s.parents = ids
 }
 
 func (s *resultSink) setTrigger(Trigger) {
 	//TODO: Change interfaces so that resultSink, does not need to implement this method.
 }
 
-func (s *resultSink) Finish() {
+func (s *resultSink) Finish(id DatasetID) {
 	close(s.blocks)
 }

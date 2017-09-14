@@ -13,8 +13,6 @@ const (
 	AccumulatingRetractingMode
 )
 
-type BlockKey string
-
 type DatasetID uuid.UUID
 
 var ZeroDatasetID DatasetID
@@ -26,59 +24,62 @@ func (id DatasetID) IsZero() bool {
 type Dataset interface {
 	Node
 
-	// BlockBuilder will return the builder for the specified block.
-	// If no builder exists, one will be created.
-	BlockBuilder(meta BlockMetadata) BlockBuilder
-	ForEachBuilder(func(BlockKey, BlockBuilder))
-
-	TriggerBlock(key BlockKey)
-	ExpireBlock(key BlockKey)
 	RetractBlock(key BlockKey)
-
 	UpdateProcessingTime(t Time)
 	UpdateWatermark(mark Time)
 	Finish()
 
+	TriggerBlock(BlockKey)
+
 	setTriggerSpec(t query.TriggerSpec)
 }
 
-func newDataset(id DatasetID, accMode AccumulationMode) Dataset {
-	return &dataset{
-		id:      id,
-		accMode: accMode,
-		blocks:  make(map[BlockKey]blockState),
-	}
+type DataCache interface {
+	BlockMetadata(BlockKey) BlockMetadata
+	Block(BlockKey) Block
+
+	ForEach(func(BlockKey))
+	ForEachWithContext(func(BlockKey, Trigger, BlockContext))
+
+	DiscardBlock(BlockKey)
+	ExpireBlock(BlockKey)
+
+	setTriggerSpec(t query.TriggerSpec)
 }
 
 type dataset struct {
 	id DatasetID
-	// Stateful triggers per stop time bound?
-	blocks  map[BlockKey]blockState
+
 	ts      []Transformation
 	accMode AccumulationMode
 
-	triggerSpec    query.TriggerSpec
 	watermark      Time
 	processingTime Time
+
+	cache DataCache
 }
 
-type blockState struct {
-	builder BlockBuilder
-	trigger Trigger
+func newDataset(id DatasetID, accMode AccumulationMode, cache DataCache) *dataset {
+	return &dataset{
+		id:      id,
+		accMode: accMode,
+		cache:   cache,
+	}
 }
 
 func (d *dataset) addTransformation(t Transformation) {
 	d.ts = append(d.ts, t)
 }
-func (d *dataset) setTriggerSpec(ts query.TriggerSpec) {
-	d.triggerSpec = ts
+
+func (d *dataset) setTriggerSpec(spec query.TriggerSpec) {
+	d.cache.setTriggerSpec(spec)
 }
 
 func (d *dataset) UpdateWatermark(mark Time) {
 	d.watermark = mark
 	d.evalTriggers()
 	for _, t := range d.ts {
-		t.UpdateWatermark(mark)
+		t.UpdateWatermark(d.id, mark)
 	}
 }
 
@@ -86,28 +87,95 @@ func (d *dataset) UpdateProcessingTime(time Time) {
 	d.processingTime = time
 	d.evalTriggers()
 	for _, t := range d.ts {
-		t.UpdateProcessingTime(time)
+		t.UpdateProcessingTime(d.id, time)
 	}
 }
 
 func (d *dataset) evalTriggers() {
-	c := TriggerContext{
-		Watermark:             d.watermark,
-		CurrentProcessingTime: d.processingTime,
-	}
-	for bk, b := range d.blocks {
-		c.Builder = b.builder
+	d.cache.ForEachWithContext(func(bk BlockKey, trigger Trigger, bc BlockContext) {
+		c := TriggerContext{
+			Block:                 bc,
+			Watermark:             d.watermark,
+			CurrentProcessingTime: d.processingTime,
+		}
 
-		if b.trigger.Triggered(c) {
+		if trigger.Triggered(c) {
 			d.TriggerBlock(bk)
 		}
-		if b.trigger.Finished() {
-			d.ExpireBlock(bk)
+		if trigger.Finished() {
+			d.cache.ExpireBlock(bk)
+		}
+	})
+}
+
+func (d *dataset) TriggerBlock(key BlockKey) {
+	b := d.cache.Block(key)
+	switch d.accMode {
+	case DiscardingMode:
+		for _, t := range d.ts {
+			t.Process(d.id, b)
+		}
+		d.cache.DiscardBlock(key)
+	case AccumulatingRetractingMode:
+		for _, t := range d.ts {
+			t.RetractBlock(d.id, b)
+		}
+		fallthrough
+	case AccumulatingMode:
+		for _, t := range d.ts {
+			t.Process(d.id, b)
 		}
 	}
 }
 
-func (d *dataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
+func (d *dataset) RetractBlock(key BlockKey) {
+	for _, t := range d.ts {
+		t.RetractBlock(d.id, d.cache.BlockMetadata(key))
+	}
+}
+
+func (d *dataset) Finish() {
+	d.cache.ForEach(func(bk BlockKey) {
+		d.TriggerBlock(bk)
+		d.cache.ExpireBlock(bk)
+	})
+	for _, t := range d.ts {
+		t.Finish(d.id)
+	}
+}
+
+type blockBuilderDataset struct {
+	// Stateful triggers per stop time bound?
+	blocks map[BlockKey]blockState
+
+	triggerSpec query.TriggerSpec
+}
+
+func newBlockBuilderDataset() *blockBuilderDataset {
+	return &blockBuilderDataset{
+		blocks: make(map[BlockKey]blockState),
+	}
+}
+
+type blockState struct {
+	builder BlockBuilder
+	trigger Trigger
+}
+
+func (d *blockBuilderDataset) setTriggerSpec(ts query.TriggerSpec) {
+	d.triggerSpec = ts
+}
+
+func (d *blockBuilderDataset) Block(key BlockKey) Block {
+	return d.blocks[key].builder.Block()
+}
+func (d *blockBuilderDataset) BlockMetadata(key BlockKey) BlockMetadata {
+	return d.blocks[key].builder
+}
+
+// BlockBuilder will return the builder for the specified block.
+// If no builder exists, one will be created.
+func (d *blockBuilderDataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
@@ -124,47 +192,30 @@ func (d *dataset) BlockBuilder(meta BlockMetadata) BlockBuilder {
 	return b.builder
 }
 
-func (d *dataset) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
+func (d *blockBuilderDataset) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
 	for k, b := range d.blocks {
 		f(k, b.builder)
 	}
 }
 
-func (d *dataset) ExpireBlock(key BlockKey) {
+func (d *blockBuilderDataset) DiscardBlock(key BlockKey) {
+	d.blocks[key].builder.ClearData()
+}
+func (d *blockBuilderDataset) ExpireBlock(key BlockKey) {
 	delete(d.blocks, key)
 }
 
-func (d *dataset) TriggerBlock(key BlockKey) {
-	b := d.blocks[key].builder.Block()
-	switch d.accMode {
-	case DiscardingMode:
-		for _, t := range d.ts {
-			t.Process(d.id, b)
-		}
-		d.blocks[key].builder.ClearData()
-	case AccumulatingRetractingMode:
-		for _, t := range d.ts {
-			t.RetractBlock(b)
-		}
-		fallthrough
-	case AccumulatingMode:
-		for _, t := range d.ts {
-			t.Process(d.id, b)
-		}
+func (d *blockBuilderDataset) ForEach(f func(BlockKey)) {
+	for bk := range d.blocks {
+		f(bk)
 	}
 }
 
-func (d *dataset) RetractBlock(key BlockKey) {
-	for _, t := range d.ts {
-		t.RetractBlock(d.blocks[key].builder)
-	}
-}
-
-func (d *dataset) Finish() {
-	for k := range d.blocks {
-		d.TriggerBlock(k)
-	}
-	for _, t := range d.ts {
-		t.Finish()
+func (d *blockBuilderDataset) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
+	for bk, b := range d.blocks {
+		f(bk, b.trigger, BlockContext{
+			Bounds: b.builder.Bounds(),
+			Count:  b.builder.NRows(),
+		})
 	}
 }
