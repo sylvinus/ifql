@@ -1,6 +1,8 @@
 package plan
 
-import "time"
+import (
+	"time"
+)
 
 type PlanSpec struct {
 	// Now represents the relative currentl time of the plan.
@@ -50,14 +52,6 @@ func (p *planner) Plan(ap *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpe
 		}
 	}
 
-	// TODO: This should be done during the abstract planning phase
-	// Create Destination links
-	for _, pr := range ap.Procedures {
-		for _, parent := range pr.Parents {
-			p.plan.Datasets[parent].Destination = pr.ID
-		}
-	}
-
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
 	for _, pr := range ap.Procedures {
 		switch spec := pr.Spec.(type) {
@@ -102,14 +96,14 @@ func (p *planner) pushDownAndSearch(pr *Procedure, kind ProcedureKind, do func(p
 func (p *planner) removeProcedure(pr *Procedure) {
 	delete(p.plan.Procedures, pr.ID)
 
-	//TODO: this only works when the procedure has a single child
-	for _, id := range pr.Children {
-		ds := p.plan.Datasets[id]
-		delete(p.plan.Datasets, id)
-		p.plan.Procedures[ds.Destination].Parents = pr.Parents
-		for _, parentDS := range pr.Parents {
-			p.plan.Datasets[parentDS].Destination = ds.Destination
-		}
+	childDS := p.plan.Datasets[pr.Child]
+	delete(p.plan.Datasets, pr.Child)
+
+	for _, dest := range childDS.Destinations {
+		p.plan.Procedures[dest].Parents = pr.Parents
+	}
+	for _, parentDS := range pr.Parents {
+		p.plan.Datasets[parentDS].Destinations = childDS.Destinations
 	}
 }
 
@@ -126,10 +120,8 @@ func (p *planner) pushDownRange(pr *Procedure, spec *RangeProcedureSpec) {
 		}
 		selectSpec.BoundsSet = true
 		selectSpec.Bounds = spec.Bounds
-		// Update children datasets with bounds
-		for _, ds := range parent.Children {
-			p.plan.Datasets[ds].Bounds = spec.Bounds
-		}
+		// Update child dataset with bounds
+		p.plan.Datasets[parent.Child].Bounds = spec.Bounds
 	},
 		WhereKind, LimitKind,
 	)

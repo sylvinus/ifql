@@ -8,7 +8,7 @@ import (
 )
 
 type Node interface {
-	setTransformation(t Transformation)
+	addTransformation(t Transformation)
 }
 
 type Source interface {
@@ -18,17 +18,18 @@ type Source interface {
 
 // storageSource performs storage reads
 type storageSource struct {
+	id     DatasetID
 	reader StorageReader
 	spec   *plan.SelectProcedureSpec
 	window Window
 	bounds Bounds
 
-	t Transformation
+	ts []Transformation
 
 	currentTime Time
 }
 
-func newStorageSource(r StorageReader, spec *plan.SelectProcedureSpec, now time.Time) Source {
+func newStorageSource(id DatasetID, r StorageReader, spec *plan.SelectProcedureSpec, now time.Time) Source {
 	var w Window
 	if spec.WindowSet {
 		w = Window{
@@ -46,6 +47,7 @@ func newStorageSource(r StorageReader, spec *plan.SelectProcedureSpec, now time.
 	}
 	currentTime := w.Start + Time(w.Period)
 	return &storageSource{
+		id:     id,
 		reader: r,
 		spec:   spec,
 		bounds: Bounds{
@@ -57,21 +59,27 @@ func newStorageSource(r StorageReader, spec *plan.SelectProcedureSpec, now time.
 	}
 }
 
-func (s *storageSource) setTransformation(t Transformation) {
-	s.t = t
+func (s *storageSource) addTransformation(t Transformation) {
+	s.ts = append(s.ts, t)
 }
 
 func (s *storageSource) Run() {
 	for blocks, mark, ok := s.Next(); ok; blocks, mark, ok = s.Next() {
 		blocks.Do(func(b Block) {
-			s.t.Process(b)
-			//TODO(nathanielc): Also add mechanism to send UpdateProcessingTime calls, when no data is arriving.
-			// This is probably not needed for this source, but other sources should do so.
-			s.t.UpdateProcessingTime(Now())
+			for _, t := range s.ts {
+				t.Process(s.id, b)
+				//TODO(nathanielc): Also add mechanism to send UpdateProcessingTime calls, when no data is arriving.
+				// This is probably not needed for this source, but other sources should do so.
+				t.UpdateProcessingTime(s.id, Now())
+			}
 		})
-		s.t.UpdateWatermark(mark)
+		for _, t := range s.ts {
+			t.UpdateWatermark(s.id, mark)
+		}
 	}
-	s.t.Finish()
+	for _, t := range s.ts {
+		t.Finish(s.id)
+	}
 }
 
 func (s *storageSource) Next() (BlockIterator, Time, bool) {

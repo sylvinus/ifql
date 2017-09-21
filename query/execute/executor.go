@@ -48,7 +48,7 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 	for i, r := range p.Results {
 		ds := es.createNode(p.Datasets[r])
 		rs := newResultSink()
-		ds.setTransformation(rs)
+		ds.addTransformation(rs)
 		es.results[i] = rs
 	}
 	return es, nil
@@ -62,12 +62,12 @@ func (es *executionState) createNode(d *plan.Dataset) Node {
 	src := es.p.Procedures[d.Source]
 	if src.Spec.Kind() == plan.SelectKind {
 		spec := src.Spec.(*plan.SelectProcedureSpec)
-		s := newStorageSource(es.sr, spec, es.p.Now)
+		s := newStorageSource(DatasetID(d.ID), es.sr, spec, es.p.Now)
 		es.sources = append(es.sources, s)
 		return s
 	}
 
-	ds := newDataset(AccumulatingMode)
+	t, ds := createTransformationDatasetPair(DatasetID(d.ID), AccumulatingMode, src.Spec, es.p.Now)
 
 	// Setup triggering
 	if src.Spec.Kind() == plan.WindowKind {
@@ -78,10 +78,13 @@ func (es *executionState) createNode(d *plan.Dataset) Node {
 		ds.setTriggerSpec(nonWindowTriggerSpec)
 	}
 
-	// TODO implement more than one parent
-	t := transformationFromProcedureSpec(ds, src.Spec, es.p.Now)
-	parent := es.createNode(es.p.Datasets[src.Parents[0]])
-	parent.setTransformation(t)
+	parentIDs := make([]DatasetID, len(src.Parents))
+	for i, parentDS := range src.Parents {
+		parent := es.createNode(es.p.Datasets[parentDS])
+		parent.addTransformation(t)
+		parentIDs[i] = DatasetID(parentDS)
+	}
+	t.setParents(parentIDs)
 
 	return ds
 }

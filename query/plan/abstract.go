@@ -1,9 +1,7 @@
 package plan
 
 import (
-	"fmt"
 	"reflect"
-	"strconv"
 
 	"github.com/influxdata/ifql/query"
 	uuid "github.com/satori/go.uuid"
@@ -61,16 +59,25 @@ func (p *abstractPlanner) walkQuery(o *query.Operation) error {
 	p.procedureLookup[pr.ID] = pr
 	p.plan.Procedures = append(p.plan.Procedures, pr)
 
-	parents := p.q.Parents(o.ID)
-
-	switch spec := spec.(type) {
-	case NarrowProcedureSpec:
-		p.doNarrow(parents, pr, spec)
-	case WideProcedureSpec:
-		p.doWide(pr, spec)
-	default:
-		return fmt.Errorf("procedure must be be either narrow or wide: %v", spec.Kind())
+	// Create child dataset
+	childDataset := &Dataset{
+		ID:     CreateDatasetID(pr.ID),
+		Source: pr.ID,
 	}
+	pr.Child = childDataset.ID
+	p.datasetLookup[childDataset.ID] = childDataset
+	p.plan.Datasets = append(p.plan.Datasets, childDataset)
+
+	// Link parents destination procedures
+	parentOps := p.q.Parents(o.ID)
+	for _, parentOp := range parentOps {
+		parentPID := ProcedureIDFromOperationID(parentOp.ID)
+		parentP := p.procedureLookup[parentPID]
+		parentDS := p.datasetLookup[parentP.Child]
+		parentDS.Destinations = append(parentDS.Destinations, pr.ID)
+		pr.Parents = append(pr.Parents, parentDS.ID)
+	}
+
 	return nil
 }
 
@@ -80,45 +87,6 @@ func (p *abstractPlanner) createSpec(qk query.OperationKind) ProcedureSpec {
 	return reflect.New(typ).Interface().(ProcedureSpec)
 }
 
-func (p *abstractPlanner) doNarrow(parents []*query.Operation, o *Procedure, spec NarrowProcedureSpec) {
-	for _, parent := range parents {
-		parentOpID := ProcedureIDFromOperationID(parent.ID)
-		parentOp := p.procedureLookup[parentOpID]
-		parentDatasetIDs := parentOp.Children
-		childrenDatasets := make([]*Dataset, len(parentDatasetIDs))
-		childrenDatasetIDs := make([]DatasetID, len(parentDatasetIDs))
-		for i, pid := range parentDatasetIDs {
-			parentDataset := p.datasetLookup[pid]
-			childDataset := parentDataset.MakeNarrowChild(o.ID, strconv.Itoa(i))
-			childDataset.Source = o.ID
-			spec.NewChild(childDataset)
-			childrenDatasets[i] = childDataset
-			childrenDatasetIDs[i] = childDataset.ID
-			p.datasetLookup[childDataset.ID] = childDataset
-		}
-		p.plan.Datasets = append(p.plan.Datasets, childrenDatasets...)
-		o.Children = append(o.Children, childrenDatasetIDs...)
-		o.Parents = append(o.Parents, parentDatasetIDs...)
-	}
-}
-
-func CreateDatasetID(pid ProcedureID, name string) DatasetID {
-	return DatasetID(uuid.NewV5(uuid.UUID(pid), name))
-}
-
-func (p *abstractPlanner) doWide(o *Procedure, spec WideProcedureSpec) {
-	children := spec.DetermineChildren()
-	childIDs := make([]DatasetID, len(children))
-
-	for i, c := range children {
-		// TODO figure out how the dataset ID hierarchy should work
-		// This currently can create duplicate IDs
-		c.ID = CreateDatasetID(o.ID, strconv.Itoa(i))
-		c.Source = o.ID
-		childIDs[i] = c.ID
-		p.datasetLookup[c.ID] = c
-	}
-
-	p.plan.Datasets = append(p.plan.Datasets, children...)
-	o.Children = childIDs
+func CreateDatasetID(pid ProcedureID) DatasetID {
+	return DatasetID(pid)
 }

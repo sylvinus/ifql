@@ -11,6 +11,8 @@ type BlockMetadata interface {
 	Tags() Tags
 }
 
+type BlockKey string
+
 func ToBlockKey(meta BlockMetadata) BlockKey {
 	// TODO: Make this not a hack
 	return BlockKey(fmt.Sprintf("%s:%d-%d", meta.Tags().Key(), meta.Bounds().Start, meta.Bounds().Stop))
@@ -22,8 +24,6 @@ type Block interface {
 	Values() ValueIterator
 	Cells() CellIterator
 }
-
-//type BlockKey uint64
 
 // BlockBuilder builds blocks that can be used multiple times
 type BlockBuilder interface {

@@ -13,9 +13,14 @@ type Trigger interface {
 }
 
 type TriggerContext struct {
-	Builder               BlockBuilder
+	Block                 BlockContext
 	Watermark             Time
 	CurrentProcessingTime Time
+}
+
+type BlockContext struct {
+	Bounds Bounds
+	Count  int
 }
 
 func newTriggerFromSpec(spec query.TriggerSpec) Trigger {
@@ -34,7 +39,7 @@ func newTriggerFromSpec(spec query.TriggerSpec) Trigger {
 		}
 	case query.AfterAtLeastCountTriggerSpec:
 		return &afterAtLeastCount{
-			count: s.Count,
+			atLeast: s.Count,
 		}
 	case query.OrFinallyTriggerSpec:
 		return &orFinally{
@@ -55,10 +60,10 @@ type afterWatermarkTrigger struct {
 }
 
 func (t *afterWatermarkTrigger) Triggered(c TriggerContext) bool {
-	if c.Watermark >= c.Builder.Bounds().Stop+Time(t.allowedLateness) {
+	if c.Watermark >= c.Block.Bounds.Stop+Time(t.allowedLateness) {
 		t.finished = true
 	}
-	return c.Watermark >= c.Builder.Bounds().Stop
+	return c.Watermark >= c.Block.Bounds.Stop
 }
 func (t *afterWatermarkTrigger) Finished() bool {
 	return t.finished
@@ -107,19 +112,18 @@ func (t *afterProcessingTimeTrigger) Reset() {
 }
 
 type afterAtLeastCount struct {
-	count int
-	rows  int
+	n, atLeast int
 }
 
 func (t *afterAtLeastCount) Triggered(c TriggerContext) bool {
-	t.rows = c.Builder.NRows()
-	return t.rows >= t.count
+	t.n = c.Block.Count
+	return t.n >= t.atLeast
 }
 func (t *afterAtLeastCount) Finished() bool {
-	return t.rows >= t.count
+	return t.n >= t.atLeast
 }
 func (t *afterAtLeastCount) Reset() {
-	t.rows = 0
+	t.n = 0
 }
 
 type orFinally struct {
