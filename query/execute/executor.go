@@ -45,8 +45,8 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 		sr:      e.sr,
 		results: make([]Result, len(p.Results)),
 	}
-	for i, r := range p.Results {
-		ds := es.createNode(p.Datasets[r])
+	for i, id := range p.Results {
+		ds := es.createNode(p.Procedures[id])
 		rs := newResultSink()
 		ds.addTransformation(rs)
 		es.results[i] = rs
@@ -58,31 +58,30 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 // whose parent transformation is not a windowing transformation.
 var nonWindowTriggerSpec = query.AfterWatermarkTriggerSpec{}
 
-func (es *executionState) createNode(d *plan.Dataset) Node {
-	src := es.p.Procedures[d.Source]
-	if src.Spec.Kind() == plan.SelectKind {
-		spec := src.Spec.(*plan.SelectProcedureSpec)
-		s := newStorageSource(DatasetID(d.ID), es.sr, spec, es.p.Now)
+func (es *executionState) createNode(pr *plan.Procedure) Node {
+	if pr.Spec.Kind() == plan.SelectKind {
+		spec := pr.Spec.(*plan.SelectProcedureSpec)
+		s := newStorageSource(DatasetID(pr.ID), es.sr, spec, es.p.Now)
 		es.sources = append(es.sources, s)
 		return s
 	}
 
-	t, ds := createTransformationDatasetPair(DatasetID(d.ID), AccumulatingMode, src.Spec, es.p.Now)
+	t, ds := createTransformationDatasetPair(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es.p.Now)
 
 	// Setup triggering
-	if src.Spec.Kind() == plan.WindowKind {
-		w := src.Spec.(*plan.WindowProcedureSpec)
+	if pr.Spec.Kind() == plan.WindowKind {
+		w := pr.Spec.(*plan.WindowProcedureSpec)
 		triggerSpec := w.Triggering
 		ds.setTriggerSpec(triggerSpec)
 	} else {
 		ds.setTriggerSpec(nonWindowTriggerSpec)
 	}
 
-	parentIDs := make([]DatasetID, len(src.Parents))
-	for i, parentDS := range src.Parents {
-		parent := es.createNode(es.p.Datasets[parentDS])
+	parentIDs := make([]DatasetID, len(pr.Parents))
+	for i, parentID := range pr.Parents {
+		parent := es.createNode(es.p.Procedures[parentID])
 		parent.addTransformation(t)
-		parentIDs[i] = DatasetID(parentDS)
+		parentIDs[i] = DatasetID(parentID)
 	}
 	t.setParents(parentIDs)
 
