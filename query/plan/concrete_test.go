@@ -17,50 +17,34 @@ func TestConcretePlanner_Plan(t *testing.T) {
 	}{
 		{
 			ap: &plan.AbstractPlanSpec{
-				Procedures: []*plan.Procedure{
-					{
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
 						Spec: &plan.SelectProcedureSpec{
 							Database: "mydb",
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
 					},
-					{
+					plan.ProcedureIDFromOperationID("range"): {
 						ID: plan.ProcedureIDFromOperationID("range"),
 						Spec: &plan.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
 						},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("select"),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 					},
-					{
+					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &plan.CountProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("range")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-					},
-				},
-				Datasets: []*plan.Dataset{
-					{
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source:       plan.ProcedureIDFromOperationID("select"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-					},
-					{
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
-						Source:       plan.ProcedureIDFromOperationID("range"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-					},
-					{
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-						Source: plan.ProcedureIDFromOperationID("count"),
+						Children: nil,
 					},
 				},
 			},
@@ -76,98 +60,63 @@ func TestConcretePlanner_Plan(t *testing.T) {
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &plan.CountProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("select")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+						Children: nil,
 					},
 				},
-				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")): {
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source:       plan.ProcedureIDFromOperationID("select"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-						Bounds: plan.BoundsSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-						},
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-						Source: plan.ProcedureIDFromOperationID("count"),
-					},
-				},
-				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+				Results: []plan.ProcedureID{
+					(plan.ProcedureIDFromOperationID("count")),
 				},
 			},
 		},
 		{
 			ap: &plan.AbstractPlanSpec{
-				Procedures: []*plan.Procedure{
-					{
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
 						Spec: &plan.SelectProcedureSpec{
 							Database: "mydb",
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
 					},
-					{
+					plan.ProcedureIDFromOperationID("range"): {
 						ID: plan.ProcedureIDFromOperationID("range"),
 						Spec: &plan.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
 						},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("select")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("limit")},
 					},
-					{
+					plan.ProcedureIDFromOperationID("limit"): {
 						ID: plan.ProcedureIDFromOperationID("limit"),
 						Spec: &plan.LimitProcedureSpec{
 							Limit: 10,
 						},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("range")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("limit")),
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 					},
-					{
+					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &plan.CountProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("limit")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("limit")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-					},
-				},
-				Datasets: []*plan.Dataset{
-					{
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source:       plan.ProcedureIDFromOperationID("select"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-					},
-					{
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("range")),
-						Source:       plan.ProcedureIDFromOperationID("range"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("limit")},
-					},
-					{
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("limit")),
-						Source:       plan.ProcedureIDFromOperationID("limit"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-					},
-					{
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-						Source: plan.ProcedureIDFromOperationID("count"),
+						Children: nil,
 					},
 				},
 			},
@@ -185,34 +134,20 @@ func TestConcretePlanner_Plan(t *testing.T) {
 							LimitSet: true,
 							Limit:    10,
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &plan.CountProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("select")),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+						Children: nil,
 					},
 				},
-				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")): {
-						ID:           plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source:       plan.ProcedureIDFromOperationID("select"),
-						Destinations: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-						Bounds: plan.BoundsSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-						},
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-						Source: plan.ProcedureIDFromOperationID("count"),
-					},
-				},
-				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+				Results: []plan.ProcedureID{
+					(plan.ProcedureIDFromOperationID("count")),
 				},
 			},
 		},

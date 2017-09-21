@@ -52,36 +52,20 @@ func TestExecutor_Execute(t *testing.T) {
 								Start: query.Time{Relative: -5},
 							},
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("sum")},
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
 						Spec: &plan.SumProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("select"),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
+						Children: nil,
 					},
 				},
-				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source: plan.ProcedureIDFromOperationID("select"),
-						Bounds: plan.BoundsSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-						},
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
-						Source: plan.ProcedureIDFromOperationID("sum"),
-						Bounds: plan.BoundsSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-						},
-					},
-				},
-				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
+				Results: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("sum"),
 				},
 			},
 			exp: []blockList{{
@@ -126,58 +110,37 @@ func TestExecutor_Execute(t *testing.T) {
 								Start: query.Time{Relative: -5},
 							},
 						},
-						Parents: nil,
-						Child:   plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("sum")},
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
 						Spec: &plan.SumProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("select"),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &plan.CountProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("select"),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
 					plan.ProcedureIDFromOperationID("join"): {
 						ID:   plan.ProcedureIDFromOperationID("join"),
 						Spec: &plan.MergeJoinProcedureSpec{},
-						Parents: []plan.DatasetID{
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
-							plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("sum"),
+							plan.ProcedureIDFromOperationID("count"),
 						},
-						Child: plan.CreateDatasetID(plan.ProcedureIDFromOperationID("join")),
+						Children: nil,
 					},
 				},
-				Datasets: map[plan.DatasetID]*plan.Dataset{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("select")),
-						Source: plan.ProcedureIDFromOperationID("select"),
-						Bounds: plan.BoundsSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-						},
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("sum")),
-						Source: plan.ProcedureIDFromOperationID("sum"),
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("count")),
-						Source: plan.ProcedureIDFromOperationID("count"),
-					},
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("join")): {
-						ID:     plan.CreateDatasetID(plan.ProcedureIDFromOperationID("join")),
-						Source: plan.ProcedureIDFromOperationID("join"),
-					},
-				},
-				Results: []plan.DatasetID{
-					plan.CreateDatasetID(plan.ProcedureIDFromOperationID("join")),
+				Results: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("join"),
 				},
 			},
 			exp: []blockList{{

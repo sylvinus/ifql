@@ -18,10 +18,10 @@ func (id ProcedureID) String() string {
 var ZeroProcedureID ProcedureID
 
 type Procedure struct {
-	ID      ProcedureID
-	Parents []DatasetID
-	Child   DatasetID
-	Spec    ProcedureSpec
+	ID       ProcedureID
+	Parents  []ProcedureID
+	Children []ProcedureID
+	Spec     ProcedureSpec
 }
 
 // ProcedureSpec specifies an operation as part of a query.
@@ -45,6 +45,18 @@ type PredicateSpec interface{}
 // TODO actually design implement this idea
 func ExpressionToPredicate(query.ExpressionSpec) PredicateSpec {
 	return nil
+}
+
+type BoundsSpec struct {
+	Start query.Time
+	Stop  query.Time
+}
+
+type WindowSpec struct {
+	Every  query.Duration
+	Period query.Duration
+	Round  query.Duration
+	Start  query.Time
 }
 
 const (
@@ -141,10 +153,6 @@ func (s *SelectProcedureSpec) SetSpec(qs query.OperationSpec) error {
 	}
 	s.Database = spec.Database
 	return nil
-}
-
-func (s *SelectProcedureSpec) DetermineChildren() []*Dataset {
-	return []*Dataset{new(Dataset)}
 }
 
 type WhereProcedureSpec struct {

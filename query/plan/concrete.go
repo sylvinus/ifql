@@ -9,10 +9,8 @@ type PlanSpec struct {
 	Now time.Time
 	// Procedures is a set of all operations
 	Procedures map[ProcedureID]*Procedure
-	// Datasets is a set of all datasets
-	Datasets map[DatasetID]*Dataset
 	// Results is a list of datasets that are the result of the plan
-	Results []DatasetID
+	Results []ProcedureID
 }
 
 type Planner interface {
@@ -32,23 +30,14 @@ func (p *planner) Plan(ap *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpe
 	p.plan = &PlanSpec{
 		Now:        now,
 		Procedures: make(map[ProcedureID]*Procedure, len(ap.Procedures)),
-		Datasets:   make(map[DatasetID]*Dataset, len(ap.Datasets)),
 	}
 
 	// Find the datasets that are results and populate mappings
-	childCount := make(map[DatasetID]int)
-	for _, pr := range ap.Procedures {
-		p.plan.Procedures[pr.ID] = pr
+	for id, pr := range ap.Procedures {
+		p.plan.Procedures[id] = pr
 
-		for _, d := range pr.Parents {
-			childCount[d]++
-		}
-	}
-	for _, d := range ap.Datasets {
-		p.plan.Datasets[d.ID] = d
-
-		if childCount[d.ID] == 0 {
-			p.plan.Results = append(p.plan.Results, d.ID)
+		if len(pr.Children) == 0 {
+			p.plan.Results = append(p.plan.Results, id)
 		}
 	}
 
@@ -78,7 +67,7 @@ func hasKind(kind ProcedureKind, kinds []ProcedureKind) bool {
 
 func (p *planner) pushDownAndSearch(pr *Procedure, kind ProcedureKind, do func(parent *Procedure), validPushThroughKinds ...ProcedureKind) {
 	for _, parent := range pr.Parents {
-		pp := p.plan.Procedures[p.plan.Datasets[parent].Source]
+		pp := p.plan.Procedures[parent]
 		pk := pp.Spec.Kind()
 		if pk == kind {
 			do(pp)
@@ -89,22 +78,31 @@ func (p *planner) pushDownAndSearch(pr *Procedure, kind ProcedureKind, do func(p
 			// TODO: create new branch since procedure cannot be pushed down
 		}
 	}
-	// Remove procedure since it has been pushed down
-	p.removeProcedure(pr)
 }
 
 func (p *planner) removeProcedure(pr *Procedure) {
 	delete(p.plan.Procedures, pr.ID)
 
-	childDS := p.plan.Datasets[pr.Child]
-	delete(p.plan.Datasets, pr.Child)
+	for _, id := range pr.Parents {
+		parent := p.plan.Procedures[id]
+		parent.Children = removeID(parent.Children, pr.ID)
+		parent.Children = append(parent.Children, pr.Children...)
+	}
+	for _, id := range pr.Children {
+		child := p.plan.Procedures[id]
+		child.Parents = removeID(child.Parents, pr.ID)
+		child.Parents = append(child.Parents, pr.Parents...)
+	}
+}
 
-	for _, dest := range childDS.Destinations {
-		p.plan.Procedures[dest].Parents = pr.Parents
+func removeID(ids []ProcedureID, remove ProcedureID) []ProcedureID {
+	filtered := ids[0:0]
+	for _, id := range ids {
+		if id != remove {
+			filtered = append(filtered, id)
+		}
 	}
-	for _, parentDS := range pr.Parents {
-		p.plan.Datasets[parentDS].Destinations = childDS.Destinations
-	}
+	return filtered
 }
 
 func (p *planner) pushDownRange(pr *Procedure, spec *RangeProcedureSpec) {
@@ -120,11 +118,11 @@ func (p *planner) pushDownRange(pr *Procedure, spec *RangeProcedureSpec) {
 		}
 		selectSpec.BoundsSet = true
 		selectSpec.Bounds = spec.Bounds
-		// Update child dataset with bounds
-		p.plan.Datasets[parent.Child].Bounds = spec.Bounds
 	},
 		WhereKind, LimitKind,
 	)
+	// Remove procedure since it has been pushed down
+	p.removeProcedure(pr)
 }
 
 func (p *planner) pushDownWhere(pr *Procedure, spec *WhereProcedureSpec) {
@@ -138,6 +136,8 @@ func (p *planner) pushDownWhere(pr *Procedure, spec *WhereProcedureSpec) {
 	},
 		LimitKind, RangeKind,
 	)
+	// Remove procedure since it has been pushed down
+	p.removeProcedure(pr)
 }
 
 func (p *planner) pushDownLimit(pr *Procedure, spec *LimitProcedureSpec) {
@@ -152,4 +152,6 @@ func (p *planner) pushDownLimit(pr *Procedure, spec *LimitProcedureSpec) {
 	},
 		WhereKind, RangeKind,
 	)
+	// Remove procedure since it has been pushed down
+	p.removeProcedure(pr)
 }
