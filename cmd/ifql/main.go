@@ -60,14 +60,14 @@ func doQuery(queryStr string) ([]execute.Result, error) {
 		return nil, errors.Wrap(err, "failed to parse query")
 	}
 
-	aplanner := plan.NewAbstractPlanner()
-	ap, err := aplanner.Plan(qSpec)
+	lplanner := plan.NewLogicalPlanner()
+	lp, err := lplanner.Plan(qSpec)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create abstract plan")
 	}
 
 	planner := plan.NewPlanner()
-	p, err := planner.Plan(ap, nil, time.Now())
+	p, err := planner.Plan(lp, nil, time.Now())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create concrete plan")
 	}
