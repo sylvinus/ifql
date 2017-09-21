@@ -10,13 +10,13 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-func TestConcretePlanner_Plan(t *testing.T) {
+func TestPhysicalPlanner_Plan(t *testing.T) {
 	testCases := []struct {
-		ap *plan.AbstractPlanSpec
+		lp *plan.LogicalPlanSpec
 		cp *plan.PlanSpec
 	}{
 		{
-			ap: &plan.AbstractPlanSpec{
+			lp: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -78,7 +78,7 @@ func TestConcretePlanner_Plan(t *testing.T) {
 			},
 		},
 		{
-			ap: &plan.AbstractPlanSpec{
+			lp: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -156,12 +156,12 @@ func TestConcretePlanner_Plan(t *testing.T) {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			planner := plan.NewPlanner()
-			got, err := planner.Plan(tc.ap, nil, time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC))
+			got, err := planner.Plan(tc.lp, nil, time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !cmp.Equal(got, tc.cp) {
-				t.Errorf("unexpected concrete plan:\n%s", cmp.Diff(got, tc.cp))
+				t.Errorf("unexpected physical plan:\n%s", cmp.Diff(got, tc.cp))
 			}
 		})
 	}

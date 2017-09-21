@@ -10,10 +10,10 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-func TestAbstractPlanner_Plan(t *testing.T) {
+func TestLogicalPlanner_Plan(t *testing.T) {
 	testCases := []struct {
 		q  *query.QuerySpec
-		ap *plan.AbstractPlanSpec
+		ap *plan.LogicalPlanSpec
 	}{
 		{
 			q: &query.QuerySpec{
@@ -41,7 +41,7 @@ func TestAbstractPlanner_Plan(t *testing.T) {
 					{Parent: "1", Child: "2"},
 				},
 			},
-			ap: &plan.AbstractPlanSpec{
+			ap: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("0"): {
 						ID: plan.ProcedureIDFromOperationID("0"),
@@ -125,7 +125,7 @@ func TestAbstractPlanner_Plan(t *testing.T) {
 					{Parent: "sum1", Child: "join"},
 				},
 			},
-			ap: &plan.AbstractPlanSpec{
+			ap: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select0"): {
 						ID: plan.ProcedureIDFromOperationID("select0"),
@@ -199,13 +199,13 @@ func TestAbstractPlanner_Plan(t *testing.T) {
 	for i, tc := range testCases {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			planner := plan.NewAbstractPlanner()
+			planner := plan.NewLogicalPlanner()
 			got, err := planner.Plan(tc.q)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !cmp.Equal(got, tc.ap) {
-				t.Errorf("unexpected abstract plan:\n%s", cmp.Diff(got, tc.ap))
+				t.Errorf("unexpected logical plan:\n%s", cmp.Diff(got, tc.ap))
 			}
 		})
 	}

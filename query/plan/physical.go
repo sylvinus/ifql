@@ -14,8 +14,8 @@ type PlanSpec struct {
 }
 
 type Planner interface {
-	// Plan create a plan from the abstract plan and available storage.
-	Plan(p *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpec, error)
+	// Plan create a plan from the logical plan and available storage.
+	Plan(p *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec, error)
 }
 
 type planner struct {
@@ -26,7 +26,7 @@ func NewPlanner() Planner {
 	return new(planner)
 }
 
-func (p *planner) Plan(ap *AbstractPlanSpec, s Storage, now time.Time) (*PlanSpec, error) {
+func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec, error) {
 	p.plan = &PlanSpec{
 		Now:        now,
 		Procedures: make(map[ProcedureID]*Procedure, len(ap.Procedures)),

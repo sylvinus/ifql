@@ -10,26 +10,26 @@ import (
 var NilUUID uuid.UUID
 var RootUUID = NilUUID
 
-type AbstractPlanSpec struct {
+type LogicalPlanSpec struct {
 	Procedures map[ProcedureID]*Procedure
 }
 
-type AbstractPlanner interface {
-	Plan(*query.QuerySpec) (*AbstractPlanSpec, error)
+type LogicalPlanner interface {
+	Plan(*query.QuerySpec) (*LogicalPlanSpec, error)
 }
 
-type abstractPlanner struct {
-	plan *AbstractPlanSpec
+type logicalPlanner struct {
+	plan *LogicalPlanSpec
 	q    *query.QuerySpec
 }
 
-func NewAbstractPlanner() AbstractPlanner {
-	return new(abstractPlanner)
+func NewLogicalPlanner() LogicalPlanner {
+	return new(logicalPlanner)
 }
 
-func (p *abstractPlanner) Plan(q *query.QuerySpec) (*AbstractPlanSpec, error) {
+func (p *logicalPlanner) Plan(q *query.QuerySpec) (*LogicalPlanSpec, error) {
 	p.q = q
-	p.plan = &AbstractPlanSpec{
+	p.plan = &LogicalPlanSpec{
 		Procedures: make(map[ProcedureID]*Procedure),
 	}
 	err := q.Walk(p.walkQuery)
@@ -43,7 +43,7 @@ func ProcedureIDFromOperationID(id query.OperationID) ProcedureID {
 	return ProcedureID(uuid.NewV5(RootUUID, string(id)))
 }
 
-func (p *abstractPlanner) walkQuery(o *query.Operation) error {
+func (p *logicalPlanner) walkQuery(o *query.Operation) error {
 	spec := p.createSpec(o.Spec.Kind())
 	if err := spec.SetSpec(o.Spec); err != nil {
 		return err
@@ -67,7 +67,7 @@ func (p *abstractPlanner) walkQuery(o *query.Operation) error {
 	return nil
 }
 
-func (p *abstractPlanner) createSpec(qk query.OperationKind) ProcedureSpec {
+func (p *logicalPlanner) createSpec(qk query.OperationKind) ProcedureSpec {
 	k := opToProcedureKind[qk]
 	typ := kindToGoType[k]
 	return reflect.New(typ).Interface().(ProcedureSpec)
