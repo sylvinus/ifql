@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -18,9 +19,40 @@ type MergeOpSpec struct {
 }
 
 func init() {
+	ifql.RegisterFunction(MergeKind, createMergeOpSpec)
 	query.RegisterOpSpec(MergeKind, newMergeOp)
 	plan.RegisterProcedureSpec(MergeKind, newMergeProcedure, MergeKind)
 	execute.RegisterTransformation(MergeKind, createMergeTransformation)
+}
+
+func createMergeOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+	spec := new(MergeOpSpec)
+	if len(args) == 0 {
+		return spec, nil
+	}
+
+	if value, ok := args["keys"]; ok {
+		if value.Type != ifql.TList {
+			return nil, fmt.Errorf("keys argument must be a list of strings got %t", value.Type)
+		}
+		list := value.Value.(ifql.List)
+		if list.Type != ifql.TString {
+			return nil, fmt.Errorf("keys argument must be a list of strings, got list of %t", list.Type)
+		}
+		spec.Keys = list.Elements.([]string)
+	}
+
+	if value, ok := args["keep"]; ok {
+		if value.Type != ifql.TList {
+			return nil, fmt.Errorf("keep argument must be a list of strings got %t", value.Type)
+		}
+		list := value.Value.(ifql.List)
+		if list.Type != ifql.TString {
+			return nil, fmt.Errorf("keep argument must be a list of strings, got list of %t", list.Type)
+		}
+		spec.Keep = list.Elements.([]string)
+	}
+	return spec, nil
 }
 
 func newMergeOp() query.OperationSpec {

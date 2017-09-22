@@ -1,4 +1,4 @@
-package ifql
+package ifql_test
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/functions"
@@ -26,17 +27,17 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database",
-			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).sum()`,
+			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "range",
+						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -47,29 +48,29 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "sum",
+						ID:   "sum2",
 						Spec: &functions.SumOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "range"},
-					{Parent: "range", Child: "sum"},
+					{Parent: "select0", Child: "range1"},
+					{Parent: "range1", Child: "sum2"},
 				},
 			},
 		},
 		{
 			name: "select with database with range",
-			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).sum()`,
+			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "range",
+						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -80,29 +81,29 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "sum",
+						ID:   "sum2",
 						Spec: &functions.SumOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "range"},
-					{Parent: "range", Child: "sum"},
+					{Parent: "select0", Child: "range1"},
+					{Parent: "range1", Child: "sum2"},
 				},
 			},
 		},
 		{
 			name: "select with database with range and count",
-			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).count()`,
+			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "range",
+						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -113,29 +114,29 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count2",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "range1"},
+					{Parent: "range1", Child: "count2"},
 				},
 			},
 		},
 		{
 			name: "select with database where and range",
-			raw:  `select(database:"mydb").where(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
+			raw:  `select(db:"mydb").where(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -186,7 +187,7 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "range",
+						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -197,20 +198,20 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count3",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
-					{Parent: "where", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
 			name: "select with database where (and with or) and range",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 								(
 									("t1"=="val1")
@@ -225,13 +226,13 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -306,7 +307,7 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "range",
+						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -317,20 +318,20 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count3",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
-					{Parent: "where", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
 			name: "select with database where including fields",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 							("t1"=="val1")
 							and
@@ -341,13 +342,13 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -398,7 +399,7 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "range",
+						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -409,20 +410,20 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count3",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
-					{Parent: "where", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
 			name: "select with database where with no parens including fields",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 							"t1"=="val1"
 							and
@@ -433,13 +434,13 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -490,7 +491,7 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "range",
+						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -501,20 +502,20 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count3",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
-					{Parent: "where", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
 			name: "select with database where with no parens including regex and field",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 							"t1"==/val1/
 							and
@@ -525,13 +526,13 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -582,7 +583,7 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "range",
+						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -593,33 +594,33 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID:   "count",
+						ID:   "count3",
 						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
-					{Parent: "where", Child: "range"},
-					{Parent: "range", Child: "count"},
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
 			name: "select with database regex with escape",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 							"t1"==/va\/l1/
 						})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -647,13 +648,13 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
+					{Parent: "select0", Child: "where1"},
 				},
 			},
 		},
 		{
 			name: "select with database with to regex",
-			raw: `select(database:"mydb")
+			raw: `select(db:"mydb")
 						.where(exp:{
 							"t1"==/va\/l1/
 							and
@@ -662,13 +663,13 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "where",
+						ID: "where1",
 						Spec: &functions.WhereOpSpec{
 							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
@@ -720,23 +721,23 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "where"},
+					{Parent: "select0", Child: "where1"},
 				},
 			},
 		},
 		{
 			name: "select with window",
-			raw:  `select(database:"mydb").window(start:-4h, every:1h)`,
+			raw:  `select(db:"mydb").window(start:-4h, every:1h)`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select",
+						ID: "select0",
 						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
-						ID: "window",
+						ID: "window1",
 						Spec: &functions.WindowOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
@@ -747,7 +748,7 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select", Child: "window"},
+					{Parent: "select0", Child: "window1"},
 				},
 			},
 		},
@@ -756,7 +757,7 @@ func TestNewQuery(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := NewQuery(tt.raw, Debug(false))
+			got, err := ifql.NewQuery(tt.raw, ifql.Debug(false))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -766,7 +767,7 @@ func TestNewQuery(t *testing.T) {
 			}
 			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
 			if !cmp.Equal(tt.want, got, opts...) {
-				t.Errorf("%q. NewQuery() = -got/+want %s", tt.name, cmp.Diff(tt.want, got, opts...))
+				t.Errorf("NewQuery() = -got/+want %s", cmp.Diff(got, tt.want, opts...))
 			}
 		})
 	}
