@@ -8,6 +8,7 @@ import (
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/functions"
 )
 
 type ArgKind int
@@ -143,7 +144,7 @@ func (s *Selector) QuerySpec() (*query.QuerySpec, error) {
 	ops := []*query.Operation{
 		{
 			ID: "select", // TODO: Change this to a UUID
-			Spec: &query.SelectOpSpec{
+			Spec: &functions.SelectOpSpec{
 				Database: "prometheus",
 			},
 		},
@@ -190,7 +191,7 @@ func NewRangeOp(rng, offset time.Duration) (*query.Operation, error) {
 	}
 	return &query.Operation{
 		ID: "range", // TODO: Change this to a UUID
-		Spec: &query.RangeOpSpec{
+		Spec: &functions.RangeOpSpec{
 			Start: query.Time{
 				Relative: -rng - offset,
 			},
@@ -273,8 +274,8 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
-		Spec: &query.WhereOpSpec{
-			Exp: &query.WhereExpressionSpec{
+		Spec: &functions.WhereOpSpec{
+			Exp: &query.ExpressionSpec{
 				Predicate: node,
 			},
 		},
@@ -331,7 +332,7 @@ func (a *Aggregate) QuerySpec() (*query.Operation, error) {
 	}
 	return &query.Operation{
 		ID: "merge",
-		Spec: &query.MergeOpSpec{
+		Spec: &functions.MergeOpSpec{
 			Keys: keys,
 			Keep: keep,
 		},
@@ -397,38 +398,38 @@ func (o *Operator) QuerySpec() (*query.Operation, error) {
 	case CountKind:
 		return &query.Operation{
 			ID:   "count",
-			Spec: &query.CountOpSpec{},
+			Spec: &functions.CountOpSpec{},
 		}, nil
-	case TopKind:
-		return &query.Operation{
-			ID:   "top",
-			Spec: &query.TopOpSpec{}, // TODO: Top doesn't have arg yet
-		}, nil
+	//case TopKind:
+	//	return &query.Operation{
+	//		ID:   "top",
+	//		Spec: &functions.TopOpSpec{}, // TODO: Top doesn't have arg yet
+	//	}, nil
 	case SumKind:
 		return &query.Operation{
 			ID:   "sum",
-			Spec: &query.SumOpSpec{},
+			Spec: &functions.SumOpSpec{},
 		}, nil
-	case MinKind:
-		return &query.Operation{
-			ID:   "min",
-			Spec: &query.MinOpSpec{},
-		}, nil
-	case MaxKind:
-		return &query.Operation{
-			ID:   "max",
-			Spec: &query.MaxOpSpec{},
-		}, nil
-	case AvgKind:
-		return &query.Operation{
-			ID:   "mean",
-			Spec: &query.MeanOpSpec{},
-		}, nil
-	case StdevKind:
-		return &query.Operation{
-			ID:   "stddev",
-			Spec: &query.StddevOpSpec{},
-		}, nil
+	//case MinKind:
+	//	return &query.Operation{
+	//		ID:   "min",
+	//		Spec: &functions.MinOpSpec{},
+	//	}, nil
+	//case MaxKind:
+	//	return &query.Operation{
+	//		ID:   "max",
+	//		Spec: &functions.MaxOpSpec{},
+	//	}, nil
+	//case AvgKind:
+	//	return &query.Operation{
+	//		ID:   "mean",
+	//		Spec: &functions.MeanOpSpec{},
+	//	}, nil
+	//case StdevKind:
+	//	return &query.Operation{
+	//		ID:   "stddev",
+	//		Spec: &functions.StddevOpSpec{},
+	//	}, nil
 	default:
 		return nil, fmt.Errorf("Unknown Op kind %d", o.Kind)
 	}

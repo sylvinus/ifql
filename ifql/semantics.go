@@ -8,6 +8,7 @@ import (
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/functions"
 )
 
 // NewQuerySpec validates and converts an ast.Program to a query
@@ -126,8 +127,8 @@ func operation(name string, args []ast.Expression) (*query.Operation, error) {
 		return rangeOperation(args)
 	case "count":
 		return countOperation(args)
-	case "clear":
-		return clearOperation(args)
+	//case "clear":
+	//	return clearOperation(args)
 	case "where":
 		return whereOperation(args)
 	case "window":
@@ -166,7 +167,7 @@ func selectOperation(args []ast.Expression) (*query.Operation, error) {
 
 	return &query.Operation{
 		ID: "select", // TODO: Change this to a UUID
-		Spec: &query.SelectOpSpec{
+		Spec: &functions.SelectOpSpec{
 			Database: db.Value,
 		},
 	}, nil
@@ -179,7 +180,7 @@ func sumOperation(args []ast.Expression) (*query.Operation, error) {
 
 	return &query.Operation{
 		ID:   "sum",
-		Spec: &query.SumOpSpec{},
+		Spec: &functions.SumOpSpec{},
 	}, nil
 }
 
@@ -190,20 +191,20 @@ func countOperation(args []ast.Expression) (*query.Operation, error) {
 
 	return &query.Operation{
 		ID:   "count",
-		Spec: &query.CountOpSpec{},
+		Spec: &functions.CountOpSpec{},
 	}, nil
 }
 
-func clearOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`clear operation requires no arguments`)
-	}
-
-	return &query.Operation{
-		ID:   "clear",
-		Spec: &query.ClearOpSpec{},
-	}, nil
-}
+//func clearOperation(args []ast.Expression) (*query.Operation, error) {
+//	if len(args) != 0 {
+//		return nil, fmt.Errorf(`clear operation requires no arguments`)
+//	}
+//
+//	return &query.Operation{
+//		ID:   "clear",
+//		Spec: &functions.ClearOpSpec{},
+//	}, nil
+//}
 
 func rangeOperation(args []ast.Expression) (*query.Operation, error) {
 	if len(args) != 1 {
@@ -248,7 +249,7 @@ func rangeOperation(args []ast.Expression) (*query.Operation, error) {
 
 	return &query.Operation{
 		ID: "range", // TODO: Change this to a UUID
-		Spec: &query.RangeOpSpec{
+		Spec: &functions.RangeOpSpec{
 			Start: start,
 			Stop:  stop,
 		},
@@ -308,8 +309,8 @@ func whereOperation(args []ast.Expression) (*query.Operation, error) {
 
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
-		Spec: &query.WhereOpSpec{
-			Exp: &query.WhereExpressionSpec{
+		Spec: &functions.WhereOpSpec{
+			Exp: &query.ExpressionSpec{
 				Predicate: &storage.Predicate{
 					Root: root,
 				},
@@ -463,7 +464,7 @@ func windowOperation(args []ast.Expression) (*query.Operation, error) {
 		return nil, fmt.Errorf(`window operation requires arguments "every" and "period" with optional arguments "start" and "round"`)
 	}
 
-	spec := &query.WindowOpSpec{}
+	spec := &functions.WindowOpSpec{}
 	everySet := false
 	periodSet := false
 	for _, farg := range params.Properties {
@@ -512,7 +513,7 @@ func windowOperation(args []ast.Expression) (*query.Operation, error) {
 }
 
 func mergeOperation(args []ast.Expression) (*query.Operation, error) {
-	spec := &query.MergeOpSpec{}
+	spec := &functions.MergeOpSpec{}
 	op := &query.Operation{
 		ID:   "merge", // TODO: Change this to a UUID
 		Spec: spec,

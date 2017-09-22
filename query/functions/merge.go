@@ -14,6 +14,7 @@ const MergeKind = "merge"
 
 type MergeOpSpec struct {
 	Keys []string `json:"keys"`
+	Keep []string `json:"keep"`
 }
 
 func init() {

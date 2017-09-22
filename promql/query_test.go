@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/functions"
 )
 
 func TestParsePromQL(t *testing.T) {
@@ -364,12 +365,12 @@ func TestBuild(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("select"),
-						Spec: &query.SelectOpSpec{Database: "prometheus"},
+						Spec: &functions.SelectOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -436,7 +437,7 @@ func TestBuild(t *testing.T) {
 						},
 					},
 					{
-						ID: query.OperationID("count"), Spec: &query.CountOpSpec{},
+						ID: query.OperationID("count"), Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -458,18 +459,18 @@ func TestBuild(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("select"),
-						Spec: &query.SelectOpSpec{Database: "prometheus"},
+						Spec: &functions.SelectOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: query.OperationID("range"),
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{Relative: -time.Minute * 7},
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -538,18 +539,18 @@ func TestBuild(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("select"),
-						Spec: &query.SelectOpSpec{Database: "prometheus"},
+						Spec: &functions.SelectOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: query.OperationID("range"),
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{Relative: -170 * time.Hour},
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -598,7 +599,7 @@ func TestBuild(t *testing.T) {
 						},
 					},
 					{
-						ID: query.OperationID("sum"), Spec: &query.SumOpSpec{},
+						ID: query.OperationID("sum"), Spec: &functions.SumOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
