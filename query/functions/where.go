@@ -1,9 +1,12 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -14,12 +17,27 @@ type WhereOpSpec struct {
 }
 
 func init() {
+	ifql.RegisterFunction(WhereKind, createWhereOpSpec)
 	query.RegisterOpSpec(WhereKind, newWhereOp)
 	plan.RegisterProcedureSpec(WhereKind, newWhereProcedure, WhereKind)
 	// TODO register a where transformation. Currently where is only supported if it is pushed down into a select procedure.
 	//execute.RegisterTransformation(WhereKind, createWhereTransformation)
 }
 
+func createWhereOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+	expValue, ok := args["exp"]
+	if !ok {
+		return nil, errors.New(`where function requires an argument "exp"`)
+	}
+
+	return &WhereOpSpec{
+		Exp: &query.ExpressionSpec{
+			Predicate: &storage.Predicate{
+				Root: expValue.Value.(*storage.Node),
+			},
+		},
+	}, nil
+}
 func newWhereOp() query.OperationSpec {
 	return new(WhereOpSpec)
 }

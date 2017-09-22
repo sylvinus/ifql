@@ -10,5 +10,5 @@ func NewQuery(ifql string, opts ...Option) (*query.QuerySpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewQuerySpec(program)
+	return Evaluate(program)
 }

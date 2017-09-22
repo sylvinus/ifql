@@ -1,8 +1,10 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
 )
@@ -15,10 +17,35 @@ type RangeOpSpec struct {
 }
 
 func init() {
+	ifql.RegisterFunction(RangeKind, createRangeOpSpec)
 	query.RegisterOpSpec(RangeKind, newRangeOp)
 	plan.RegisterProcedureSpec(RangeKind, newRangeProcedure, RangeKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
 	//execute.RegisterTransformation(RangeKind, createRangeTransformation)
+}
+
+func createRangeOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+	startValue, ok := args["start"]
+	if !ok {
+		return nil, errors.New(`range function requires argument "start"`)
+	}
+
+	spec := new(RangeOpSpec)
+	start, err := ifql.ToQueryTime(startValue)
+	if err != nil {
+		return nil, err
+	}
+	spec.Start = start
+
+	if stopValue, ok := args["stop"]; ok {
+		stop, err := ifql.ToQueryTime(stopValue)
+		if err != nil {
+			return nil, err
+		}
+		spec.Stop = stop
+	}
+
+	return spec, nil
 }
 
 func newRangeOp() query.OperationSpec {

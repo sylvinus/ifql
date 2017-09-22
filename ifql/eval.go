@@ -2,335 +2,332 @@ package ifql
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
-	"github.com/influxdata/ifql/query/functions"
 )
 
-// NewQuerySpec validates and converts an ast.Program to a query
-func NewQuerySpec(program *ast.Program) (*query.QuerySpec, error) {
+// Evaluate validates and converts an ast.Program to a query
+func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
+	ev := evaluator{
+		scope: newScope(),
+	}
 	// TODO: There are other possible expression/variable statements
 	for _, stmt := range program.Body {
 		switch s := stmt.(type) {
 		case *ast.VariableDeclaration:
-			return nil, fmt.Errorf("Variables not support yet")
+			if err := ev.doVariableDeclaration(s); err != nil {
+				return nil, err
+			}
 		case *ast.ExpressionStatement:
-			return fromExpression(s.Expression)
+			value, err := ev.doExpression(s.Expression)
+			if err != nil {
+				return nil, err
+			}
+			if value.Type == TChain {
+				chain := value.Value.(*CallChain)
+				ev.operations = append(ev.operations, chain.Operations...)
+				ev.edges = append(ev.edges, chain.Edges...)
+			}
 		default:
 			return nil, fmt.Errorf("Unsupported program statement expression type %t", s)
 		}
 	}
 	// TODO: There are other possible expression/variable statements
-	return nil, nil
+	return ev.spec(), nil
 }
 
-func fromExpression(expr ast.Expression) (*query.QuerySpec, error) {
-	switch e := expr.(type) {
-	case *ast.CallExpression:
-		fn, err := callFunction(e, nil)
-		if err != nil {
-			return nil, err
-		}
-		return fn.QuerySpec(), nil
-	default:
-		return nil, fmt.Errorf("Unsupport expression %t", e)
+type CreateOperationSpec func(args map[string]Value) (query.OperationSpec, error)
+
+var functionsMap = make(map[string]CreateOperationSpec)
+
+func RegisterFunction(name string, c CreateOperationSpec) {
+	if functionsMap[name] != nil {
+		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
+	functionsMap[name] = c
+}
+
+// TODO(nathanielc): Maybe we want Value to be an interface instead of a struct?
+// Value represents any value that can be the result of evaluating any expression.
+type Value struct {
+	Type  Type
+	Value interface{}
+}
+
+type Type int
+
+const (
+	TString       Type = iota // Go type string
+	TInt                      // Go type int64
+	TFloat                    // Go type float64
+	TBool                     // Go type bool
+	TAbsoluteTime             // Go type time.Time
+	TDuration                 // Go type time.Duration
+	TList                     // Go type List
+	TMap                      // Go type Map
+	TChain                    // Go type *CallChain
+	TExpression               // Go type *storage.Node TODO(nathanielc): create a type for this in this package
+)
+
+type List struct {
+	Type Type
+	// Elements will be a typed slice of any other type
+	// []string, []float64, or possibly even []List and []Map
+	Elements interface{}
+}
+type Map struct {
+	Type Type
+	// Elements will be a typed map of any other type, keys are always strings
+	// map[strin]string, map[string]float64, or possibly even map[string]List and map[string]Map
+	Elements interface{}
+}
+
+type evaluator struct {
+	id    int
+	scope *scope
+
+	operations []*query.Operation
+	edges      []query.Edge
+}
+
+func (ev *evaluator) spec() *query.QuerySpec {
+	return &query.QuerySpec{
+		Operations: ev.operations,
+		Edges:      ev.edges,
+	}
+}
+
+func (ev *evaluator) nextID() int {
+	id := ev.id
+	ev.id++
+	return id
+}
+
+func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration) error {
+	for _, vd := range declarations.Declarations {
+		value, err := ev.doExpression(vd.Init)
+		if err != nil {
+			return err
+		}
+		ev.scope.Set(vd.ID.Name, value)
+	}
+	return nil
+}
+
+func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
+	switch e := expr.(type) {
+	case ast.Literal:
+		return ev.doLiteral(e)
+	case *ast.Identifier:
+		value, ok := ev.scope.Get(e.Name)
+		if !ok {
+			return Value{}, fmt.Errorf("undefined identifier %q", e.Name)
+		}
+		return value, nil
+	case *ast.CallExpression:
+		chain, err := ev.callFunction(e, nil)
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{
+			Type:  TChain,
+			Value: chain,
+		}, nil
+	case *ast.BinaryExpression:
+		root, err := ev.comparisonNode(e)
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{
+			Type:  TExpression,
+			Value: root,
+		}, nil
+	case *ast.LogicalExpression:
+		root, err := ev.logicalNode(e)
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{
+			Type:  TExpression,
+			Value: root,
+		}, nil
+	default:
+		return Value{}, fmt.Errorf("unsupported expression %t", e)
+	}
+}
+
+func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
+	switch l := lit.(type) {
+	case *ast.DateTimeLiteral:
+		return Value{
+			Type:  TAbsoluteTime,
+			Value: l.Value,
+		}, nil
+	case *ast.DurationLiteral:
+		return Value{
+			Type:  TDuration,
+			Value: l.Value,
+		}, nil
+	case *ast.NumberLiteral:
+		//TODO(nathanielc): Support integer types as well. See https://github.com/influxdata/ifql/issues/35
+		return Value{
+			Type:  TFloat,
+			Value: l.Value,
+		}, nil
+	case *ast.StringLiteral:
+		return Value{
+			Type:  TString,
+			Value: l.Value,
+		}, nil
+	case *ast.BooleanLiteral:
+		return Value{
+			Type:  TBool,
+			Value: l.Value,
+		}, nil
+	// TODO(nathanielc): Support lists and maps
+	default:
+		return Value{}, fmt.Errorf("unknown literal type %t", lit)
+	}
+
 }
 
 // CallChain is an intermediate structure to build QuerySpecs during recursion through the AST
 type CallChain struct {
-	Operators  []*query.Operation
+	Operations []*query.Operation
 	Edges      []query.Edge
-	ParentName string
-	ParentID   string
+	Parent     query.OperationID
 }
 
-// QuerySpec converts the CallChain into a query.QuerySpec
-func (c *CallChain) QuerySpec() *query.QuerySpec {
-	return &query.QuerySpec{
-		Operations: c.Operators,
-		Edges:      c.Edges,
-	}
-}
-
-func callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
+func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
 	switch callee := call.Callee.(type) {
 	case *ast.Identifier:
-		op, err := operation(callee.Name, call.Arguments)
+		op, err := ev.function(callee.Name, call.Arguments)
 		if err != nil {
 			return nil, err
 		}
 		return &CallChain{
-			Operators:  []*query.Operation{op},
-			Edges:      []query.Edge{},
-			ParentName: callee.Name,
-			ParentID:   callee.Name, // TODO make this a real ID
+			Operations: []*query.Operation{op},
+			Parent:     op.ID,
 		}, nil
 	case *ast.MemberExpression:
-		chain, err := memberFunction(callee, chain)
+		chain, name, err := ev.memberFunction(callee, chain)
 		if err != nil {
 			return nil, err
 		}
 
-		op, err := operation(chain.ParentName, call.Arguments)
+		op, err := ev.function(name, call.Arguments)
 		if err != nil {
 			return nil, err
 		}
 
-		chain.Operators = append(chain.Operators, op)
+		chain.Operations = append(chain.Operations, op)
+		chain.Edges = append(chain.Edges, query.Edge{
+			Parent: chain.Parent,
+			Child:  op.ID,
+		})
+		chain.Parent = op.ID
 		return chain, nil
 	default:
 		return nil, fmt.Errorf("Unsupported callee expression type %t", callee)
 	}
 }
 
-func memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain, error) {
+func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain, string, error) {
 	switch obj := member.Object.(type) {
 	case *ast.CallExpression:
 		var err error
-		chain, err = callFunction(obj, chain)
+		chain, err = ev.callFunction(obj, chain)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	case *ast.Identifier:
-		return nil, fmt.Errorf("Variables not support yet in member expression object type")
+		return nil, "", fmt.Errorf("Variables not support yet in member expression object type")
 	default:
-		return nil, fmt.Errorf("Unsupported member expression object type %t", obj)
+		return nil, "", fmt.Errorf("Unsupported member expression object type %t", obj)
 	}
 
-	child := member.Property.Name
-	// TODO: make these IDs uniquer-er-er
-	childID := child
-
-	edge := query.Edge{
-		Parent: query.OperationID(chain.ParentID),
-		Child:  query.OperationID(childID),
-	}
-
-	chain.Edges = append(chain.Edges, edge)
-	chain.ParentID = childID
-	chain.ParentName = child
-	return chain, nil
+	return chain, member.Property.Name, nil
 }
 
-func operation(name string, args []ast.Expression) (*query.Operation, error) {
-	switch strings.ToLower(name) {
-	case "select":
-		return selectOperation(args)
-	case "sum":
-		return sumOperation(args)
-	case "range":
-		return rangeOperation(args)
-	case "count":
-		return countOperation(args)
-	//case "clear":
-	//	return clearOperation(args)
-	case "where":
-		return whereOperation(args)
-	case "window":
-		return windowOperation(args)
-	case "merge":
-		return mergeOperation(args)
-	default:
-		return nil, fmt.Errorf("Unknown function %s", name)
+func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, error) {
+	op := &query.Operation{
+		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
 	}
-}
-
-func selectOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf(`select operation requires argument "database"`)
-	}
-
-	params, ok := args[0].(*ast.ObjectExpression)
+	createOpSpec, ok := functionsMap[name]
 	if !ok {
-		return nil, fmt.Errorf("Arguments not a valid object expression")
+		return nil, fmt.Errorf("unknown function %q", name)
 	}
-
-	if len(params.Properties) != 1 {
-		return nil, fmt.Errorf(`select operation requires argument "database"`)
-	}
-
-	arg := params.Properties[0]
-	param := strings.ToLower(arg.Key.Name)
-	if param != "database" && param != "db" {
-		return nil, fmt.Errorf("Argument is not database: %s", param)
-	}
-
-	db, ok := arg.Value.(*ast.StringLiteral)
-	if !ok {
-		return nil, fmt.Errorf("Argument to database parameter is not a string but is %t", arg.Value)
-	}
-
-	return &query.Operation{
-		ID: "select", // TODO: Change this to a UUID
-		Spec: &functions.SelectOpSpec{
-			Database: db.Value,
-		},
-	}, nil
-}
-
-func sumOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`sum operation requires no arguments`)
-	}
-
-	return &query.Operation{
-		ID:   "sum",
-		Spec: &functions.SumOpSpec{},
-	}, nil
-}
-
-func countOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`count operation requires no arguments`)
-	}
-
-	return &query.Operation{
-		ID:   "count",
-		Spec: &functions.CountOpSpec{},
-	}, nil
-}
-
-//func clearOperation(args []ast.Expression) (*query.Operation, error) {
-//	if len(args) != 0 {
-//		return nil, fmt.Errorf(`clear operation requires no arguments`)
-//	}
-//
-//	return &query.Operation{
-//		ID:   "clear",
-//		Spec: &functions.ClearOpSpec{},
-//	}, nil
-//}
-
-func rangeOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf(`range operation requires the argument "start"`)
-	}
-
-	params, ok := args[0].(*ast.ObjectExpression)
-	if !ok {
-		return nil, fmt.Errorf("Arguments not a valid object expression")
-	}
-
-	if len(params.Properties) != 1 && len(params.Properties) != 2 {
-		return nil, fmt.Errorf(`range operation requires argument "start" with optional argument "stop"`)
-	}
-
-	times := map[string]query.Time{}
-	for _, p := range params.Properties {
-		fn := strings.ToLower(p.Key.Name)
-		if fn != "start" && fn != "stop" {
-			return nil, fmt.Errorf(`range operation requires argument "start" with optional argument "stop"`)
+	var paramMap map[string]Value
+	if len(args) == 1 {
+		params, ok := args[0].(*ast.ObjectExpression)
+		if !ok {
+			return nil, fmt.Errorf("arguments not a valid object expression")
 		}
-
-		tm, err := queryTime(p.Value.(ast.Literal))
+		var err error
+		paramMap, err = ev.resolveParameters(params)
 		if err != nil {
 			return nil, err
 		}
-
-		times[fn] = tm
 	}
-
-	start, ok := times["start"]
-	if !ok {
-		return nil, fmt.Errorf(`range operation requires the argument "start"`)
-	}
-
-	stop, ok := times["stop"]
-	if !ok {
-		stop = query.Time{
-			Absolute: time.Now(),
-		}
-	}
-
-	return &query.Operation{
-		ID: "range", // TODO: Change this to a UUID
-		Spec: &functions.RangeOpSpec{
-			Start: start,
-			Stop:  stop,
-		},
-	}, nil
-}
-
-func queryTime(arg ast.Literal) (query.Time, error) {
-	switch t := arg.(type) {
-	case *ast.DateTimeLiteral:
-		return query.Time{
-			Absolute: t.Value,
-		}, nil
-	case *ast.DurationLiteral:
-		return query.Time{
-			Relative: t.Value,
-		}, nil
-	case *ast.NumberLiteral:
-		// TODO:  Should this be nano?
-		// FIXME: Should this be an integer?
-		return query.Time{
-			Absolute: time.Unix(int64(t.Value), 0),
-		}, nil
-	default:
-		return query.Time{}, fmt.Errorf("Unknown time type")
-	}
-}
-
-func whereOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf(`where operation requires argument "exp"`)
-	}
-
-	params, ok := args[0].(*ast.ObjectExpression)
-	if !ok {
-		return nil, fmt.Errorf("Arguments not a valid object expression")
-	}
-
-	if len(params.Properties) != 1 {
-		return nil, fmt.Errorf(`where operation requires argument "exp"`)
-	}
-
-	arg := params.Properties[0]
-	param := strings.ToLower(arg.Key.Name)
-	if param != "exp" {
-		return nil, fmt.Errorf(`where operation requires argument "exp", but has %s`, param)
-	}
-
-	expr, ok := arg.Value.(ast.Expression)
-	if !ok {
-		return nil, fmt.Errorf(`Argument to "exp" parameter is not an expression but is %t`, arg.Value)
-	}
-
-	root, err := binaryOperation(expr)
+	spec, err := createOpSpec(paramMap)
 	if err != nil {
 		return nil, err
 	}
-
-	return &query.Operation{
-		ID: "where", // TODO: Change this to a UUID
-		Spec: &functions.WhereOpSpec{
-			Exp: &query.ExpressionSpec{
-				Predicate: &storage.Predicate{
-					Root: root,
-				},
-			},
-		},
-	}, nil
+	op.Spec = spec
+	return op, nil
 }
 
-func binaryOperation(expr ast.Expression) (*storage.Node, error) {
+func (ev *evaluator) resolveParameters(params *ast.ObjectExpression) (map[string]Value, error) {
+	paramsMap := make(map[string]Value, len(params.Properties))
+	for _, p := range params.Properties {
+		value, err := ev.doExpression(p.Value)
+		if err != nil {
+			return nil, err
+		}
+		paramsMap[p.Key.Name] = value
+	}
+	return paramsMap, nil
+}
+
+func ToQueryTime(value Value) (query.Time, error) {
+	switch v := value.Value.(type) {
+	case time.Time:
+		return query.Time{
+			Absolute: v,
+		}, nil
+	case time.Duration:
+		return query.Time{
+			Relative: v,
+		}, nil
+	case int64:
+		return query.Time{
+			Absolute: time.Unix(v, 0),
+		}, nil
+		// TODO(nathanielc) don't allow float64 to be converted to a time once we have support for integer numbers.
+	case float64:
+		return query.Time{
+			Absolute: time.Unix(int64(v), 0),
+		}, nil
+	default:
+		return query.Time{}, fmt.Errorf("unknown time type %t", value.Value)
+	}
+}
+
+func (ev *evaluator) binaryOperation(expr ast.Expression) (*storage.Node, error) {
 	switch op := expr.(type) {
 	case *ast.BinaryExpression:
-		return comparisonNode(op)
+		return ev.comparisonNode(op)
 	case *ast.LogicalExpression:
-		return logicalNode(op)
+		return ev.logicalNode(op)
 	default:
 		return nil, fmt.Errorf("Expression type expected to be arithmatic, relational or logical, but is %t", op)
 	}
 }
 
-func comparisonNode(expr *ast.BinaryExpression) (*storage.Node, error) {
+func (ev *evaluator) comparisonNode(expr *ast.BinaryExpression) (*storage.Node, error) {
 	lhs, err := primaryNode(expr.Left.(ast.Literal), true /* isLeft */)
 	if err != nil {
 		return nil, err
@@ -425,13 +422,13 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 	}
 }
 
-func logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
-	lhs, err := binaryOperation(expr.Left)
+func (ev *evaluator) logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
+	lhs, err := ev.binaryOperation(expr.Left)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := binaryOperation(expr.Right)
+	rhs, err := ev.binaryOperation(expr.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -450,95 +447,20 @@ func logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
 	}, nil
 }
 
-func windowOperation(args []ast.Expression) (*query.Operation, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf(`window operation requires arguments "every" and "period" with optional arguments "start" and "round"`)
-	}
-
-	params, ok := args[0].(*ast.ObjectExpression)
-	if !ok {
-		return nil, fmt.Errorf("Arguments not a valid object expression")
-	}
-
-	if len(params.Properties) < 2 && len(params.Properties) > 4 {
-		return nil, fmt.Errorf(`window operation requires arguments "every" and "period" with optional arguments "start" and "round"`)
-	}
-
-	spec := &functions.WindowOpSpec{}
-	everySet := false
-	periodSet := false
-	for _, farg := range params.Properties {
-		name := farg.Key.Name
-		arg := farg.Value
-		switch name {
-		case "every":
-			everySet = true
-			dur, ok := arg.(*ast.DurationLiteral)
-			if !ok {
-				return nil, fmt.Errorf("every argument must be a duration")
-			}
-			spec.Every = query.Duration(dur.Value)
-		case "period":
-			periodSet = true
-			dur, ok := arg.(*ast.DurationLiteral)
-			if !ok {
-				return nil, fmt.Errorf("period argument must be a duration")
-			}
-			spec.Period = query.Duration(dur.Value)
-		case "round":
-			dur, ok := arg.(*ast.DurationLiteral)
-			if !ok {
-				return nil, fmt.Errorf("round argument must be a duration")
-			}
-			spec.Round = query.Duration(dur.Value)
-		case "start":
-			t, err := queryTime(arg.(ast.Literal))
-			if err != nil {
-				return nil, err
-			}
-			spec.Start = t
-		}
-	}
-	// Apply defaults
-	if !everySet {
-		spec.Every = spec.Period
-	}
-	if !periodSet {
-		spec.Period = spec.Every
-	}
-	return &query.Operation{
-		ID:   "window", // TODO: Change this to a UUID
-		Spec: spec,
-	}, nil
+type scope struct {
+	vars map[string]Value
 }
 
-func mergeOperation(args []ast.Expression) (*query.Operation, error) {
-	spec := &functions.MergeOpSpec{}
-	op := &query.Operation{
-		ID:   "merge", // TODO: Change this to a UUID
-		Spec: spec,
+func newScope() *scope {
+	return &scope{
+		vars: make(map[string]Value),
 	}
-	if len(args) == 0 {
-		return op, nil
-	}
+}
 
-	params, ok := args[0].(*ast.ObjectExpression)
-	if !ok {
-		return nil, fmt.Errorf("Arguments not a valid object expression")
-	}
-	if len(params.Properties) > 2 {
-		return nil, fmt.Errorf(`merge operation has two options arguments "keys" and "keep"`)
-	}
-
-	for _, farg := range params.Properties {
-		name := farg.Key.Name
-		//arg := farg.Value
-		switch name {
-		case "keys":
-			//TODO(nathanielc): Get list of keys
-		case "keep":
-			//TODO(nathanielc): Get list of keep tags
-		}
-	}
-	return op, nil
+func (s *scope) Get(name string) (Value, bool) {
+	v, ok := s.vars[name]
+	return v, ok
+}
+func (s *scope) Set(name string, value Value) {
+	s.vars[name] = value
 }

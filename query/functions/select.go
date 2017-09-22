@@ -1,9 +1,11 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/storage"
@@ -17,9 +19,24 @@ type SelectOpSpec struct {
 }
 
 func init() {
+	ifql.RegisterFunction(SelectKind, createSelectOpSpec)
 	query.RegisterOpSpec(SelectKind, newSelectOp)
 	plan.RegisterProcedureSpec(SelectKind, newSelectProcedure, SelectKind)
 	execute.RegisterSource(SelectKind, createSelectSource)
+}
+
+func createSelectOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+	dbValue, ok := args["db"]
+	if !ok {
+		return nil, errors.New(`select function requires the "db" argument`)
+	}
+	if dbValue.Type != ifql.TString {
+		return nil, fmt.Errorf(`select function "db" argument must be a string, got %v`, dbValue.Type)
+	}
+
+	return &SelectOpSpec{
+		Database: dbValue.Value.(string),
+	}, nil
 }
 
 func newSelectOp() query.OperationSpec {

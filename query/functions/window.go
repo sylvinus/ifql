@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -20,9 +21,49 @@ type WindowOpSpec struct {
 }
 
 func init() {
+	ifql.RegisterFunction(WindowKind, createWindowOpSpec)
 	query.RegisterOpSpec(WindowKind, newWindowOp)
 	plan.RegisterProcedureSpec(WindowKind, newWindowProcedure, WindowKind)
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
+}
+
+func createWindowOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+	spec := new(WindowOpSpec)
+	everyValue, everySet := args["every"]
+	if everySet {
+		if everyValue.Type != ifql.TDuration {
+			return nil, fmt.Errorf(`window every function argument "every" must be a duration, got %v`, everyValue.Type)
+		}
+		spec.Every = query.Duration(everyValue.Value.(time.Duration))
+	}
+	periodValue, periodSet := args["period"]
+	if periodSet {
+		if periodValue.Type != ifql.TDuration {
+			return nil, fmt.Errorf(`window period function argument "period" must be a duration, got %v`, periodValue.Type)
+		}
+		spec.Period = query.Duration(periodValue.Value.(time.Duration))
+	}
+	if roundValue, ok := args["round"]; ok {
+		if roundValue.Type != ifql.TDuration {
+			return nil, fmt.Errorf(`window round function argument "round" must be a duration, got %v`, roundValue.Type)
+		}
+		spec.Round = query.Duration(roundValue.Value.(time.Duration))
+	}
+	if startValue, ok := args["start"]; ok {
+		start, err := ifql.ToQueryTime(startValue)
+		if err != nil {
+			return nil, err
+		}
+		spec.Start = start
+	}
+	// Apply defaults
+	if !everySet {
+		spec.Every = spec.Period
+	}
+	if !periodSet {
+		spec.Period = spec.Every
+	}
+	return spec, nil
 }
 
 func newWindowOp() query.OperationSpec {
