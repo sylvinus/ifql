@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/functions"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -20,20 +21,20 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "0",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "1",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 							Stop:  query.Time{},
 						},
 					},
 					{
 						ID:   "2",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -45,7 +46,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("0"): {
 						ID: plan.ProcedureIDFromOperationID("0"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -53,7 +54,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("1"): {
 						ID: plan.ProcedureIDFromOperationID("1"),
-						Spec: &plan.RangeProcedureSpec{
+						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
@@ -65,7 +66,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("2"): {
 						ID:   plan.ProcedureIDFromOperationID("2"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("1"),
 						},
@@ -79,41 +80,41 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select0",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "range0",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 							Stop:  query.Time{},
 						},
 					},
 					{
 						ID:   "count0",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 					{
 						ID: "select1",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "range1",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{Relative: -1 * time.Hour},
 							Stop:  query.Time{},
 						},
 					},
 					{
 						ID:   "sum1",
-						Spec: &query.SumOpSpec{},
+						Spec: &functions.SumOpSpec{},
 					},
 					{
 						ID:   "join",
-						Spec: &query.JoinOpSpec{},
+						Spec: &functions.JoinOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -129,7 +130,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select0"): {
 						ID: plan.ProcedureIDFromOperationID("select0"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -137,7 +138,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("range0"): {
 						ID: plan.ProcedureIDFromOperationID("range0"),
-						Spec: &plan.RangeProcedureSpec{
+						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
@@ -149,7 +150,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count0"): {
 						ID:   plan.ProcedureIDFromOperationID("count0"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("range0"),
 						},
@@ -157,7 +158,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("select1"): {
 						ID: plan.ProcedureIDFromOperationID("select1"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -165,7 +166,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("range1"): {
 						ID: plan.ProcedureIDFromOperationID("range1"),
-						Spec: &plan.RangeProcedureSpec{
+						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
@@ -177,7 +178,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum1"): {
 						ID:   plan.ProcedureIDFromOperationID("sum1"),
-						Spec: &plan.SumProcedureSpec{},
+						Spec: &functions.SumProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("range1"),
 						},
@@ -185,7 +186,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("join"): {
 						ID:   plan.ProcedureIDFromOperationID("join"),
-						Spec: &plan.MergeJoinProcedureSpec{},
+						Spec: &functions.MergeJoinProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("count0"),
 							plan.ProcedureIDFromOperationID("sum1"),

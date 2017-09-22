@@ -1,50 +1,110 @@
-package execute
+package functions
 
 import (
+	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
 
-type mergeJoinTransformation struct {
-	parents []DatasetID
+const JoinKind = "join"
+const MergeJoinKind = "merge-join"
 
-	d     Dataset
+type JoinOpSpec struct {
+	Keys       []string             `json:"keys"`
+	Expression query.ExpressionSpec `json:"expression"`
+}
+
+func init() {
+	query.RegisterOpSpec(JoinKind, newJoinOp)
+	//TODO(nathanielc): Allow for other types of join implementations
+	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)
+	execute.RegisterTransformation(MergeJoinKind, createMergeJoinTransformation)
+}
+
+func newJoinOp() query.OperationSpec {
+	return new(JoinOpSpec)
+}
+
+func (s *JoinOpSpec) Kind() query.OperationKind {
+	return JoinKind
+}
+
+type MergeJoinProcedureSpec struct {
+	Keys       []string             `json:"keys"`
+	Expression query.ExpressionSpec `json:"expression"`
+}
+
+func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+	spec, ok := qs.(*JoinOpSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type %T", qs)
+	}
+
+	p := &MergeJoinProcedureSpec{
+		Keys:       spec.Keys,
+		Expression: spec.Expression,
+	}
+	sort.Strings(p.Keys)
+	return p, nil
+}
+
+func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
+	return MergeJoinKind
+}
+
+func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
+	s, ok := spec.(*MergeJoinProcedureSpec)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
+	}
+	cache := newMergeJoinCache()
+	d := execute.NewDataset(id, mode, cache)
+	t := newMergeJoinTransformation(d, cache, s)
+	return t, d, nil
+}
+
+type mergeJoinTransformation struct {
+	parents []execute.DatasetID
+
+	d     execute.Dataset
 	cache MergeJoinCache
 
-	leftID  DatasetID
-	rightID DatasetID
+	leftID  execute.DatasetID
+	rightID execute.DatasetID
 
-	parentState map[DatasetID]*mergeJoinParentState
+	parentState map[execute.DatasetID]*mergeJoinParentState
 
 	keys []string
 }
 
-func newMergeJoinTransformation(d Dataset, cache MergeJoinCache, spec *plan.MergeJoinProcedureSpec) *mergeJoinTransformation {
+func newMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec) *mergeJoinTransformation {
 	return &mergeJoinTransformation{
 		d:           d,
 		cache:       cache,
-		parentState: make(map[DatasetID]*mergeJoinParentState),
+		parentState: make(map[execute.DatasetID]*mergeJoinParentState),
 	}
 }
 
 type mergeJoinParentState struct {
-	mark       Time
-	processing Time
+	mark       execute.Time
+	processing execute.Time
 	finished   bool
 }
 
-func (t *mergeJoinTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
+func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
 	bm := blockMetadata{
 		tags:   meta.Tags().Subset(t.keys),
 		bounds: meta.Bounds(),
 	}
-	t.d.RetractBlock(ToBlockKey(bm))
+	t.d.RetractBlock(execute.ToBlockKey(bm))
 }
 
-func (t *mergeJoinTransformation) Process(id DatasetID, b Block) {
+func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block) {
 	bm := blockMetadata{
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
@@ -60,17 +120,17 @@ func (t *mergeJoinTransformation) Process(id DatasetID, b Block) {
 	}
 
 	cells := b.Cells()
-	cells.Do(func(cs []Cell) {
+	cells.Do(func(cs []execute.Cell) {
 		for _, c := range cs {
 			table.Insert(c.Value, c.Tags.Subset(t.keys), c.Time)
 		}
 	})
 }
 
-func (t *mergeJoinTransformation) UpdateWatermark(id DatasetID, mark Time) {
+func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
 	t.parentState[id].mark = mark
 
-	min := Time(math.MaxInt64)
+	min := execute.Time(math.MaxInt64)
 	for _, state := range t.parentState {
 		if state.mark < min {
 			min = state.mark
@@ -80,10 +140,10 @@ func (t *mergeJoinTransformation) UpdateWatermark(id DatasetID, mark Time) {
 	t.d.UpdateWatermark(min)
 }
 
-func (t *mergeJoinTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
+func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.parentState[id].processing = pt
 
-	min := Time(math.MaxInt64)
+	min := execute.Time(math.MaxInt64)
 	for _, state := range t.parentState {
 		if state.processing < min {
 			min = state.processing
@@ -93,7 +153,7 @@ func (t *mergeJoinTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
 	t.d.UpdateProcessingTime(min)
 }
 
-func (t *mergeJoinTransformation) Finish(id DatasetID) {
+func (t *mergeJoinTransformation) Finish(id execute.DatasetID) {
 
 	t.parentState[id].finished = true
 	finished := true
@@ -106,7 +166,7 @@ func (t *mergeJoinTransformation) Finish(id DatasetID) {
 	}
 }
 
-func (t *mergeJoinTransformation) setParents(ids []DatasetID) {
+func (t *mergeJoinTransformation) SetParents(ids []execute.DatasetID) {
 	if len(ids) != 2 {
 		panic("joins should only ever have two parents")
 	}
@@ -120,12 +180,12 @@ func (t *mergeJoinTransformation) setParents(ids []DatasetID) {
 
 type joinCell struct {
 	Key   joinKey
-	Tags  Tags
+	Tags  execute.Tags
 	Value float64
 }
 type joinKey struct {
-	Time    Time
-	TagsKey TagsKey
+	Time    execute.Time
+	TagsKey execute.TagsKey
 }
 
 func (k joinKey) Less(o joinKey) bool {
@@ -138,38 +198,38 @@ func (k joinKey) Less(o joinKey) bool {
 }
 
 type MergeJoinCache interface {
-	Tables(BlockMetadata) *joinTables
+	Tables(execute.BlockMetadata) *joinTables
 }
 
 type mergeJoinCache struct {
-	data map[BlockKey]*joinTables
+	data map[execute.BlockKey]*joinTables
 
 	triggerSpec query.TriggerSpec
 }
 
 func newMergeJoinCache() *mergeJoinCache {
 	return &mergeJoinCache{
-		data: make(map[BlockKey]*joinTables),
+		data: make(map[execute.BlockKey]*joinTables),
 	}
 }
 
-func (c *mergeJoinCache) BlockMetadata(key BlockKey) BlockMetadata {
+func (c *mergeJoinCache) BlockMetadata(key execute.BlockKey) execute.BlockMetadata {
 	return c.data[key]
 }
 
-func (c *mergeJoinCache) Block(key BlockKey) Block {
+func (c *mergeJoinCache) Block(key execute.BlockKey) execute.Block {
 	return c.data[key].Join()
 }
 
-func (c *mergeJoinCache) ForEach(f func(BlockKey)) {
+func (c *mergeJoinCache) ForEach(f func(execute.BlockKey)) {
 	for bk := range c.data {
 		f(bk)
 	}
 }
 
-func (c *mergeJoinCache) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
+func (c *mergeJoinCache) ForEachWithContext(f func(execute.BlockKey, execute.Trigger, execute.BlockContext)) {
 	for bk, tables := range c.data {
-		bc := BlockContext{
+		bc := execute.BlockContext{
 			Bounds: tables.bounds,
 			Count:  tables.Size(),
 		}
@@ -177,20 +237,20 @@ func (c *mergeJoinCache) ForEachWithContext(f func(BlockKey, Trigger, BlockConte
 	}
 }
 
-func (c *mergeJoinCache) DiscardBlock(key BlockKey) {
+func (c *mergeJoinCache) DiscardBlock(key execute.BlockKey) {
 	c.data[key].ClearData()
 }
 
-func (c *mergeJoinCache) ExpireBlock(key BlockKey) {
+func (c *mergeJoinCache) ExpireBlock(key execute.BlockKey) {
 	delete(c.data, key)
 }
 
-func (c *mergeJoinCache) setTriggerSpec(spec query.TriggerSpec) {
+func (c *mergeJoinCache) SetTriggerSpec(spec query.TriggerSpec) {
 	c.triggerSpec = spec
 }
 
-func (c *mergeJoinCache) Tables(bm BlockMetadata) *joinTables {
-	key := ToBlockKey(bm)
+func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
+	key := execute.ToBlockKey(bm)
 	tables := c.data[key]
 	if tables == nil {
 		tables = &joinTables{
@@ -198,7 +258,7 @@ func (c *mergeJoinCache) Tables(bm BlockMetadata) *joinTables {
 			bounds:  bm.Bounds(),
 			left:    new(mergeTable),
 			right:   new(mergeTable),
-			trigger: newTriggerFromSpec(c.triggerSpec),
+			trigger: execute.NewTriggerFromSpec(c.triggerSpec),
 		}
 		c.data[key] = tables
 	}
@@ -206,19 +266,19 @@ func (c *mergeJoinCache) Tables(bm BlockMetadata) *joinTables {
 }
 
 type joinTables struct {
-	tags   Tags
-	bounds Bounds
+	tags   execute.Tags
+	bounds execute.Bounds
 
 	left  *mergeTable
 	right *mergeTable
 
-	trigger Trigger
+	trigger execute.Trigger
 }
 
-func (t *joinTables) Bounds() Bounds {
+func (t *joinTables) Bounds() execute.Bounds {
 	return t.bounds
 }
-func (t *joinTables) Tags() Tags {
+func (t *joinTables) Tags() execute.Tags {
 	return t.tags
 }
 func (t *joinTables) Size() int {
@@ -230,10 +290,10 @@ func (t *joinTables) ClearData() {
 	t.right = new(mergeTable)
 }
 
-func (t *joinTables) Join() Block {
+func (t *joinTables) Join() execute.Block {
 	// Perform sort-merge join
 
-	builder := newRowListBlockBuilder()
+	builder := execute.NewRowListBlockBuilder()
 	builder.SetBounds(t.bounds)
 	builder.SetTags(t.tags)
 
@@ -250,7 +310,7 @@ func (t *joinTables) Join() Block {
 			for _, l := range leftSet {
 				for _, r := range rightSet {
 					v := t.eval(l.Value, r.Value)
-					builder.AddCell(Cell{
+					builder.AddCell(execute.Cell{
 						Time:  l.Key.Time,
 						Tags:  l.Tags,
 						Value: v,
@@ -291,7 +351,7 @@ type mergeTable struct {
 	cells []joinCell
 }
 
-func (t *mergeTable) Insert(value float64, tags Tags, time Time) {
+func (t *mergeTable) Insert(value float64, tags execute.Tags, time execute.Time) {
 	cell := joinCell{
 		Key: joinKey{
 			Time:    time,

@@ -28,7 +28,7 @@ type DataCache interface {
 	DiscardBlock(BlockKey)
 	ExpireBlock(BlockKey)
 
-	setTriggerSpec(t query.TriggerSpec)
+	SetTriggerSpec(t query.TriggerSpec)
 }
 
 type AccumulationMode int
@@ -59,7 +59,7 @@ type dataset struct {
 	cache DataCache
 }
 
-func newDataset(id DatasetID, accMode AccumulationMode, cache DataCache) *dataset {
+func NewDataset(id DatasetID, accMode AccumulationMode, cache DataCache) *dataset {
 	return &dataset{
 		id:      id,
 		accMode: accMode,
@@ -72,7 +72,7 @@ func (d *dataset) addTransformation(t Transformation) {
 }
 
 func (d *dataset) setTriggerSpec(spec query.TriggerSpec) {
-	d.cache.setTriggerSpec(spec)
+	d.cache.SetTriggerSpec(spec)
 }
 
 func (d *dataset) UpdateWatermark(mark Time) {
@@ -160,7 +160,7 @@ type blockBuilderCache struct {
 	triggerSpec query.TriggerSpec
 }
 
-func newBlockBuilderCache() *blockBuilderCache {
+func NewBlockBuilderCache() *blockBuilderCache {
 	return &blockBuilderCache{
 		blocks: make(map[BlockKey]blockState),
 	}
@@ -171,7 +171,7 @@ type blockState struct {
 	trigger Trigger
 }
 
-func (d *blockBuilderCache) setTriggerSpec(ts query.TriggerSpec) {
+func (d *blockBuilderCache) SetTriggerSpec(ts query.TriggerSpec) {
 	d.triggerSpec = ts
 }
 
@@ -188,10 +188,10 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
-		builder := newRowListBlockBuilder()
+		builder := NewRowListBlockBuilder()
 		builder.SetTags(meta.Tags())
 		builder.SetBounds(meta.Bounds())
-		t := newTriggerFromSpec(d.triggerSpec)
+		t := NewTriggerFromSpec(d.triggerSpec)
 		b = blockState{
 			builder: builder,
 			trigger: t,

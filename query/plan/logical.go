@@ -1,7 +1,7 @@
 package plan
 
 import (
-	"reflect"
+	"fmt"
 
 	"github.com/influxdata/ifql/query"
 	uuid "github.com/satori/go.uuid"
@@ -44,8 +44,8 @@ func ProcedureIDFromOperationID(id query.OperationID) ProcedureID {
 }
 
 func (p *logicalPlanner) walkQuery(o *query.Operation) error {
-	spec := p.createSpec(o.Spec.Kind())
-	if err := spec.SetSpec(o.Spec); err != nil {
+	spec, err := p.createSpec(o.Spec.Kind(), o.Spec)
+	if err != nil {
 		return err
 	}
 
@@ -67,8 +67,11 @@ func (p *logicalPlanner) walkQuery(o *query.Operation) error {
 	return nil
 }
 
-func (p *logicalPlanner) createSpec(qk query.OperationKind) ProcedureSpec {
-	k := opToProcedureKind[qk]
-	typ := kindToGoType[k]
-	return reflect.New(typ).Interface().(ProcedureSpec)
+func (p *logicalPlanner) createSpec(qk query.OperationKind, spec query.OperationSpec) (ProcedureSpec, error) {
+	createPs, ok := queryOpToProcedure[qk]
+	if !ok {
+		return nil, fmt.Errorf("unknown query operation %v", qk)
+	}
+	//TODO(nathanielc): Support adding all procedures to logical plan instead of only the first
+	return createPs[0](spec)
 }

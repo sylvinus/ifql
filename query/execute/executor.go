@@ -2,11 +2,40 @@ package execute
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/pkg/errors"
 )
+
+func Execute(qSpec *query.QuerySpec) ([]Result, error) {
+	lplanner := plan.NewLogicalPlanner()
+	lp, err := lplanner.Plan(qSpec)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create logical plan")
+	}
+
+	planner := plan.NewPlanner()
+	p, err := planner.Plan(lp, nil, time.Now())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create physical plan")
+	}
+
+	storage, err := NewStorageReader()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create storage reader")
+	}
+
+	e := NewExecutor(storage)
+	r, err := e.Execute(context.Background(), p)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to execute query")
+	}
+	return r, nil
+}
 
 type Executor interface {
 	Execute(context.Context, *plan.PlanSpec) ([]Result, error)
@@ -33,7 +62,7 @@ type executionState struct {
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
 	es, err := e.createExecutionState(p)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to initialize execute state")
 	}
 	es.do(ctx)
 	return es.results, nil
@@ -46,7 +75,10 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 		results: make([]Result, len(p.Results)),
 	}
 	for i, id := range p.Results {
-		ds := es.createNode(p.Procedures[id])
+		ds, err := es.createNode(p.Procedures[id])
+		if err != nil {
+			return nil, err
+		}
 		rs := newResultSink()
 		ds.addTransformation(rs)
 		es.results[i] = rs
@@ -54,38 +86,50 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 	return es, nil
 }
 
-// nonWindowTriggerSpec defines the triggering that should be used for datasets
+// defaultTriggerSpec defines the triggering that should be used for datasets
 // whose parent transformation is not a windowing transformation.
-var nonWindowTriggerSpec = query.AfterWatermarkTriggerSpec{}
+var defaultTriggerSpec = query.AfterWatermarkTriggerSpec{}
 
-func (es *executionState) createNode(pr *plan.Procedure) Node {
-	if pr.Spec.Kind() == plan.SelectKind {
-		spec := pr.Spec.(*plan.SelectProcedureSpec)
-		s := newStorageSource(DatasetID(pr.ID), es.sr, spec, es.p.Now)
+type triggeringSpec interface {
+	TriggerSpec() query.TriggerSpec
+}
+
+func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
+	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
+		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es.p.Now)
 		es.sources = append(es.sources, s)
-		return s
+		return s, nil
 	}
 
-	t, ds := createTransformationDatasetPair(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es.p.Now)
+	createT, ok := procedureToTransformation[pr.Spec.Kind()]
+
+	if !ok {
+		return nil, fmt.Errorf("unsupported procedure %v", pr.Spec.Kind())
+	}
+	t, ds, err := createT(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es.p.Now)
+	if err != nil {
+		return nil, err
+	}
 
 	// Setup triggering
-	if pr.Spec.Kind() == plan.WindowKind {
-		w := pr.Spec.(*plan.WindowProcedureSpec)
-		triggerSpec := w.Triggering
-		ds.setTriggerSpec(triggerSpec)
-	} else {
-		ds.setTriggerSpec(nonWindowTriggerSpec)
+	var ts query.TriggerSpec = defaultTriggerSpec
+	if t, ok := pr.Spec.(triggeringSpec); ok {
+		ts = t.TriggerSpec()
 	}
+	ds.setTriggerSpec(ts)
 
 	parentIDs := make([]DatasetID, len(pr.Parents))
 	for i, parentID := range pr.Parents {
-		parent := es.createNode(es.p.Procedures[parentID])
+		parent, err := es.createNode(es.p.Procedures[parentID])
+		if err != nil {
+			return nil, err
+		}
 		parent.addTransformation(t)
 		parentIDs[i] = DatasetID(parentID)
 	}
-	t.setParents(parentIDs)
+	t.SetParents(parentIDs)
 
-	return ds
+	return ds, nil
 }
 
 func (es *executionState) do(ctx context.Context) {

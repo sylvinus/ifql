@@ -10,8 +10,15 @@ import (
 )
 
 type StorageReader interface {
-	Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (BlockIterator, error)
+	Read(rs ReadSpec, start, stop Time) (BlockIterator, error)
 	Close()
+}
+
+type ReadSpec struct {
+	Database   string
+	Predicate  *storage.Predicate
+	Limit      int64
+	Descending bool
 }
 
 func NewStorageReader() (StorageReader, error) {
@@ -33,12 +40,12 @@ type storageReader struct {
 	c    storage.StorageClient
 }
 
-func (sr *storageReader) Read(database string, predicate *storage.Predicate, limit int64, desc bool, start, stop Time) (BlockIterator, error) {
+func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
 	var req storage.ReadRequest
-	req.Database = database
-	req.Predicate = predicate
+	req.Database = readSpec.Database
+	req.Predicate = readSpec.Predicate
 	//	req.Limit = limit
-	req.Descending = desc
+	req.Descending = readSpec.Descending
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
 
@@ -88,7 +95,7 @@ func (bi *storageBlockIterator) readBlocks() {
 			return
 		}
 
-		builder := newRowListBlockBuilder()
+		builder := NewRowListBlockBuilder()
 		builder.SetBounds(bi.bounds)
 
 		for _, frame := range rep.Frames {
@@ -111,7 +118,7 @@ func (bi *storageBlockIterator) readBlocks() {
 
 				// Each row is its own block
 				bi.blocks <- builder.Block()
-				builder = newRowListBlockBuilder()
+				builder = NewRowListBlockBuilder()
 				builder.SetBounds(bi.bounds)
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/functions"
 )
 
 var ignoreUnexportedQuerySpec = cmpopts.IgnoreUnexported(query.QuerySpec{})
@@ -34,13 +35,13 @@ func TestQuery_JSON(t *testing.T) {
 			}
 		},
 		{
-			"id": "clear",
-			"kind": "clear"
+			"id": "sum",
+			"kind": "sum"
 		}
 	],
 	"edges":[
 		{"parent":"select","child":"range"},
-		{"parent":"range","child":"clear"}
+		{"parent":"range","child":"sum"}
 	]
 }
 	`)
@@ -54,13 +55,13 @@ func TestQuery_JSON(t *testing.T) {
 		Operations: []*query.Operation{
 			{
 				ID: "select",
-				Spec: &query.SelectOpSpec{
+				Spec: &functions.SelectOpSpec{
 					Database: "mydb",
 				},
 			},
 			{
 				ID: "range",
-				Spec: &query.RangeOpSpec{
+				Spec: &functions.RangeOpSpec{
 					Start: query.Time{
 						Relative: -4 * time.Hour,
 					},
@@ -68,13 +69,13 @@ func TestQuery_JSON(t *testing.T) {
 				},
 			},
 			{
-				ID:   "clear",
-				Spec: &query.ClearOpSpec{},
+				ID:   "sum",
+				Spec: &functions.SumOpSpec{},
 			},
 		},
 		Edges: []query.Edge{
 			{Parent: "select", Child: "range"},
-			{Parent: "range", Child: "clear"},
+			{Parent: "range", Child: "sum"},
 		},
 	}
 	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {

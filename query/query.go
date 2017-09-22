@@ -22,22 +22,10 @@ type Edge struct {
 	Child  OperationID `json:"child"`
 }
 
-// TODO: instead of taking a predicate, take what can be returned by
-//       the parser. That is, the parser could have variable references.
-type WhereExpressionSpec struct {
+// TODO: instead of taking a predicate, define a spec for expressions native to queries.
+type ExpressionSpec struct {
 	Predicate *storage.Predicate
 }
-
-// TODO: wire this up to evaluate in the engine to fill in variables
-//       with values
-func (w *WhereExpressionSpec) Evaluate() *storage.Predicate {
-	return w.Predicate
-}
-
-// ExpressionSpec specifies an expression.
-// Expressions may return any value that the storage supports.
-//TODO flesh this out.
-type ExpressionSpec interface{}
 
 // Walk calls f on each operation exactly once.
 // The function f will be called on an operation only after

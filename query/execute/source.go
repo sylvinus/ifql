@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -16,44 +17,36 @@ type Source interface {
 	Run()
 }
 
+type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, now time.Time) Source
+
+var procedureToSource = make(map[plan.ProcedureKind]CreateSource)
+
+func RegisterSource(k plan.ProcedureKind, c CreateSource) {
+	if procedureToSource[k] != nil {
+		panic(fmt.Errorf("duplicate registration for source with procedure kind %v", k))
+	}
+	procedureToSource[k] = c
+}
+
 // storageSource performs storage reads
 type storageSource struct {
-	id     DatasetID
-	reader StorageReader
-	spec   *plan.SelectProcedureSpec
-	window Window
-	bounds Bounds
+	id       DatasetID
+	reader   StorageReader
+	readSpec ReadSpec
+	window   Window
+	bounds   Bounds
 
 	ts []Transformation
 
 	currentTime Time
 }
 
-func newStorageSource(id DatasetID, r StorageReader, spec *plan.SelectProcedureSpec, now time.Time) Source {
-	var w Window
-	if spec.WindowSet {
-		w = Window{
-			Every:  Duration(spec.Window.Every),
-			Period: Duration(spec.Window.Period),
-			Round:  Duration(spec.Window.Round),
-			Start:  Time(spec.Window.Start.Time(now).UnixNano()),
-		}
-	} else {
-		w = Window{
-			Every:  Duration(spec.Bounds.Stop.Time(now).UnixNano() - spec.Bounds.Start.Time(now).UnixNano()),
-			Period: Duration(spec.Bounds.Stop.Time(now).UnixNano() - spec.Bounds.Start.Time(now).UnixNano()),
-			Start:  Time(spec.Bounds.Start.Time(now).UnixNano()),
-		}
-	}
-	currentTime := w.Start + Time(w.Period)
+func NewStorageSource(id DatasetID, r StorageReader, readSpec ReadSpec, bounds Bounds, w Window, currentTime Time) Source {
 	return &storageSource{
-		id:     id,
-		reader: r,
-		spec:   spec,
-		bounds: Bounds{
-			Start: Time(spec.Bounds.Start.Time(now).UnixNano()),
-			Stop:  Time(spec.Bounds.Stop.Time(now).UnixNano()),
-		},
+		id:          id,
+		reader:      r,
+		readSpec:    readSpec,
+		bounds:      bounds,
 		window:      w,
 		currentTime: currentTime,
 	}
@@ -91,10 +84,7 @@ func (s *storageSource) Next() (BlockIterator, Time, bool) {
 		return nil, 0, false
 	}
 	bi, err := s.reader.Read(
-		s.spec.Database,
-		s.spec.Where,
-		s.spec.Limit,
-		s.spec.Desc,
+		s.readSpec,
 		start,
 		stop,
 	)

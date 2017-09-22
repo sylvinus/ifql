@@ -43,13 +43,10 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
 	for _, pr := range ap.Procedures {
-		switch spec := pr.Spec.(type) {
-		case *RangeProcedureSpec:
-			p.pushDownRange(pr, spec)
-		case *WhereProcedureSpec:
-			p.pushDownWhere(pr, spec)
-		case *LimitProcedureSpec:
-			p.pushDownLimit(pr, spec)
+		if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
+			rule := pd.PushDownRule()
+			p.pushDownAndSearch(pr, rule, pd.PushDown)
+			p.removeProcedure(pr)
 		}
 	}
 
@@ -65,14 +62,14 @@ func hasKind(kind ProcedureKind, kinds []ProcedureKind) bool {
 	return false
 }
 
-func (p *planner) pushDownAndSearch(pr *Procedure, kind ProcedureKind, do func(parent *Procedure), validPushThroughKinds ...ProcedureKind) {
+func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(parent *Procedure)) {
 	for _, parent := range pr.Parents {
 		pp := p.plan.Procedures[parent]
 		pk := pp.Spec.Kind()
-		if pk == kind {
+		if pk == rule.Root {
 			do(pp)
-		} else if hasKind(pk, validPushThroughKinds) {
-			p.pushDownAndSearch(pp, kind, do)
+		} else if hasKind(pk, rule.Through) {
+			p.pushDownAndSearch(pp, rule, do)
 		} else {
 			// Cannot push down
 			// TODO: create new branch since procedure cannot be pushed down
@@ -103,55 +100,4 @@ func removeID(ids []ProcedureID, remove ProcedureID) []ProcedureID {
 		}
 	}
 	return filtered
-}
-
-func (p *planner) pushDownRange(pr *Procedure, spec *RangeProcedureSpec) {
-	p.pushDownAndSearch(pr, SelectKind, func(parent *Procedure) {
-		selectSpec := parent.Spec.(*SelectProcedureSpec)
-		if selectSpec.BoundsSet {
-			// TODO: create copy of select spec and set new bounds
-			//
-			// Example case where this matters
-			//    var data = select(database: "mydb")
-			//    var past = data.range(start:-2d,stop:-1d)
-			//    var current = data.range(start:-1d,stop:now)
-		}
-		selectSpec.BoundsSet = true
-		selectSpec.Bounds = spec.Bounds
-	},
-		WhereKind, LimitKind,
-	)
-	// Remove procedure since it has been pushed down
-	p.removeProcedure(pr)
-}
-
-func (p *planner) pushDownWhere(pr *Procedure, spec *WhereProcedureSpec) {
-	p.pushDownAndSearch(pr, SelectKind, func(parent *Procedure) {
-		selectSpec := parent.Spec.(*SelectProcedureSpec)
-		if selectSpec.WhereSet {
-			// TODO: create copy of select spec and set new where expression
-		}
-		selectSpec.WhereSet = true
-		selectSpec.Where = spec.Exp.Exp.Predicate
-	},
-		LimitKind, RangeKind,
-	)
-	// Remove procedure since it has been pushed down
-	p.removeProcedure(pr)
-}
-
-func (p *planner) pushDownLimit(pr *Procedure, spec *LimitProcedureSpec) {
-	p.pushDownAndSearch(pr, SelectKind, func(parent *Procedure) {
-		selectSpec := parent.Spec.(*SelectProcedureSpec)
-		if selectSpec.LimitSet {
-			// TODO: create copy of select spec and set new limit
-		}
-		selectSpec.LimitSet = true
-		selectSpec.Limit = spec.Limit
-		selectSpec.Offset = spec.Offset
-	},
-		WhereKind, RangeKind,
-	)
-	// Remove procedure since it has been pushed down
-	p.removeProcedure(pr)
 }

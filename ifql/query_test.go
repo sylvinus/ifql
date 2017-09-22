@@ -9,6 +9,7 @@ import (
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/functions"
 )
 
 func TestNewQuery(t *testing.T) {
@@ -25,51 +26,18 @@ func TestNewQuery(t *testing.T) {
 		},
 		{
 			name: "select with database",
-			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).clear()`,
-			want: &query.QuerySpec{
-				Operations: []*query.Operation{
-					{
-						ID: "select",
-						Spec: &query.SelectOpSpec{
-							Database: "mydb",
-						},
-					},
-					{
-						ID: "range",
-						Spec: &query.RangeOpSpec{
-							Start: query.Time{
-								Relative: -4 * time.Hour,
-							},
-							Stop: query.Time{
-								Relative: -2 * time.Hour,
-							},
-						},
-					},
-					{
-						ID:   "clear",
-						Spec: &query.ClearOpSpec{},
-					},
-				},
-				Edges: []query.Edge{
-					{Parent: "select", Child: "range"},
-					{Parent: "range", Child: "clear"},
-				},
-			},
-		},
-		{
-			name: "select with database with range",
 			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -80,7 +48,40 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "sum",
-						Spec: &query.SumOpSpec{},
+						Spec: &functions.SumOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select", Child: "range"},
+					{Parent: "range", Child: "sum"},
+				},
+			},
+		},
+		{
+			name: "select with database with range",
+			raw:  `select(database:"mydb").range(start:-4h, stop:-2h).sum()`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select",
+						Spec: &functions.SelectOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "range",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -4 * time.Hour,
+							},
+							Stop: query.Time{
+								Relative: -2 * time.Hour,
+							},
+						},
+					},
+					{
+						ID:   "sum",
+						Spec: &functions.SumOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -96,13 +97,13 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -113,7 +114,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -129,14 +130,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -186,7 +187,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -197,7 +198,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -225,14 +226,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -306,7 +307,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -317,7 +318,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -341,14 +342,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -398,7 +399,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -409,7 +410,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -433,14 +434,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -490,7 +491,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -501,7 +502,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -525,14 +526,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -582,7 +583,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID: "range",
-						Spec: &query.RangeOpSpec{
+						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
@@ -593,7 +594,7 @@ func TestNewQuery(t *testing.T) {
 					},
 					{
 						ID:   "count",
-						Spec: &query.CountOpSpec{},
+						Spec: &functions.CountOpSpec{},
 					},
 				},
 				Edges: []query.Edge{
@@ -613,14 +614,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeComparisonExpression,
@@ -662,14 +663,14 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "where",
-						Spec: &query.WhereOpSpec{
-							Exp: &query.WhereExpressionSpec{
+						Spec: &functions.WhereOpSpec{
+							Exp: &query.ExpressionSpec{
 								Predicate: &storage.Predicate{
 									Root: &storage.Node{
 										NodeType: storage.NodeTypeLogicalExpression,
@@ -730,13 +731,13 @@ func TestNewQuery(t *testing.T) {
 				Operations: []*query.Operation{
 					{
 						ID: "select",
-						Spec: &query.SelectOpSpec{
+						Spec: &functions.SelectOpSpec{
 							Database: "mydb",
 						},
 					},
 					{
 						ID: "window",
-						Spec: &query.WindowOpSpec{
+						Spec: &functions.WindowOpSpec{
 							Start: query.Time{
 								Relative: -4 * time.Hour,
 							},
