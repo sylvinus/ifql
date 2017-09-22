@@ -23,7 +23,7 @@ type BlockContext struct {
 	Count  int
 }
 
-func newTriggerFromSpec(spec query.TriggerSpec) Trigger {
+func NewTriggerFromSpec(spec query.TriggerSpec) Trigger {
 	switch s := spec.(type) {
 	case query.AfterWatermarkTriggerSpec:
 		return &afterWatermarkTrigger{
@@ -31,7 +31,7 @@ func newTriggerFromSpec(spec query.TriggerSpec) Trigger {
 		}
 	case query.RepeatedTriggerSpec:
 		return &repeatedlyForever{
-			t: newTriggerFromSpec(s.Trigger),
+			t: NewTriggerFromSpec(s.Trigger),
 		}
 	case query.AfterProcessingTimeTriggerSpec:
 		return &afterProcessingTimeTrigger{
@@ -43,8 +43,8 @@ func newTriggerFromSpec(spec query.TriggerSpec) Trigger {
 		}
 	case query.OrFinallyTriggerSpec:
 		return &orFinally{
-			main:    newTriggerFromSpec(s.Main),
-			finally: newTriggerFromSpec(s.Finally),
+			main:    NewTriggerFromSpec(s.Main),
+			finally: NewTriggerFromSpec(s.Finally),
 		}
 	default:
 		//TODO(nathanielc): Add proper error handling here.

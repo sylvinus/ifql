@@ -151,7 +151,7 @@ type rowListBlockBuilder struct {
 	key BlockKey
 }
 
-func newRowListBlockBuilder() BlockBuilder {
+func NewRowListBlockBuilder() BlockBuilder {
 	return &rowListBlockBuilder{
 		blk: new(rowListBlock),
 	}

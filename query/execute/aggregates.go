@@ -10,7 +10,7 @@ type aggregateTransformation struct {
 	parents []DatasetID
 }
 
-func newAggregateTransformation(d Dataset, cache *blockBuilderCache, agg aggFunc) *aggregateTransformation {
+func NewAggregateTransformation(d Dataset, cache *blockBuilderCache, agg aggFunc) *aggregateTransformation {
 	return &aggregateTransformation{
 		d:     d,
 		cache: cache,
@@ -52,7 +52,7 @@ func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
 func (t *aggregateTransformation) Finish(id DatasetID) {
 	t.d.Finish()
 }
-func (t *aggregateTransformation) setParents(ids []DatasetID) {
+func (t *aggregateTransformation) SetParents(ids []DatasetID) {
 	t.parents = ids
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/functions"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -20,7 +21,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -28,7 +29,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("range"): {
 						ID: plan.ProcedureIDFromOperationID("range"),
-						Spec: &plan.RangeProcedureSpec{
+						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
@@ -40,7 +41,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("range")),
 						},
@@ -53,7 +54,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
@@ -65,7 +66,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("select")),
 						},
@@ -82,7 +83,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -90,7 +91,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("range"): {
 						ID: plan.ProcedureIDFromOperationID("range"),
-						Spec: &plan.RangeProcedureSpec{
+						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
@@ -102,7 +103,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("limit"): {
 						ID: plan.ProcedureIDFromOperationID("limit"),
-						Spec: &plan.LimitProcedureSpec{
+						Spec: &functions.LimitProcedureSpec{
 							Limit: 10,
 						},
 						Parents: []plan.ProcedureID{
@@ -112,7 +113,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("limit")),
 						},
@@ -125,7 +126,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
@@ -139,7 +140,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("select")),
 						},

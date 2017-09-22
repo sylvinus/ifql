@@ -44,7 +44,7 @@ func (s *resultSink) UpdateWatermark(id DatasetID, mark Time) {
 func (s *resultSink) UpdateProcessingTime(id DatasetID, t Time) {
 	//Nothing to do
 }
-func (s *resultSink) setParents(ids []DatasetID) {
+func (s *resultSink) SetParents(ids []DatasetID) {
 	s.parents = ids
 }
 

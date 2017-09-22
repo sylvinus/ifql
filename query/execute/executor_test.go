@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
-	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/functions"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -45,7 +45,7 @@ func TestExecutor_Execute(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
@@ -57,7 +57,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
-						Spec: &plan.SumProcedureSpec{},
+						Spec: &functions.SumProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("select"),
 						},
@@ -103,7 +103,7 @@ func TestExecutor_Execute(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &plan.SelectProcedureSpec{
+						Spec: &functions.SelectProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
@@ -115,7 +115,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
-						Spec: &plan.SumProcedureSpec{},
+						Spec: &functions.SumProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("select"),
 						},
@@ -123,7 +123,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("count"): {
 						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &plan.CountProcedureSpec{},
+						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("select"),
 						},
@@ -131,7 +131,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("join"): {
 						ID:   plan.ProcedureIDFromOperationID("join"),
-						Spec: &plan.MergeJoinProcedureSpec{},
+						Spec: &functions.MergeJoinProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("sum"),
 							plan.ProcedureIDFromOperationID("count"),
@@ -185,7 +185,7 @@ type storageReader struct {
 }
 
 func (s storageReader) Close() {}
-func (s storageReader) Read(string, *storage.Predicate, int64, bool, execute.Time, execute.Time) (execute.BlockIterator, error) {
+func (s storageReader) Read(execute.ReadSpec, execute.Time, execute.Time) (execute.BlockIterator, error) {
 	return &storageBlockIterator{
 		s: s,
 	}, nil
