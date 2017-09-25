@@ -7,3 +7,7 @@ required = ["github.com/mna/pigeon"]
 [[override]]
   branch = "fbae0281ffd546fa6d1959fec6075ac5da7fb577"
   name = "github.com/uber-go/zap"
+
+[[override]]
+  branch = "master"
+  name = "github.com/mna/pigeon"

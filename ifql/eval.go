@@ -60,17 +60,44 @@ type Value struct {
 type Type int
 
 const (
-	TString       Type = iota // Go type string
-	TInt                      // Go type int64
-	TFloat                    // Go type float64
-	TBool                     // Go type bool
-	TAbsoluteTime             // Go type time.Time
-	TDuration                 // Go type time.Duration
-	TList                     // Go type List
-	TMap                      // Go type Map
-	TChain                    // Go type *CallChain
-	TExpression               // Go type *storage.Node TODO(nathanielc): create a type for this in this package
+	TString     Type = iota // Go type string
+	TInt                    // Go type int64
+	TFloat                  // Go type float64
+	TBool                   // Go type bool
+	TTime                   // Go type time.Time
+	TDuration               // Go type time.Duration
+	TList                   // Go type List
+	TMap                    // Go type Map
+	TChain                  // Go type *CallChain
+	TExpression             // Go type *storage.Node TODO(nathanielc): create a type for this in this package
 )
+
+func (t Type) String() string {
+	switch t {
+	case TString:
+		return "string"
+	case TInt:
+		return "int"
+	case TFloat:
+		return "float"
+	case TBool:
+		return "bool"
+	case TTime:
+		return "time"
+	case TDuration:
+		return "duration"
+	case TList:
+		return "list"
+	case TMap:
+		return "map"
+	case TChain:
+		return "chain"
+	case TExpression:
+		return "expression"
+	default:
+		return fmt.Sprintf("unknown type %d", int(t))
+	}
+}
 
 type List struct {
 	Type Type
@@ -155,7 +182,7 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 			Value: root,
 		}, nil
 	default:
-		return Value{}, fmt.Errorf("unsupported expression %t", e)
+		return Value{}, fmt.Errorf("unsupported expression %T", expr)
 	}
 }
 
@@ -163,7 +190,7 @@ func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
 	switch l := lit.(type) {
 	case *ast.DateTimeLiteral:
 		return Value{
-			Type:  TAbsoluteTime,
+			Type:  TTime,
 			Value: l.Value,
 		}, nil
 	case *ast.DurationLiteral:
@@ -172,9 +199,13 @@ func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
 			Value: l.Value,
 		}, nil
 	case *ast.NumberLiteral:
-		//TODO(nathanielc): Support integer types as well. See https://github.com/influxdata/ifql/issues/35
 		return Value{
 			Type:  TFloat,
+			Value: l.Value,
+		}, nil
+	case *ast.IntegerLiteral:
+		return Value{
+			Type:  TInt,
 			Value: l.Value,
 		}, nil
 	case *ast.StringLiteral:
@@ -189,7 +220,7 @@ func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
 		}, nil
 	// TODO(nathanielc): Support lists and maps
 	default:
-		return Value{}, fmt.Errorf("unknown literal type %t", lit)
+		return Value{}, fmt.Errorf("unknown literal type %T", lit)
 	}
 
 }
@@ -306,11 +337,6 @@ func ToQueryTime(value Value) (query.Time, error) {
 		return query.Time{
 			Absolute: time.Unix(v, 0),
 		}, nil
-		// TODO(nathanielc) don't allow float64 to be converted to a time once we have support for integer numbers.
-	case float64:
-		return query.Time{
-			Absolute: time.Unix(int64(v), 0),
-		}, nil
 	default:
 		return query.Time{}, fmt.Errorf("unknown time type %t", value.Value)
 	}
@@ -401,6 +427,13 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 				FloatValue: lit.Value,
 			},
 		}, nil
+	case *ast.IntegerLiteral:
+		return &storage.Node{
+			NodeType: storage.NodeTypeLiteral,
+			Value: &storage.Node_IntegerValue{
+				IntegerValue: lit.Value,
+			},
+		}, nil
 	case *ast.RegexpLiteral:
 		return &storage.Node{
 			NodeType: storage.NodeTypeLiteral,
@@ -418,7 +451,7 @@ func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
 	case *ast.DurationLiteral, *ast.DateTimeLiteral, *ast.BooleanLiteral:
 		return nil, fmt.Errorf("durations, datetimes and booleans not yet support in expressions")
 	default:
-		return nil, fmt.Errorf("Unknown primary literal type: %t", lit)
+		return nil, fmt.Errorf("unknown primary literal type: %T", expr)
 	}
 }
 

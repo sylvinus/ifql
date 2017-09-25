@@ -322,13 +322,16 @@ StringChar
     ) SourceChar
 
 Number
-  = '-'? Integer ( '.' Digit+ )? {
+  = Integer '.' Digit+ {
       return numberLiteral(c.text, c.pos)
-    }
+   }
+   / Integer {
+      return integerLiteral(c.text, c.pos)
+   } 
 
 Integer
   = '0'
-  / NonZeroDigit Digit*
+  / '-'? NonZeroDigit Digit*
 
 NonZeroDigit
   = [1-9]

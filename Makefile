@@ -7,6 +7,10 @@ $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 test:
-	go test `go list ./... | grep -v /vendor/` ${args}
+	go test ./... ${args}
+
+generate:
+	go install ./vendor/github.com/mna/pigeon
+	go generate ./... ${args}
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS)
