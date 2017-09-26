@@ -319,7 +319,7 @@ func TestOperation_JSON(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !cmp.Equal(gotO, tc.op) {
-				t.Errorf("unexpected operation:\n%s", cmp.Diff(gotO, tc.op))
+				t.Errorf("unexpected operation -want/+got %s", cmp.Diff(tc.op, gotO))
 			}
 
 			// Marshal the spec and ensure we can unmarshal it again.
@@ -332,7 +332,7 @@ func TestOperation_JSON(t *testing.T) {
 			}
 
 			if !cmp.Equal(gotO, tc.op) {
-				t.Errorf("unexpected operation after marshalling:\n%s", cmp.Diff(gotO, tc.op))
+				t.Errorf("unexpected operation after marshalling -want/+got %s", cmp.Diff(tc.op, gotO))
 			}
 		})
 	}

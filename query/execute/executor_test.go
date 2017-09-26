@@ -174,7 +174,7 @@ func TestExecutor_Execute(t *testing.T) {
 			}
 
 			if !cmp.Equal(got, tc.exp, allowUnexportedDataFrame) {
-				t.Error("unexpected results", cmp.Diff(got, tc.exp, allowUnexportedDataFrame))
+				t.Error("unexpected results -want/+got", cmp.Diff(tc.exp, got, allowUnexportedDataFrame))
 			}
 		})
 	}

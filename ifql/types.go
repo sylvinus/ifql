@@ -133,6 +133,22 @@ func identifier(text []byte, pos position) (*ast.Identifier, error) {
 	}, nil
 }
 
+func array(first, rest interface{}, text []byte, pos position) *ast.ArrayExpression {
+	var elements []ast.Expression
+	if first != nil {
+		elements = append(elements, first.(ast.Expression))
+	}
+	if rest != nil {
+		for _, el := range rest.([]interface{}) {
+			elements = append(elements, el.(ast.Expression))
+		}
+	}
+	return &ast.ArrayExpression{
+		Elements: elements,
+		BaseNode: base(text, pos),
+	}
+}
+
 func logicalExpression(head, tails interface{}, text []byte, pos position) (ast.Expression, error) {
 	res := head.(ast.Expression)
 	for _, tail := range toIfaceSlice(tails) {
@@ -248,7 +264,6 @@ func datetime(text []byte, pos position) (*ast.DateTimeLiteral, error) {
 }
 
 func base(text []byte, pos position) *ast.BaseNode {
-	return nil
 	return &ast.BaseNode{
 		Loc: &ast.SourceLocation{
 			Start: ast.Position{

@@ -629,7 +629,7 @@ func TestBuild(t *testing.T) {
 			}
 			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
 			if !cmp.Equal(tt.want, got, opts...) {
-				t.Errorf("Build() = %s -got/+want %s", tt.promql, cmp.Diff(tt.want, got, opts...))
+				t.Errorf("Build() = %s -want/+got%s", tt.promql, cmp.Diff(tt.want, got, opts...))
 			}
 		})
 	}

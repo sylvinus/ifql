@@ -1,16 +1,37 @@
-SUBDIRS := ifql promql
-TOPTARGETS := all clean
+SUBDIRS := ast ifql promql
 
-$(TOPTARGETS): $(SUBDIRS)
+SOURCES := $(shell find . -name '*.go') 
 
-$(SUBDIRS):
+all: Gopkg.lock $(SUBDIRS) bin/ifql
+
+$(SUBDIRS): bin/pigeon bin/cmpgen
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-test:
-	go test ./... ${args}
+bin/ifql: $(SOURCES) bin/pigeon bin/cmpgen
+	go build -i -o bin/ifql ./cmd/ifql
 
-generate:
-	go install ./vendor/github.com/mna/pigeon
-	go generate ./... ${args}
+bin/pigeon: ./vendor/github.com/mna/pigeon/main.go
+	go build -i -o bin/pigeon  ./vendor/github.com/mna/pigeon
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS)
+bin/cmpgen: ./ast/asttest/cmpgen/main.go
+	go build -i -o bin/cmpgen ./ast/asttest/cmpgen
+
+Gopkg.lock: Gopkg.toml
+	dep ensure
+
+update:
+	dep ensure -update
+
+test: Gopkg.lock bin/ifql
+	go test ./...
+
+test-race: Gopkg.lock bin/ifql
+	go test -race ./...
+
+bench: Gopkg.lock bin/ifql
+	go test -bench=. -run=^$$ ./...
+
+clean: $(SUBDIRS)
+	rm -rf bin
+
+.PHONY: all clean $(SUBDIRS) update

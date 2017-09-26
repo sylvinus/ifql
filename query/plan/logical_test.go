@@ -206,7 +206,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !cmp.Equal(got, tc.ap) {
-				t.Errorf("unexpected logical plan:\n%s", cmp.Diff(got, tc.ap))
+				t.Errorf("unexpected logical plan -want/+got %s", cmp.Diff(tc.ap, got))
 			}
 		})
 	}
