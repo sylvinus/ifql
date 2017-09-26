@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/functions"
@@ -37,6 +38,10 @@ func TestExecutor_Execute(t *testing.T) {
 						{Value: 3, Time: 2},
 						{Value: 4, Time: 3},
 						{Value: 5, Time: 4},
+					},
+					cols: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ValueCol,
 					},
 				},
 			},
@@ -78,26 +83,32 @@ func TestExecutor_Execute(t *testing.T) {
 					cells: []execute.Cell{
 						{Value: 15, Time: 5, Tags: execute.Tags{}},
 					},
+					cols: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ValueCol,
+					},
 				}},
 			}},
 		},
 		{
-			src: []block{
-				{
-					bounds: execute.Bounds{
-						Start: 1,
-						Stop:  5,
-					},
-					tags: execute.Tags{},
-					cells: []execute.Cell{
-						{Value: 1, Time: 0},
-						{Value: 2, Time: 1},
-						{Value: 3, Time: 2},
-						{Value: 4, Time: 3},
-						{Value: 5, Time: 4},
-					},
+			src: []block{{
+				bounds: execute.Bounds{
+					Start: 1,
+					Stop:  5,
 				},
-			},
+				tags: execute.Tags{},
+				cells: []execute.Cell{
+					{Value: 1, Time: 0},
+					{Value: 2, Time: 1},
+					{Value: 3, Time: 2},
+					{Value: 4, Time: 3},
+					{Value: 5, Time: 4},
+				},
+				cols: []execute.ColMeta{
+					execute.TimeCol,
+					execute.ValueCol,
+				},
+			}},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
@@ -130,8 +141,20 @@ func TestExecutor_Execute(t *testing.T) {
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
 					plan.ProcedureIDFromOperationID("join"): {
-						ID:   plan.ProcedureIDFromOperationID("join"),
-						Spec: &functions.MergeJoinProcedureSpec{},
+						ID: plan.ProcedureIDFromOperationID("join"),
+						Spec: &functions.MergeJoinProcedureSpec{
+							Expression: &expression.BinaryNode{
+								Operator: expression.DivisionOperator,
+								Left: &expression.ReferenceNode{
+									Name: "$",
+									Kind: "field",
+								},
+								Right: &expression.ReferenceNode{
+									Name: "b",
+									Kind: "identifier",
+								},
+							},
+						},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("sum"),
 							plan.ProcedureIDFromOperationID("count"),
@@ -152,6 +175,10 @@ func TestExecutor_Execute(t *testing.T) {
 					tags: execute.Tags{},
 					cells: []execute.Cell{
 						{Value: 3, Time: 5, Tags: execute.Tags{}},
+					},
+					cols: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ValueCol,
 					},
 				}},
 			}},
@@ -237,6 +264,7 @@ type block struct {
 	bounds execute.Bounds
 	tags   execute.Tags
 	cells  []execute.Cell
+	cols   []execute.ColMeta
 }
 
 func (b block) Bounds() execute.Bounds {
@@ -245,6 +273,9 @@ func (b block) Bounds() execute.Bounds {
 
 func (b block) Tags() execute.Tags {
 	return b.tags
+}
+func (b block) Cols() []execute.ColMeta {
+	return b.cols
 }
 
 func (b block) Values() execute.ValueIterator {
@@ -277,6 +308,7 @@ func convertToTestBlock(b execute.Block) block {
 	blk := block{
 		bounds: b.Bounds(),
 		tags:   b.Tags(),
+		cols:   b.Cols(),
 	}
 	cells := b.Cells()
 

@@ -127,16 +127,16 @@ func (*LogicalExpression) expression()     {}
 func (*ObjectExpression) expression()      {}
 func (*ConditionalExpression) expression() {}
 func (*ArrayExpression) expression()       {}
-
-func (*Identifier) expression()      {}
-func (*StringLiteral) expression()   {}
-func (*BooleanLiteral) expression()  {}
-func (*NumberLiteral) expression()   {}
-func (*IntegerLiteral) expression()  {}
-func (*RegexpLiteral) expression()   {}
-func (*DurationLiteral) expression() {}
-func (*DateTimeLiteral) expression() {}
-func (*FieldLiteral) expression()    {}
+func (*Identifier) expression()            {}
+func (*StringLiteral) expression()         {}
+func (*BooleanLiteral) expression()        {}
+func (*NumberLiteral) expression()         {}
+func (*IntegerLiteral) expression()        {}
+func (*RegexpLiteral) expression()         {}
+func (*DurationLiteral) expression()       {}
+func (*DateTimeLiteral) expression()       {}
+func (*FieldLiteral) expression()          {}
+func (*FunctionExpression) expression()    {}
 
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
@@ -168,6 +168,14 @@ type SequenceExpression struct {
 
 // Type is the abstract type
 func (*SequenceExpression) Type() string { return "SequenceExpression" }
+
+type FunctionExpression struct {
+	*BaseNode
+	Function Expression `json:"function"`
+}
+
+// Type is the abstract type
+func (*FunctionExpression) Type() string { return "FunctionExpression" }
 
 // OperatorKind are Equality and Arithmatic operators.
 // Result of evaluating an equality operator is always of type Boolean based on whether the

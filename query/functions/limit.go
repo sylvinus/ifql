@@ -24,7 +24,7 @@ func init() {
 	//execute.RegisterTransformation(LimitKind, createLimitTransformation)
 }
 
-func createLimitOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createLimitOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(LimitOpSpec)
 
 	limitValue, ok := args["limit"]

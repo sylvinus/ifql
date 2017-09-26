@@ -41,6 +41,10 @@ const (
 
 type DatasetID uuid.UUID
 
+func (id DatasetID) String() string {
+	return uuid.UUID(id).String()
+}
+
 var ZeroDatasetID DatasetID
 
 func (id DatasetID) IsZero() bool {
@@ -146,85 +150,5 @@ func (d *dataset) Finish() {
 	})
 	for _, t := range d.ts {
 		t.Finish(d.id)
-	}
-}
-
-type BlockBuilderCache interface {
-	BlockBuilder(meta BlockMetadata) BlockBuilder
-	ForEachBuilder(f func(BlockKey, BlockBuilder))
-}
-
-type blockBuilderCache struct {
-	blocks map[BlockKey]blockState
-
-	triggerSpec query.TriggerSpec
-}
-
-func NewBlockBuilderCache() *blockBuilderCache {
-	return &blockBuilderCache{
-		blocks: make(map[BlockKey]blockState),
-	}
-}
-
-type blockState struct {
-	builder BlockBuilder
-	trigger Trigger
-}
-
-func (d *blockBuilderCache) SetTriggerSpec(ts query.TriggerSpec) {
-	d.triggerSpec = ts
-}
-
-func (d *blockBuilderCache) Block(key BlockKey) Block {
-	return d.blocks[key].builder.Block()
-}
-func (d *blockBuilderCache) BlockMetadata(key BlockKey) BlockMetadata {
-	return d.blocks[key].builder
-}
-
-// BlockBuilder will return the builder for the specified block.
-// If no builder exists, one will be created.
-func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
-	key := ToBlockKey(meta)
-	b, ok := d.blocks[key]
-	if !ok {
-		builder := NewRowListBlockBuilder()
-		builder.SetTags(meta.Tags())
-		builder.SetBounds(meta.Bounds())
-		t := NewTriggerFromSpec(d.triggerSpec)
-		b = blockState{
-			builder: builder,
-			trigger: t,
-		}
-		d.blocks[key] = b
-	}
-	return b.builder
-}
-
-func (d *blockBuilderCache) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
-	for k, b := range d.blocks {
-		f(k, b.builder)
-	}
-}
-
-func (d *blockBuilderCache) DiscardBlock(key BlockKey) {
-	d.blocks[key].builder.ClearData()
-}
-func (d *blockBuilderCache) ExpireBlock(key BlockKey) {
-	delete(d.blocks, key)
-}
-
-func (d *blockBuilderCache) ForEach(f func(BlockKey)) {
-	for bk := range d.blocks {
-		f(bk)
-	}
-}
-
-func (d *blockBuilderCache) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
-	for bk, b := range d.blocks {
-		f(bk, b.trigger, BlockContext{
-			Bounds: b.builder.Bounds(),
-			Count:  b.builder.NRows(),
-		})
 	}
 }

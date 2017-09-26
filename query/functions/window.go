@@ -27,7 +27,7 @@ func init() {
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
 }
 
-func createWindowOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createWindowOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(WindowOpSpec)
 	everyValue, everySet := args["every"]
 	if everySet {

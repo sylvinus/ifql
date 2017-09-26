@@ -7,9 +7,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/functions"
 )
 
@@ -138,49 +138,26 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t1",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "val1",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t2",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "val2",
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "val1",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t2",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "val2",
 									},
 								},
 							},
@@ -234,73 +211,39 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalOr},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeLogicalExpression,
-												Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeComparisonExpression,
-														Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-														Children: []*storage.Node{
-															&storage.Node{
-																NodeType: storage.NodeTypeTagRef,
-																Value: &storage.Node_TagRefValue{
-																	TagRefValue: "t1",
-																},
-															},
-															&storage.Node{
-																NodeType: storage.NodeTypeLiteral,
-																Value: &storage.Node_StringValue{
-																	StringValue: "val1",
-																},
-															},
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeComparisonExpression,
-														Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-														Children: []*storage.Node{
-															&storage.Node{
-																NodeType: storage.NodeTypeTagRef,
-																Value: &storage.Node_TagRefValue{
-																	TagRefValue: "t2",
-																},
-															},
-															&storage.Node{
-																NodeType: storage.NodeTypeLiteral,
-																Value: &storage.Node_StringValue{
-																	StringValue: "val2",
-																},
-															},
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t3",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "val3",
-														},
-													},
-												},
-											},
+							Exp: &expression.BinaryNode{
+								Operator: expression.OrOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
 										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t2",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val2",
+										},
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t3",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "val3",
 									},
 								},
 							},
@@ -350,49 +293,26 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t1",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "val1",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_field",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_IntegerValue{
-															IntegerValue: 10.0,
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "val1",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "$",
+										Kind: "field",
+									},
+									Right: &expression.IntegerLiteralNode{
+										Value: 10,
 									},
 								},
 							},
@@ -442,49 +362,26 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t1",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "val1",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_field",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_IntegerValue{
-															IntegerValue: 10.0,
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "val1",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "$",
+										Kind: "field",
+									},
+									Right: &expression.IntegerLiteralNode{
+										Value: 10,
 									},
 								},
 							},
@@ -534,49 +431,26 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t1",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_RegexValue{
-															RegexValue: "val1",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_field",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_FloatValue{
-															FloatValue: 10.5,
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.RegexpMatchOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.RegexpLiteralNode{
+										Value: "val1",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "$",
+										Kind: "field",
+									},
+									Right: &expression.FloatLiteralNode{
+										Value: 10.5,
 									},
 								},
 							},
@@ -622,26 +496,14 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeComparisonExpression,
-										Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeTagRef,
-												Value: &storage.Node_TagRefValue{
-													TagRefValue: "t1",
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeLiteral,
-												Value: &storage.Node_RegexValue{
-													RegexValue: "va/l1",
-												},
-											},
-										},
-									},
+							Exp: &expression.BinaryNode{
+								Operator: expression.RegexpMatchOperator,
+								Left: &expression.ReferenceNode{
+									Name: "t1",
+									Kind: "tag",
+								},
+								Right: &expression.RegexpLiteralNode{
+									Value: `va/l1`,
 								},
 							},
 						},
@@ -653,7 +515,7 @@ func TestNewQuery(t *testing.T) {
 			},
 		},
 		{
-			name: "select with database with to regex",
+			name: "select with database with two regex",
 			raw: `select(db:"mydb")
 						.where(exp:{
 							"t1"==/va\/l1/
@@ -671,49 +533,26 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonRegex},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t1",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_RegexValue{
-															RegexValue: "va/l1",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonNotRegex},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "t2",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_RegexValue{
-															RegexValue: "val2",
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.RegexpMatchOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.RegexpLiteralNode{
+										Value: `va/l1`,
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.RegexpNotMatchOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t2",
+										Kind: "tag",
+									},
+									Right: &expression.RegexpLiteralNode{
+										Value: `val2`,
 									},
 								},
 							},
@@ -749,6 +588,259 @@ func TestNewQuery(t *testing.T) {
 				},
 				Edges: []query.Edge{
 					{Parent: "select0", Child: "window1"},
+				},
+			},
+		},
+		{
+			name: "select with join",
+			raw: `
+var a = select(db:"dbA").range(start:-1h)
+var b = select(db:"dbB").range(start:-1h)
+a.join(keys:["host"], exp:{a + b})`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select0",
+						Spec: &functions.SelectOpSpec{
+							Database: "dbA",
+						},
+					},
+					{
+						ID: "range1",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "select2",
+						Spec: &functions.SelectOpSpec{
+							Database: "dbB",
+						},
+					},
+					{
+						ID: "range3",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "join4",
+						Spec: &functions.JoinOpSpec{
+							Keys: []string{"host"},
+							Expression: &expression.BinaryNode{
+								Operator: expression.AdditionOperator,
+								Left: &expression.ReferenceNode{
+									Name: "a",
+									Kind: "identifier",
+								},
+								Right: &expression.ReferenceNode{
+									Name: "b",
+									Kind: "identifier",
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select0", Child: "range1"},
+					{Parent: "select2", Child: "range3"},
+					{Parent: "range1", Child: "join4"},
+					{Parent: "range3", Child: "join4"},
+				},
+			},
+		},
+		{
+			name: "select with join and anonymous",
+			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{a/$})`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select0",
+						Spec: &functions.SelectOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "where1",
+						Spec: &functions.WhereOpSpec{
+							Exp: &expression.BinaryNode{
+								Operator: expression.EqualOperator,
+								Left: &expression.ReferenceNode{
+									Name: "_measurement",
+									Kind: "tag",
+								},
+								Right: &expression.StringLiteralNode{
+									Value: "a",
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "select3",
+						Spec: &functions.SelectOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "where4",
+						Spec: &functions.WhereOpSpec{
+							Exp: &expression.BinaryNode{
+								Operator: expression.EqualOperator,
+								Left: &expression.ReferenceNode{
+									Name: "_measurement",
+									Kind: "tag",
+								},
+								Right: &expression.StringLiteralNode{
+									Value: "b",
+								},
+							},
+						},
+					},
+					{
+						ID: "range5",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "join6",
+						Spec: &functions.JoinOpSpec{
+							Keys: []string{"t1"},
+							Expression: &expression.BinaryNode{
+								Operator: expression.DivisionOperator,
+								Left: &expression.ReferenceNode{
+									Name: "a",
+									Kind: "identifier",
+								},
+								Right: &expression.ReferenceNode{
+									Name: "$",
+									Kind: "field",
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "select3", Child: "where4"},
+					{Parent: "where4", Child: "range5"},
+					{Parent: "range5", Child: "join6"},
+					{Parent: "range2", Child: "join6"},
+				},
+			},
+		},
+		{
+			name: "select with join with complex expression",
+			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{(a-$)/$})`,
+			want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "select0",
+						Spec: &functions.SelectOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "where1",
+						Spec: &functions.WhereOpSpec{
+							Exp: &expression.BinaryNode{
+								Operator: expression.EqualOperator,
+								Left: &expression.ReferenceNode{
+									Name: "_measurement",
+									Kind: "tag",
+								},
+								Right: &expression.StringLiteralNode{
+									Value: "a",
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "select3",
+						Spec: &functions.SelectOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "where4",
+						Spec: &functions.WhereOpSpec{
+							Exp: &expression.BinaryNode{
+								Operator: expression.EqualOperator,
+								Left: &expression.ReferenceNode{
+									Name: "_measurement",
+									Kind: "tag",
+								},
+								Right: &expression.StringLiteralNode{
+									Value: "b",
+								},
+							},
+						},
+					},
+					{
+						ID: "range5",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative: -1 * time.Hour,
+							},
+						},
+					},
+					{
+						ID: "join6",
+						Spec: &functions.JoinOpSpec{
+							Keys: []string{"t1"},
+							Expression: &expression.BinaryNode{
+								Operator: expression.DivisionOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.SubtractionOperator,
+									Left: &expression.ReferenceNode{
+										Name: "a",
+										Kind: "identifier",
+									},
+									Right: &expression.ReferenceNode{
+										Name: "$",
+										Kind: "field",
+									},
+								},
+								Right: &expression.ReferenceNode{
+									Name: "$",
+									Kind: "field",
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "select0", Child: "where1"},
+					{Parent: "where1", Child: "range2"},
+					{Parent: "select3", Child: "where4"},
+					{Parent: "where4", Child: "range5"},
+					{Parent: "range5", Child: "join6"},
+					{Parent: "range2", Child: "join6"},
 				},
 			},
 		},

@@ -102,12 +102,12 @@ FunctionArg
     }
 
 FunctionArgValues
-  = WhereExpr
+  = LambdaExpression
   / Primary
 
-WhereExpr
+LambdaExpression
   = "{" __ expr:Expr __  "}" {
-      return expr, nil
+      return function(expr), nil
     }
 
 // + -
@@ -182,24 +182,31 @@ Primary
   = '(' __ expr:Logical __ ')' {
       return expr, nil
     }
-  / PrimaryArray
+  / Array
   / StringLiteral
   / RegularExpressionLiteral
   / Duration
   / DateTime
   / Number
+  / Integer
   / Field
   / Identifier
 
-PrimaryArray = "[" __ "]" {
-    return array(nil, nil, c.text, c.pos), nil
-} / "[" __ first:Primary __ rest:PrimaryArrayRest * __ "]" {
-    return array(first, rest, c.text, c.pos), nil
-}
 
-PrimaryArrayRest =  "," __ element:Primary {
-    return element, nil
-}
+Array
+  = "[" __ elements:ArrayElements? __ "]" {
+      return elements, nil
+    }
+
+ArrayElements
+  = first:Primary __ rest:ArrayRest* {
+      return array(first, rest, c.text, c.pos), nil
+    }
+
+ArrayRest
+  = "," __ element:Primary {
+      return element, nil
+    }
 
 DateFullYear
   = Digit Digit Digit Digit
@@ -278,7 +285,7 @@ DurationUnits
     )
 
 SingleDuration
-  = Number DurationUnits
+  = Integer DurationUnits
 
 Duration
   = SingleDuration+ {
@@ -304,34 +311,21 @@ DoubleStringEscape
     }
 
 Identifier
-  = StringChar+ {
+  // Allow any unicode letter
+  = [\pL]+ {
       return identifier(c.text, c.pos)
     }
-
-StringChar
-  = !('"'
-      / "("
-      / ")"
-      / ":"
-      / "{"
-      / "}"
-      / ","
-      / "$"
-      / "."
-      / ws
-    ) SourceChar
 
 Number
   = Integer '.' Digit+ {
       return numberLiteral(c.text, c.pos)
    }
-   / Integer {
-      return integerLiteral(c.text, c.pos)
-   } 
 
 Integer
-  = '0'
-  / '-'? NonZeroDigit Digit*
+  = ('0' / '-'? NonZeroDigit Digit*) {
+      return integerLiteral(c.text, c.pos)
+   }
+
 
 NonZeroDigit
   = [1-9]

@@ -1,29 +1,77 @@
 package functions
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
+	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/pkg/errors"
 )
 
 const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	Keys       []string             `json:"keys"`
-	Expression query.ExpressionSpec `json:"expression"`
+	Keys       []string        `json:"keys"`
+	Expression expression.Node `json:"expression"`
 }
 
 func init() {
+	ifql.RegisterFunction(JoinKind, createJoinOpSpec)
 	query.RegisterOpSpec(JoinKind, newJoinOp)
 	//TODO(nathanielc): Allow for other types of join implementations
 	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)
 	execute.RegisterTransformation(MergeJoinKind, createMergeJoinTransformation)
+}
+
+func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+	expValue, ok := args["exp"]
+	if !ok {
+		return nil, errors.New(`join function requires an argument "exp"`)
+	}
+	if expValue.Type != ifql.TExpression {
+		return nil, fmt.Errorf(`join function argument "exp" must be an expression, got %v`, expValue.Type)
+	}
+	expr := expValue.Value.(expression.Node)
+	spec := &JoinOpSpec{
+		Expression: expr,
+	}
+
+	if keysValue, ok := args["keys"]; ok {
+		if keysValue.Type != ifql.TArray {
+			return nil, fmt.Errorf(`join argument "keys" must be a list, got %v`, keysValue.Type)
+		}
+		list := keysValue.Value.(ifql.Array)
+		if list.Type != ifql.TString {
+			return nil, fmt.Errorf(`join argument "keys" must be a list of strings, got list of %v`, list.Type)
+		}
+		spec.Keys = list.Elements.([]string)
+	}
+
+	// Find identifier of parent nodes
+	err := expression.Walk(expr, func(n expression.Node) error {
+		if r, ok := n.(*expression.ReferenceNode); ok && r.Kind == "identifier" {
+			id, err := ctx.LookupIDFromIdentifier(r.Name)
+			if err != nil {
+				return err
+			}
+			ctx.AdditionalParent(id)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return spec, nil
 }
 
 func newJoinOp() query.OperationSpec {
@@ -35,8 +83,8 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	Keys       []string             `json:"keys"`
-	Expression query.ExpressionSpec `json:"expression"`
+	Keys       []string        `json:"keys"`
+	Expression expression.Node `json:"expression"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -62,7 +110,11 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := newMergeJoinCache()
+	joinExpr, err := newExpressionSpec(s.Expression)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "invalid expression")
+	}
+	cache := newMergeJoinCache(joinExpr)
 	d := execute.NewDataset(id, mode, cache)
 	t := newMergeJoinTransformation(d, cache, s)
 	return t, d, nil
@@ -70,6 +122,8 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 
 type mergeJoinTransformation struct {
 	parents []execute.DatasetID
+
+	mu sync.Mutex
 
 	d     execute.Dataset
 	cache MergeJoinCache
@@ -87,6 +141,7 @@ func newMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *M
 		d:           d,
 		cache:       cache,
 		parentState: make(map[execute.DatasetID]*mergeJoinParentState),
+		keys:        spec.Keys,
 	}
 }
 
@@ -97,6 +152,9 @@ type mergeJoinParentState struct {
 }
 
 func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	bm := blockMetadata{
 		tags:   meta.Tags().Subset(t.keys),
 		bounds: meta.Bounds(),
@@ -105,6 +163,9 @@ func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execut
 }
 
 func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	bm := blockMetadata{
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
@@ -128,6 +189,8 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 }
 
 func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.parentState[id].mark = mark
 
 	min := execute.Time(math.MaxInt64)
@@ -141,6 +204,8 @@ func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark exe
 }
 
 func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.parentState[id].processing = pt
 
 	min := execute.Time(math.MaxInt64)
@@ -154,6 +219,8 @@ func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt 
 }
 
 func (t *mergeJoinTransformation) Finish(id execute.DatasetID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	t.parentState[id].finished = true
 	finished := true
@@ -167,6 +234,9 @@ func (t *mergeJoinTransformation) Finish(id execute.DatasetID) {
 }
 
 func (t *mergeJoinTransformation) SetParents(ids []execute.DatasetID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if len(ids) != 2 {
 		panic("joins should only ever have two parents")
 	}
@@ -205,11 +275,14 @@ type mergeJoinCache struct {
 	data map[execute.BlockKey]*joinTables
 
 	triggerSpec query.TriggerSpec
+
+	joinExpr *expressionSpec
 }
 
-func newMergeJoinCache() *mergeJoinCache {
+func newMergeJoinCache(joinExpr *expressionSpec) *mergeJoinCache {
 	return &mergeJoinCache{
-		data: make(map[execute.BlockKey]*joinTables),
+		data:     make(map[execute.BlockKey]*joinTables),
+		joinExpr: joinExpr,
 	}
 }
 
@@ -254,11 +327,12 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 	tables := c.data[key]
 	if tables == nil {
 		tables = &joinTables{
-			tags:    bm.Tags(),
-			bounds:  bm.Bounds(),
-			left:    new(mergeTable),
-			right:   new(mergeTable),
-			trigger: execute.NewTriggerFromSpec(c.triggerSpec),
+			tags:     bm.Tags(),
+			bounds:   bm.Bounds(),
+			left:     new(mergeTable),
+			right:    new(mergeTable),
+			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
+			joinExpr: c.joinExpr.copy(),
 		}
 		c.data[key] = tables
 	}
@@ -273,6 +347,8 @@ type joinTables struct {
 	right *mergeTable
 
 	trigger execute.Trigger
+
+	joinExpr *expressionSpec
 }
 
 func (t *joinTables) Bounds() execute.Bounds {
@@ -293,14 +369,21 @@ func (t *joinTables) ClearData() {
 func (t *joinTables) Join() execute.Block {
 	// Perform sort-merge join
 
-	builder := execute.NewRowListBlockBuilder()
+	builder := execute.NewColListBlockBuilder()
 	builder.SetBounds(t.bounds)
 	builder.SetTags(t.tags)
+	builder.AddCol(execute.TimeCol)
+	builder.AddCol(execute.ValueCol)
+	rIdx := 0
 
 	var left, leftSet, right, rightSet []joinCell
 	var leftKey, rightKey joinKey
 	left = t.left.Sorted()
 	right = t.right.Sorted()
+
+	//log.Println("tags", t.tags)
+	//log.Println("left", tabularFmt(left))
+	//log.Println("right", tabularFmt(right))
 
 	left, leftSet, leftKey = t.advance(left)
 	right, rightSet, rightKey = t.advance(right)
@@ -310,11 +393,11 @@ func (t *joinTables) Join() execute.Block {
 			for _, l := range leftSet {
 				for _, r := range rightSet {
 					v := t.eval(l.Value, r.Value)
-					builder.AddCell(execute.Cell{
-						Time:  l.Key.Time,
-						Tags:  l.Tags,
-						Value: v,
-					})
+					builder.AddRow()
+					builder.SetTime(rIdx, 0, l.Key.Time)
+					builder.SetFloat(rIdx, 1, v)
+					//log.Println("AddCell", l.Key.Time, l.Tags, v)
+					rIdx++
 				}
 			}
 
@@ -343,8 +426,7 @@ func (t *joinTables) advance(table []joinCell) ([]joinCell, []joinCell, joinKey)
 }
 
 func (t *joinTables) eval(l, r float64) float64 {
-	// TODO perform specified expression
-	return l / r
+	return t.joinExpr.eval(l, r)
 }
 
 type mergeTable struct {
@@ -373,3 +455,78 @@ type cells []joinCell
 func (c cells) Len() int               { return len(c) }
 func (c cells) Less(i int, j int) bool { return c[i].Key.Less(c[j].Key) }
 func (c cells) Swap(i int, j int)      { c[i], c[j] = c[j], c[i] }
+
+type tabularFmt []joinCell
+
+func (t tabularFmt) String() string {
+	if len(t) == 0 {
+		return "<empty table>"
+	}
+	var buf bytes.Buffer
+	n := 0
+	fmt.Fprintf(&buf, "Table:\n%5s", "#")
+	n += 5
+	fmt.Fprintf(&buf, "%31s", "Time")
+	n += 31
+	keys := t[0].Tags.Keys()
+	for _, k := range keys {
+		fmt.Fprintf(&buf, "%20s", k)
+		n += 20
+	}
+	fmt.Fprintf(&buf, "%20s", "Value")
+	buf.WriteRune('\n')
+	n += 20
+	for i := 0; i < n; i++ {
+		buf.WriteRune('-')
+	}
+	buf.WriteRune('\n')
+
+	for i, c := range t {
+		fmt.Fprintf(&buf, "%5d", i)
+		fmt.Fprintf(&buf, "%31v", c.Key.Time)
+		for _, k := range keys {
+			fmt.Fprintf(&buf, "%20s", c.Tags[k])
+		}
+		fmt.Fprintf(&buf, "%20v", c.Value)
+		buf.WriteRune('\n')
+	}
+	return buf.String()
+}
+
+type expressionSpec struct {
+	expr                expression.Node
+	leftName, rightName string
+	scope               execute.Scope
+}
+
+func newExpressionSpec(expr expression.Node) (*expressionSpec, error) {
+	names := execute.ExpressionNames(expr)
+	if len(names) != 2 {
+		return nil, fmt.Errorf("join expression can only have two tables, got names: %v", names)
+	}
+	rightName := names[0]
+	if rightName == "$" {
+		rightName = names[1]
+	}
+	return &expressionSpec{
+		leftName:  "$",
+		rightName: rightName,
+		scope:     make(execute.Scope, 2),
+		expr:      expr,
+	}, nil
+}
+
+func (s *expressionSpec) eval(l, r float64) float64 {
+	s.scope[s.leftName] = l
+	s.scope[s.rightName] = r
+	// Ignore the error since we validated the names already
+	v, _ := execute.EvalExpression(s.expr, s.scope)
+	return v
+}
+
+func (s *expressionSpec) copy() *expressionSpec {
+	cpy := new(expressionSpec)
+	*cpy = *s
+	cpy.scope = make(execute.Scope, 2)
+	return cpy
+}

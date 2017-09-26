@@ -3,8 +3,8 @@ package execute
 import (
 	"context"
 	"io"
+	"sync"
 
-	"github.com/gogo/protobuf/codec"
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/yarpc"
 )
@@ -22,25 +22,32 @@ type ReadSpec struct {
 }
 
 func NewStorageReader() (StorageReader, error) {
-	opts := []yarpc.DialOption{yarpc.WithCodec(codec.New(1000))}
-	conn, err := yarpc.Dial("localhost:8082", opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	c := storage.NewStorageClient(conn)
-	return &storageReader{
-		conn: conn,
-		c:    c,
-	}, nil
+	return &storageReader{}, nil
 }
 
 type storageReader struct {
-	conn *yarpc.ClientConn
-	c    storage.StorageClient
+	mu          sync.Mutex
+	connections []*yarpc.ClientConn
+}
+
+func (sr *storageReader) connect() (*yarpc.ClientConn, error) {
+	conn, err := yarpc.Dial("localhost:8082")
+	if err != nil {
+		return nil, err
+	}
+	sr.mu.Lock()
+	sr.connections = append(sr.connections, conn)
+	sr.mu.Unlock()
+	return conn, nil
 }
 
 func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
+	conn, err := sr.connect()
+	if err != nil {
+		return nil, err
+	}
+	c := storage.NewStorageClient(conn)
+
 	var req storage.ReadRequest
 	req.Database = readSpec.Database
 	req.Predicate = readSpec.Predicate
@@ -49,7 +56,7 @@ func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterato
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
 
-	stream, err := sr.c.Read(context.Background(), &req)
+	stream, err := c.Read(context.Background(), &req)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +73,11 @@ func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterato
 }
 
 func (sr *storageReader) Close() {
-	sr.conn.Close()
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	for _, c := range sr.connections {
+		c.Close()
+	}
 }
 
 type storageBlockIterator struct {
@@ -95,7 +106,7 @@ func (bi *storageBlockIterator) readBlocks() {
 			return
 		}
 
-		builder := NewRowListBlockBuilder()
+		builder := NewColListBlockBuilder()
 		builder.SetBounds(bi.bounds)
 
 		for _, frame := range rep.Frames {
@@ -104,21 +115,23 @@ func (bi *storageBlockIterator) readBlocks() {
 				for _, t := range s.Tags {
 					tags[string(t.Key)] = string(t.Value)
 				}
-				builder.AddRow(tags)
 				builder.SetTags(tags)
+				builder.AddCol(TimeCol)
+				builder.AddCol(ValueCol)
 			} else if p := frame.GetIntegerPoints(); p != nil {
 				panic("ints not supported")
 			} else if p := frame.GetFloatPoints(); p != nil {
-				for _, c := range p.Timestamps {
-					builder.AddCol(Time(c))
-				}
-				for j, v := range p.Values {
-					builder.Set(0, j, v)
+				for i, c := range p.Timestamps {
+					builder.AddRow()
+					builder.SetTime(0, 0, Time(c))
+					builder.SetFloat(0, 1, p.Values[i])
+					b := builder.Block()
+					bi.blocks <- b
+					builder.ClearData()
 				}
 
-				// Each row is its own block
-				bi.blocks <- builder.Block()
-				builder = NewRowListBlockBuilder()
+				// Series is complete, create a new builder with new bound and tags
+				builder = NewColListBlockBuilder()
 				builder.SetBounds(bi.bounds)
 			}
 		}

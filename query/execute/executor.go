@@ -56,7 +56,7 @@ type executionState struct {
 	sr StorageReader
 
 	results []Result
-	sources []Source
+	runners []Runner
 }
 
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
@@ -97,7 +97,7 @@ type triggeringSpec interface {
 func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
 		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es.p.Now)
-		es.sources = append(es.sources, s)
+		es.runners = append(es.runners, s)
 		return s, nil
 	}
 
@@ -124,7 +124,9 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		parent.addTransformation(t)
+		transport := newTransformationTransport(t, nil)
+		parent.addTransformation(transport)
+		es.runners = append(es.runners, transport)
 		parentIDs[i] = DatasetID(parentID)
 	}
 	t.SetParents(parentIDs)
@@ -133,16 +135,18 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 }
 
 func (es *executionState) do(ctx context.Context) {
-	//TODO: pass through the context and design a concurrency system that works for any DAG,
-	// this current implementation only works for linear DAGs.
 	wg := new(sync.WaitGroup)
-	wg.Add(len(es.sources))
-	for _, s := range es.sources {
-		s := s
+	wg.Add(len(es.runners))
+	for _, r := range es.runners {
+		r := r
 		go func() {
 			defer wg.Done()
-			s.Run()
+			r.Run()
 		}()
 	}
 	wg.Wait()
+}
+
+type Runner interface {
+	Run()
 }

@@ -8,7 +8,7 @@ type Bounds struct {
 }
 
 func (b Bounds) String() string {
-	return fmt.Sprintf("[%v, %v]", b.Start, b.Stop)
+	return fmt.Sprintf("[%v, %v)", b.Start, b.Stop)
 }
 
 func (b Bounds) Contains(t Time) bool {

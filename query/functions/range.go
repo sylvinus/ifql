@@ -24,7 +24,7 @@ func init() {
 	//execute.RegisterTransformation(RangeKind, createRangeTransformation)
 }
 
-func createRangeOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createRangeOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	startValue, ok := args["start"]
 	if !ok {
 		return nil, errors.New(`range function requires argument "start"`)

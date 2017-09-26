@@ -25,18 +25,7 @@ func main() {
 	for _, r := range results {
 		blocks := r.Blocks()
 		blocks.Do(func(b execute.Block) {
-			fmt.Printf("Block Tags: %v Bounds: %v\nTime:\tValue:\tTags:\n", b.Tags(), b.Bounds())
-			cells := b.Cells()
-			cells.Do(func(cs []execute.Cell) {
-				for _, c := range cs {
-					fmt.Print(c.Time)
-					fmt.Print("\t")
-					fmt.Print(c.Value)
-					fmt.Print("\t")
-					fmt.Print(c.Tags)
-					fmt.Println()
-				}
-			})
+			fmt.Println(execute.TableFmt{Block: b})
 		})
 	}
 

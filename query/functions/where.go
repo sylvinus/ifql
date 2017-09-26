@@ -4,16 +4,17 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
 
 const WhereKind = "where"
 
 type WhereOpSpec struct {
-	Exp *query.ExpressionSpec `json:"exp"`
+	Exp expression.Node `json:"exp"`
 }
 
 func init() {
@@ -24,18 +25,17 @@ func init() {
 	//execute.RegisterTransformation(WhereKind, createWhereTransformation)
 }
 
-func createWhereOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createWhereOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	expValue, ok := args["exp"]
 	if !ok {
 		return nil, errors.New(`where function requires an argument "exp"`)
 	}
+	if expValue.Type != ifql.TExpression {
+		return nil, fmt.Errorf(`where function argument "exp" must be an expression, got %v`, expValue.Type)
+	}
 
 	return &WhereOpSpec{
-		Exp: &query.ExpressionSpec{
-			Predicate: &storage.Predicate{
-				Root: expValue.Value.(*storage.Node),
-			},
-		},
+		Exp: expValue.Value.(expression.Node),
 	}, nil
 }
 func newWhereOp() query.OperationSpec {
@@ -47,7 +47,7 @@ func (s *WhereOpSpec) Kind() query.OperationKind {
 }
 
 type WhereProcedureSpec struct {
-	Exp *query.ExpressionSpec
+	Exp expression.Node
 }
 
 func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -77,5 +77,10 @@ func (s *WhereProcedureSpec) PushDown(root *plan.Procedure) {
 		// TODO: create copy of select spec and set new where expression
 	}
 	selectSpec.WhereSet = true
-	selectSpec.Where = s.Exp.Predicate
+	p, err := execute.ExpressionToStoragePredicate(s.Exp)
+	if err != nil {
+		//TODO(nathanielc): Handle this error
+		panic(err)
+	}
+	selectSpec.Where = p
 }

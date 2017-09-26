@@ -25,7 +25,7 @@ func init() {
 	execute.RegisterSource(SelectKind, createSelectSource)
 }
 
-func createSelectOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createSelectOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	dbValue, ok := args["db"]
 	if !ok {
 		return nil, errors.New(`select function requires the "db" argument`)

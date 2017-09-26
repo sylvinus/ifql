@@ -22,7 +22,7 @@ func init() {
 	execute.RegisterTransformation(SumKind, createSumTransformation)
 }
 
-func createSumOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createSumOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	if len(args) != 0 {
 		return nil, fmt.Errorf(`sum function requires no arguments`)
 	}

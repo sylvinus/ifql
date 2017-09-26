@@ -152,8 +152,8 @@ func TestParse(t *testing.T) {
 								Callee: &ast.Identifier{
 									Name: "select",
 								},
-							}},
-						},
+							},
+						}},
 					},
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -208,7 +208,7 @@ func TestParse(t *testing.T) {
 							Arguments: []ast.Expression{
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
-										&ast.Property{
+										{
 											Key: &ast.Identifier{
 												Name: "db",
 											},
@@ -240,7 +240,7 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "db"},
 													Value: &ast.StringLiteral{Value: "telegraf"},
 												},
@@ -252,27 +252,29 @@ func TestParse(t *testing.T) {
 							Arguments: []ast.Expression{
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
-										&ast.Property{
+										{
 											Key: &ast.Identifier{Name: "exp"},
-											Value: &ast.LogicalExpression{
-												Operator: ast.OrOperator,
-												Left: &ast.LogicalExpression{
-													Operator: ast.AndOperator,
-													Left: &ast.BinaryExpression{
-														Operator: ast.EqualOperator,
-														Left:     &ast.StringLiteral{Value: "other"},
-														Right:    &ast.StringLiteral{Value: "mem"},
+											Value: &ast.FunctionExpression{
+												Function: &ast.LogicalExpression{
+													Operator: ast.OrOperator,
+													Left: &ast.LogicalExpression{
+														Operator: ast.AndOperator,
+														Left: &ast.BinaryExpression{
+															Operator: ast.EqualOperator,
+															Left:     &ast.StringLiteral{Value: "other"},
+															Right:    &ast.StringLiteral{Value: "mem"},
+														},
+														Right: &ast.BinaryExpression{
+															Operator: ast.EqualOperator,
+															Left:     &ast.StringLiteral{Value: "this"},
+															Right:    &ast.StringLiteral{Value: "that"},
+														},
 													},
 													Right: &ast.BinaryExpression{
-														Operator: ast.EqualOperator,
-														Left:     &ast.StringLiteral{Value: "this"},
-														Right:    &ast.StringLiteral{Value: "that"},
+														Operator: ast.NotEqualOperator,
+														Left:     &ast.StringLiteral{Value: "these"},
+														Right:    &ast.StringLiteral{Value: "those"},
 													},
-												},
-												Right: &ast.BinaryExpression{
-													Operator: ast.NotEqualOperator,
-													Left:     &ast.StringLiteral{Value: "these"},
-													Right:    &ast.StringLiteral{Value: "those"},
 												},
 											},
 										},
@@ -297,7 +299,7 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "db"},
 													Value: &ast.StringLiteral{Value: "telegraf"},
 												},
@@ -310,11 +312,11 @@ func TestParse(t *testing.T) {
 							Arguments: []ast.Expression{
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
-										&ast.Property{
+										{
 											Key:   &ast.Identifier{Name: "start"},
 											Value: &ast.DurationLiteral{Value: -time.Hour},
 										},
-										&ast.Property{
+										{
 											Key:   &ast.Identifier{Name: "end"},
 											Value: &ast.DurationLiteral{Value: 10 * time.Minute},
 										},
@@ -339,7 +341,7 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "db"},
 													Value: &ast.StringLiteral{Value: "telegraf"},
 												},
@@ -352,11 +354,11 @@ func TestParse(t *testing.T) {
 							Arguments: []ast.Expression{
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
-										&ast.Property{
+										{
 											Key:   &ast.Identifier{Name: "limit"},
 											Value: &ast.IntegerLiteral{Value: 100},
 										},
-										&ast.Property{
+										{
 											Key:   &ast.Identifier{Name: "offset"},
 											Value: &ast.IntegerLiteral{Value: 10},
 										},
@@ -385,7 +387,7 @@ func TestParse(t *testing.T) {
 											Arguments: []ast.Expression{
 												&ast.ObjectExpression{
 													Properties: []*ast.Property{
-														&ast.Property{
+														{
 															Key:   &ast.Identifier{Name: "db"},
 															Value: &ast.StringLiteral{Value: "mydb"},
 														},
@@ -398,11 +400,11 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "start"},
 													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
 												},
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "stop"},
 													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
 												},
@@ -438,7 +440,7 @@ func TestParse(t *testing.T) {
 													Arguments: []ast.Expression{
 														&ast.ObjectExpression{
 															Properties: []*ast.Property{
-																&ast.Property{
+																{
 																	Key:   &ast.Identifier{Name: "db"},
 																	Value: &ast.StringLiteral{Value: "mydb"},
 																},
@@ -451,11 +453,11 @@ func TestParse(t *testing.T) {
 											Arguments: []ast.Expression{
 												&ast.ObjectExpression{
 													Properties: []*ast.Property{
-														&ast.Property{
+														{
 															Key:   &ast.Identifier{Name: "start"},
 															Value: &ast.DurationLiteral{Value: -4 * time.Hour},
 														},
-														&ast.Property{
+														{
 															Key:   &ast.Identifier{Name: "stop"},
 															Value: &ast.DurationLiteral{Value: -2 * time.Hour},
 														},
@@ -468,7 +470,7 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "limit"},
 													Value: &ast.IntegerLiteral{Value: 10},
 												},
@@ -504,7 +506,7 @@ func TestParse(t *testing.T) {
 													Arguments: []ast.Expression{
 														&ast.ObjectExpression{
 															Properties: []*ast.Property{
-																&ast.Property{
+																{
 																	Key:   &ast.Identifier{Name: "db"},
 																	Value: &ast.StringLiteral{Value: "mydb"},
 																},
@@ -517,12 +519,14 @@ func TestParse(t *testing.T) {
 											Arguments: []ast.Expression{
 												&ast.ObjectExpression{
 													Properties: []*ast.Property{
-														&ast.Property{
+														{
 															Key: &ast.Identifier{Name: "exp"},
-															Value: &ast.BinaryExpression{
-																Operator: ast.EqualOperator,
-																Left:     &ast.FieldLiteral{Value: "_field"},
-																Right:    &ast.NumberLiteral{Value: 10.1},
+															Value: &ast.FunctionExpression{
+																Function: &ast.BinaryExpression{
+																	Operator: ast.EqualOperator,
+																	Left:     &ast.FieldLiteral{Value: "$"},
+																	Right:    &ast.NumberLiteral{Value: 10.1},
+																},
 															},
 														},
 													},
@@ -534,11 +538,11 @@ func TestParse(t *testing.T) {
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "start"},
 													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
 												},
-												&ast.Property{
+												{
 													Key:   &ast.Identifier{Name: "stop"},
 													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
 												},
@@ -549,6 +553,415 @@ func TestParse(t *testing.T) {
 								Property: &ast.Identifier{Name: "count"},
 							},
 							Arguments: nil,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with join",
+			raw: `
+var a = select(db:"dbA").range(start:-1h)
+var b = select(db:"dbB").range(start:-1h)
+a.join(keys:["host"], exp:{$ + b})`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.MemberExpression{
+									Object: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "select"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key:   &ast.Identifier{Name: "db"},
+														Value: &ast.StringLiteral{Value: "dbA"},
+													},
+												},
+											},
+										},
+									},
+									Property: &ast.Identifier{Name: "range"},
+								},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "start"},
+												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+											},
+										},
+									},
+								},
+							},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "b",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.MemberExpression{
+									Object: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "select"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key:   &ast.Identifier{Name: "db"},
+														Value: &ast.StringLiteral{Value: "dbB"},
+													},
+												},
+											},
+										},
+									},
+									Property: &ast.Identifier{Name: "range"},
+								},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "start"},
+												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+											},
+										},
+									},
+								},
+							}},
+						},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object:   &ast.Identifier{Name: "a"},
+								Property: &ast.Identifier{Name: "join"},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										{
+											Key: &ast.Identifier{Name: "keys"},
+											Value: &ast.ArrayExpression{
+												Elements: []ast.Expression{&ast.StringLiteral{Value: "host"}},
+											},
+										},
+										{
+											Key: &ast.Identifier{Name: "exp"},
+											Value: &ast.FunctionExpression{
+												Function: &ast.BinaryExpression{
+													Operator: ast.AdditionOperator,
+													Left:     &ast.FieldLiteral{Value: "$"},
+													Right:    &ast.Identifier{Name: "b"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with join and anonymous",
+			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{a/$})`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.MemberExpression{
+									Object: &ast.CallExpression{
+										Callee: &ast.MemberExpression{
+											Object: &ast.CallExpression{
+												Callee: &ast.Identifier{Name: "select"},
+												Arguments: []ast.Expression{
+													&ast.ObjectExpression{
+														Properties: []*ast.Property{
+															{
+																Key:   &ast.Identifier{Name: "db"},
+																Value: &ast.StringLiteral{Value: "ifql"},
+															},
+														},
+													},
+												},
+											},
+											Property: &ast.Identifier{Name: "where"},
+										},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key: &ast.Identifier{Name: "exp"},
+														Value: &ast.FunctionExpression{
+															Function: &ast.BinaryExpression{
+																Operator: ast.EqualOperator,
+																Left:     &ast.StringLiteral{Value: "_measurement"},
+																Right:    &ast.StringLiteral{Value: "a"},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+									Property: &ast.Identifier{Name: "range"},
+								},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "start"},
+												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+											},
+										},
+									},
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.MemberExpression{
+										Object: &ast.CallExpression{
+											Callee: &ast.MemberExpression{
+												Object: &ast.CallExpression{
+													Callee: &ast.Identifier{Name: "select"},
+													Arguments: []ast.Expression{
+														&ast.ObjectExpression{
+															Properties: []*ast.Property{
+																{
+																	Key:   &ast.Identifier{Name: "db"},
+																	Value: &ast.StringLiteral{Value: "ifql"},
+																},
+															},
+														},
+													},
+												},
+												Property: &ast.Identifier{Name: "where"},
+											},
+											Arguments: []ast.Expression{
+												&ast.ObjectExpression{
+													Properties: []*ast.Property{
+														{
+															Key: &ast.Identifier{Name: "exp"},
+															Value: &ast.FunctionExpression{
+																Function: &ast.BinaryExpression{
+																	Operator: ast.EqualOperator,
+																	Left:     &ast.StringLiteral{Value: "_measurement"},
+																	Right:    &ast.StringLiteral{Value: "b"},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+										Property: &ast.Identifier{Name: "range"},
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key:   &ast.Identifier{Name: "start"},
+													Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "join"},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										{
+											Key: &ast.Identifier{Name: "keys"},
+											Value: &ast.ArrayExpression{
+												Elements: []ast.Expression{
+													&ast.StringLiteral{
+														Value: "t1",
+													},
+												},
+											},
+										},
+										{
+											Key: &ast.Identifier{Name: "exp"},
+											Value: &ast.FunctionExpression{
+												Function: &ast.BinaryExpression{
+													Operator: ast.DivisionOperator,
+													Left:     &ast.Identifier{Name: "a"},
+													Right:    &ast.FieldLiteral{Value: "$"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with join with complex expression",
+			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{(a-$)/$})`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.MemberExpression{
+									Object: &ast.CallExpression{
+										Callee: &ast.MemberExpression{
+											Object: &ast.CallExpression{
+												Callee: &ast.Identifier{Name: "select"},
+												Arguments: []ast.Expression{
+													&ast.ObjectExpression{
+														Properties: []*ast.Property{
+															{
+																Key:   &ast.Identifier{Name: "db"},
+																Value: &ast.StringLiteral{Value: "ifql"},
+															},
+														},
+													},
+												},
+											},
+											Property: &ast.Identifier{Name: "where"},
+										},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key: &ast.Identifier{Name: "exp"},
+														Value: &ast.FunctionExpression{
+															Function: &ast.BinaryExpression{
+																Operator: ast.EqualOperator,
+																Left:     &ast.StringLiteral{Value: "_measurement"},
+																Right:    &ast.StringLiteral{Value: "a"},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+									Property: &ast.Identifier{Name: "range"},
+								},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "start"},
+												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+											},
+										},
+									},
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.MemberExpression{
+										Object: &ast.CallExpression{
+											Callee: &ast.MemberExpression{
+												Object: &ast.CallExpression{
+													Callee: &ast.Identifier{Name: "select"},
+													Arguments: []ast.Expression{
+														&ast.ObjectExpression{
+															Properties: []*ast.Property{
+																{
+																	Key:   &ast.Identifier{Name: "db"},
+																	Value: &ast.StringLiteral{Value: "ifql"},
+																},
+															},
+														},
+													},
+												},
+												Property: &ast.Identifier{Name: "where"},
+											},
+											Arguments: []ast.Expression{
+												&ast.ObjectExpression{
+													Properties: []*ast.Property{
+														{
+															Key: &ast.Identifier{Name: "exp"},
+															Value: &ast.FunctionExpression{
+																Function: &ast.BinaryExpression{
+																	Operator: ast.EqualOperator,
+																	Left:     &ast.StringLiteral{Value: "_measurement"},
+																	Right:    &ast.StringLiteral{Value: "b"},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+										Property: &ast.Identifier{Name: "range"},
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key:   &ast.Identifier{Name: "start"},
+													Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "join"},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										{
+											Key: &ast.Identifier{Name: "keys"},
+											Value: &ast.ArrayExpression{
+												Elements: []ast.Expression{
+													&ast.StringLiteral{
+														Value: "t1",
+													},
+												},
+											},
+										},
+										{
+											Key: &ast.Identifier{Name: "exp"},
+											Value: &ast.FunctionExpression{
+												Function: &ast.BinaryExpression{
+													Operator: ast.DivisionOperator,
+													Left: &ast.BinaryExpression{
+														Operator: ast.SubtractionOperator,
+														Left:     &ast.Identifier{Name: "a"},
+														Right:    &ast.FieldLiteral{Value: "$"},
+													},
+													Right: &ast.FieldLiteral{Value: "$"},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},

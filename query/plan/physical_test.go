@@ -48,6 +48,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Children: nil,
 					},
 				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("range"),
+					plan.ProcedureIDFromOperationID("count"),
+				},
 			},
 			cp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
@@ -75,6 +80,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				},
 				Results: []plan.ProcedureID{
 					(plan.ProcedureIDFromOperationID("count")),
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("count"),
 				},
 			},
 		},
@@ -120,6 +129,12 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Children: nil,
 					},
 				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("range"),
+					plan.ProcedureIDFromOperationID("limit"),
+					plan.ProcedureIDFromOperationID("count"),
+				},
 			},
 			cp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
@@ -149,6 +164,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				},
 				Results: []plan.ProcedureID{
 					(plan.ProcedureIDFromOperationID("count")),
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("count"),
 				},
 			},
 		},

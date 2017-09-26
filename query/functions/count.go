@@ -21,7 +21,7 @@ func init() {
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)
 }
-func createCountOpSpec(args map[string]ifql.Value) (query.OperationSpec, error) {
+func createCountOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	if len(args) != 0 {
 		return nil, fmt.Errorf(`count function requires no arguments`)
 	}

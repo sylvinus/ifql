@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+
+	"github.com/influxdata/ifql/query"
 )
 
 type BlockMetadata interface {
@@ -21,6 +23,7 @@ func ToBlockKey(meta BlockMetadata) BlockKey {
 type Block interface {
 	BlockMetadata
 
+	Cols() []ColMeta
 	Values() ValueIterator
 	Cells() CellIterator
 }
@@ -28,22 +31,30 @@ type Block interface {
 // BlockBuilder builds blocks that can be used multiple times
 type BlockBuilder interface {
 	SetBounds(Bounds)
+
+	//SetTags sets tags that are global to all records of this block
 	SetTags(Tags)
 
 	BlockMetadata
+
 	NRows() int
+	NCols() int
 
 	// AddRow increases the size of the block by one row
-	AddRow(Tags)
+	AddRow()
 	// AddCol increases the size of the block by one column
-	AddCol(Time)
+	// Columns need not be added for tags that are common to the block
+	AddCol(ColMeta)
 
-	// AddCell adds a new row for the cell and adds a new columns if necessary.
+	// AddCell increases the size of the block by one row and
+	// sets the values based on the cell.
 	AddCell(Cell)
 
 	// Set sets the value at the specified coordinates
 	// The rows and columns must exist before calling set, otherwise Set panics.
-	Set(i, j int, value float64)
+	SetFloat(i, j int, value float64)
+	SetString(i, j int, value string)
+	SetTime(i, j int, value Time)
 
 	// Clear removes all rows and columns from the block
 	ClearData()
@@ -53,25 +64,44 @@ type BlockBuilder interface {
 	Block() Block
 }
 
+type DataType int
+
+const (
+	TInvalid DataType = iota
+	TTime
+	TString
+	TFloat
+)
+
+type ColMeta struct {
+	Label string
+	Type  DataType
+}
+
+var (
+	TimeCol = ColMeta{
+		Label: "time",
+		Type:  TTime,
+	}
+	ValueCol = ColMeta{
+		Label: "value",
+		Type:  TFloat,
+	}
+)
+
+type Record struct {
+	Values []interface{}
+}
+
 type BlockIterator interface {
 	Do(f func(Block))
 }
 
-type CellIterator interface {
-	Do(f func([]Cell))
-}
-
-type T int
-
-const (
-	Float T = iota
-	Int
-	String
-	Bool
-)
-
 type ValueIterator interface {
 	Do(f func([]float64))
+}
+type CellIterator interface {
+	Do(f func([]Cell))
 }
 
 type Cell struct {
@@ -100,6 +130,15 @@ func (t Tags) Equal(o Tags) bool {
 		}
 	}
 	return true
+}
+
+func (t Tags) Keys() []string {
+	keys := make([]string, 0, len(t))
+	for k := range t {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type TagsKey string
@@ -146,198 +185,410 @@ func (m blockMetadata) Bounds() Bounds {
 	return m.bounds
 }
 
-type rowListBlockBuilder struct {
-	blk *rowListBlock
+type colListBlockBuilder struct {
+	blk *colListBlock
 	key BlockKey
 }
 
-func NewRowListBlockBuilder() BlockBuilder {
-	return &rowListBlockBuilder{
-		blk: new(rowListBlock),
+func NewColListBlockBuilder() BlockBuilder {
+	return &colListBlockBuilder{
+		blk: new(colListBlock),
 	}
 }
 
-func (b rowListBlockBuilder) SetBounds(bounds Bounds) {
+func (b colListBlockBuilder) SetBounds(bounds Bounds) {
 	b.blk.bounds = bounds
 }
-func (b rowListBlockBuilder) Bounds() Bounds {
+func (b colListBlockBuilder) Bounds() Bounds {
 	return b.blk.bounds
 }
 
-func (b rowListBlockBuilder) SetTags(tags Tags) {
+func (b colListBlockBuilder) SetTags(tags Tags) {
 	b.blk.tags = tags
 }
-func (b rowListBlockBuilder) Tags() Tags {
+func (b colListBlockBuilder) Tags() Tags {
 	return b.blk.tags
 }
-func (b rowListBlockBuilder) NRows() int {
-	return len(b.blk.rows)
+func (b colListBlockBuilder) NRows() int {
+	return b.blk.nrows
+}
+func (b colListBlockBuilder) NCols() int {
+	return len(b.blk.cols)
 }
 
-func (b rowListBlockBuilder) AddRow(tags Tags) {
-	b.blk.rowTags = append(b.blk.rowTags, tags)
-	b.blk.rows = append(b.blk.rows, make([]float64, len(b.blk.colTimes)))
-}
-
-func (b rowListBlockBuilder) AddCol(t Time) {
-	//TODO(nathanielc): ensure bounds are updated when times are added
-	b.blk.colTimes = append(b.blk.colTimes, t)
-	for i, r := range b.blk.rows {
-		b.blk.rows[i] = append(r, 0)
+func (b colListBlockBuilder) AddRow() {
+	for _, c := range b.blk.cols {
+		c.Grow()
 	}
+	b.blk.nrows++
 }
 
-func (b rowListBlockBuilder) AddCell(c Cell) {
-	// TODO(nathanielc): ensure columns are sorted in increasing time order
-	b.AddRow(c.Tags)
-	for i, t := range b.blk.colTimes {
-		if t == c.Time {
-			b.Set(len(b.blk.rows)-1, i, c.Value)
-			return
+func (b colListBlockBuilder) AddCol(c ColMeta) {
+	var col column
+	switch c.Type {
+	case TFloat:
+		col = &floatColumn{
+			ColMeta: c,
+		}
+	case TString:
+		col = &stringColumn{
+			ColMeta: c,
+		}
+	case TTime:
+		col = &timeColumn{
+			ColMeta: c,
 		}
 	}
-	b.AddCol(c.Time)
-	b.Set(len(b.blk.rows)-1, len(b.blk.colTimes)-1, c.Value)
+	b.blk.cols = append(b.blk.cols, col)
 }
 
-func (b rowListBlockBuilder) Set(i int, j int, value float64) {
-	b.blk.rows[i][j] = value
+func (b colListBlockBuilder) AddCell(cell Cell) {
+	//TODO(nathanielc): What do we do about new tags not as columns or as tags on the block.
+	for _, c := range b.blk.cols {
+		switch col := c.(type) {
+		case *floatColumn:
+			col.data = append(col.data, cell.Value)
+		case *stringColumn:
+			col.data = append(col.data, cell.Tags[col.Label])
+		case *timeColumn:
+			col.data = append(col.data, cell.Time)
+		}
+	}
+	b.blk.nrows++
 }
 
-func (b rowListBlockBuilder) Block() Block {
-	return b.blk.asDenseBlock()
+func (b colListBlockBuilder) SetTime(i int, j int, value Time) {
+	if b.blk.cols[j].Meta().Type != TTime {
+		panic(fmt.Errorf("column %d is not of type time", j))
+	}
+	b.blk.cols[j].(*timeColumn).data[i] = value
+}
+func (b colListBlockBuilder) SetString(i int, j int, value string) {
+	if b.blk.cols[j].Meta().Type != TString {
+		panic(fmt.Errorf("column %d is not of type string", j))
+	}
+	b.blk.cols[j].(*stringColumn).data[i] = value
+}
+func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
+	if b.blk.cols[j].Meta().Type != TFloat {
+		panic(fmt.Errorf("column %d is not of type float", j))
+	}
+	b.blk.cols[j].(*floatColumn).data[i] = value
 }
 
-func (b rowListBlockBuilder) ClearData() {
-	b.blk.rows = nil
-	b.blk.rowTags = nil
-	b.blk.colTimes = nil
+func (b colListBlockBuilder) Block() Block {
+	//TODO(nathanielc): Construct Apache Arrow based block
+	return b.blk.Copy()
+}
+
+func (b colListBlockBuilder) ClearData() {
+	for _, c := range b.blk.cols {
+		c.Clear()
+	}
+	b.blk.nrows = 0
 }
 
 // Block implements Block using list of rows.
-type rowListBlock struct {
+type colListBlock struct {
 	bounds Bounds
 	tags   Tags
 
-	rowTags  []Tags
-	colTimes []Time
-
-	rows [][]float64
+	cols  []column
+	nrows int
 }
 
-func (b *rowListBlock) Bounds() Bounds {
+func (b *colListBlock) Bounds() Bounds {
 	return b.bounds
 }
 
-func (b *rowListBlock) Tags() Tags {
+func (b *colListBlock) Tags() Tags {
 	return b.tags
 }
-
-func (b *rowListBlock) Values() ValueIterator {
-	return &rowListValueIterator{blk: b}
+func (b *colListBlock) Cols() []ColMeta {
+	cols := make([]ColMeta, len(b.cols))
+	for i, c := range b.cols {
+		cols[i] = c.Meta()
+	}
+	return cols
 }
 
-func (b *rowListBlock) Cells() CellIterator {
-	return &rowListCellIterator{blk: b}
+func (b *colListBlock) Values() ValueIterator {
+	return colListValueIterator{blk: b}
+}
+func (b *colListBlock) Cells() CellIterator {
+	return colListCellIterator{blk: b}
 }
 
-func (b *rowListBlock) asDenseBlock() *denseBlock {
-	db := &denseBlock{
-		bounds:   b.bounds,
-		tags:     b.tags.Copy(),
-		data:     make([]float64, len(b.rows)*len(b.colTimes)),
-		rowTags:  make([]Tags, len(b.rowTags)),
-		colTimes: make([]Time, len(b.colTimes)),
+func (b *colListBlock) Copy() *colListBlock {
+	cpy := new(colListBlock)
+	cpy.bounds = b.bounds
+	cpy.tags = b.tags.Copy()
+	cpy.nrows = b.nrows
+
+	cpy.cols = make([]column, len(b.cols))
+	for i, c := range b.cols {
+		cpy.cols[i] = c.Copy()
 	}
 
-	copy(db.rowTags, b.rowTags)
-	copy(db.colTimes, b.colTimes)
-	stride := len(db.colTimes)
-	for i, r := range b.rows {
-		copy(db.data[i*stride:(i+1)*stride], r)
-	}
-	return db
+	return cpy
 }
 
-type rowListValueIterator struct {
-	blk *rowListBlock
-
-	currentRow int
+type colListValueIterator struct {
+	blk *colListBlock
 }
 
-func (vi *rowListValueIterator) Do(f func([]float64)) {
-	for _, row := range vi.blk.rows {
-		f(row)
-	}
-}
-
-type rowListCellIterator struct {
-	blk *rowListBlock
-}
-
-func (ci *rowListCellIterator) Do(f func([]Cell)) {
-	for r, row := range ci.blk.rows {
-		for c, value := range row {
-			f([]Cell{{
-				Value: value,
-				Time:  ci.blk.colTimes[c],
-				Tags:  ci.blk.rowTags[r],
-			}})
+func (vi colListValueIterator) Do(f func([]float64)) {
+	for _, c := range vi.blk.cols {
+		meta := c.Meta()
+		// TODO(nathanielc): Change api to deal with multiple value columns
+		if meta.Label == "value" && meta.Type == TFloat {
+			f(c.(*floatColumn).data)
+			break
 		}
 	}
 }
 
-type denseBlock struct {
-	bounds Bounds
-	tags   Tags
-
-	data []float64
-
-	rowTags  []Tags
-	colTimes []Time
+type colListCellIterator struct {
+	blk *colListBlock
 }
 
-func (b *denseBlock) Bounds() Bounds {
-	return b.bounds
-}
-
-func (b *denseBlock) Tags() Tags {
-	return b.tags
-}
-
-func (b *denseBlock) Values() ValueIterator {
-	return &denseBlockValueIterator{blk: b}
-}
-
-func (b *denseBlock) Cells() CellIterator {
-	return &denseBlockCellIterator{blk: b}
-}
-
-func (b *denseBlock) at(r, c int) float64 {
-	return b.data[r*len(b.colTimes)+c]
-}
-
-type denseBlockValueIterator struct {
-	blk *denseBlock
-}
-
-func (vi *denseBlockValueIterator) Do(f func([]float64)) {
-	f(vi.blk.data)
-}
-
-type denseBlockCellIterator struct {
-	blk *denseBlock
-}
-
-func (ci *denseBlockCellIterator) Do(f func([]Cell)) {
-	stride := len(ci.blk.colTimes)
-	for i, value := range ci.blk.data {
-		r := i / stride
-		c := i % stride
-		f([]Cell{{
-			Value: value,
-			Time:  ci.blk.colTimes[c],
-			Tags:  ci.blk.rowTags[r],
-		}})
+func (ci colListCellIterator) Do(f func([]Cell)) {
+	cells := make([]Cell, ci.blk.nrows)
+	for i := 0; i < ci.blk.nrows; i++ {
+		cells[i].Tags = ci.blk.tags.Copy()
+		for _, c := range ci.blk.cols {
+			// TODO(nathanielc): This assumes all string cols are tags and that
+			// there is only one float(value) and one time column.
+			switch col := c.(type) {
+			case *floatColumn:
+				cells[i].Value = col.data[i]
+			case *stringColumn:
+				cells[i].Tags[col.Label] = col.data[i]
+			case *timeColumn:
+				cells[i].Time = col.data[i]
+			}
+		}
 	}
+	f(cells)
+}
+
+type column interface {
+	Meta() ColMeta
+	Grow()
+	Clear()
+	Len() int
+	Copy() column
+}
+
+type floatColumn struct {
+	ColMeta
+	data []float64
+}
+
+func (c *floatColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *floatColumn) Grow() {
+	c.data = append(c.data, 0)
+}
+func (c *floatColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *floatColumn) Len() int {
+	return len(c.data)
+}
+func (c *floatColumn) Copy() column {
+	cpy := &floatColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]float64, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+
+type stringColumn struct {
+	ColMeta
+	data []string
+}
+
+func (c *stringColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *stringColumn) Grow() {
+	c.data = append(c.data, "")
+}
+func (c *stringColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *stringColumn) Len() int {
+	return len(c.data)
+}
+func (c *stringColumn) Copy() column {
+	cpy := &stringColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]string, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+
+type timeColumn struct {
+	ColMeta
+	data []Time
+}
+
+func (c *timeColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *timeColumn) Grow() {
+	c.data = append(c.data, 0)
+}
+func (c *timeColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *timeColumn) Len() int {
+	return len(c.data)
+}
+func (c *timeColumn) Copy() column {
+	cpy := &timeColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]Time, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+
+type BlockBuilderCache interface {
+	BlockBuilder(meta BlockMetadata) BlockBuilder
+	ForEachBuilder(f func(BlockKey, BlockBuilder))
+}
+
+type blockBuilderCache struct {
+	blocks map[BlockKey]blockState
+
+	triggerSpec query.TriggerSpec
+}
+
+func NewBlockBuilderCache() *blockBuilderCache {
+	return &blockBuilderCache{
+		blocks: make(map[BlockKey]blockState),
+	}
+}
+
+type blockState struct {
+	builder BlockBuilder
+	trigger Trigger
+}
+
+func (d *blockBuilderCache) SetTriggerSpec(ts query.TriggerSpec) {
+	d.triggerSpec = ts
+}
+
+func (d *blockBuilderCache) Block(key BlockKey) Block {
+	return d.blocks[key].builder.Block()
+}
+func (d *blockBuilderCache) BlockMetadata(key BlockKey) BlockMetadata {
+	return d.blocks[key].builder
+}
+
+// BlockBuilder will return the builder for the specified block.
+// If no builder exists, one will be created.
+func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
+	key := ToBlockKey(meta)
+	b, ok := d.blocks[key]
+	if !ok {
+		builder := NewColListBlockBuilder()
+		builder.SetTags(meta.Tags())
+		builder.SetBounds(meta.Bounds())
+		t := NewTriggerFromSpec(d.triggerSpec)
+		b = blockState{
+			builder: builder,
+			trigger: t,
+		}
+		d.blocks[key] = b
+	}
+	return b.builder
+}
+
+func (d *blockBuilderCache) ForEachBuilder(f func(BlockKey, BlockBuilder)) {
+	for k, b := range d.blocks {
+		f(k, b.builder)
+	}
+}
+
+func (d *blockBuilderCache) DiscardBlock(key BlockKey) {
+	d.blocks[key].builder.ClearData()
+}
+func (d *blockBuilderCache) ExpireBlock(key BlockKey) {
+	delete(d.blocks, key)
+}
+
+func (d *blockBuilderCache) ForEach(f func(BlockKey)) {
+	for bk := range d.blocks {
+		f(bk)
+	}
+}
+
+func (d *blockBuilderCache) ForEachWithContext(f func(BlockKey, Trigger, BlockContext)) {
+	for bk, b := range d.blocks {
+		f(bk, b.trigger, BlockContext{
+			Bounds: b.builder.Bounds(),
+			Count:  b.builder.NRows(),
+		})
+	}
+}
+
+type TableFmt struct {
+	Block Block
+}
+
+func (t TableFmt) String() string {
+	var buf bytes.Buffer
+	b := t.Block
+	tags := b.Tags()
+	keys := tags.Keys()
+	fmt.Fprintf(&buf, "Block: keys: %v bounds: %v\n", keys, b.Bounds())
+	cols := b.Cols()
+	size := 0
+	for _, c := range cols {
+		if c.Label == "time" {
+			fmt.Fprintf(&buf, "%31s", c.Label)
+			size += 31
+		} else {
+			fmt.Fprintf(&buf, "%20s", c.Label)
+			size += 20
+		}
+	}
+	for _, k := range keys {
+		fmt.Fprintf(&buf, "%20s", k)
+		size += 20
+	}
+	buf.WriteRune('\n')
+	for i := 0; i < size; i++ {
+		buf.WriteRune('-')
+	}
+	buf.WriteRune('\n')
+	cells := b.Cells()
+	cells.Do(func(cs []Cell) {
+		for _, cell := range cs {
+			for _, c := range cols {
+				label := c.Label
+				if label == "time" {
+					fmt.Fprintf(&buf, "%31v", cell.Time)
+				} else if label == "value" {
+					fmt.Fprintf(&buf, "%20f", cell.Value)
+				} else {
+					fmt.Fprintf(&buf, "%20s", cell.Tags[label])
+				}
+			}
+			for _, k := range keys {
+				fmt.Fprintf(&buf, "%20s", tags[k])
+			}
+			buf.WriteRune('\n')
+		}
+	})
+	return buf.String()
 }

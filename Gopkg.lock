@@ -15,15 +15,15 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/hashicorp/yamux"
+  name = "github.com/influxdata/yamux"
   packages = ["."]
-  revision = "d1caa6c97c9fc1cc9e83bbe34d0603f9ff0ce8bd"
+  revision = "e7f91523e648eeb91537e420aebbd96aa64ab6ae"
 
 [[projects]]
   branch = "master"
   name = "github.com/influxdata/yarpc"
   packages = [".","codes","status","yarpcproto"]
-  revision = "7d68715e9b3b188a817ce06732b634ff0c9a8a4b"
+  revision = "036268cdec22b7074cd6d50cc6d7315c667063c7"
 
 [[projects]]
   branch = "master"

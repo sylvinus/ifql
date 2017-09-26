@@ -5,6 +5,8 @@ import "time"
 type Time int64
 type Duration int64
 
+const fixedWidthTimeFmt = "2006-01-02T15:04:05.000000000Z07:00"
+
 func (t Time) Round(d Duration) Time {
 	if d <= 0 {
 		return t
@@ -40,7 +42,7 @@ func remainder(t Time, d Duration) (r Duration) {
 }
 
 func (t Time) String() string {
-	return t.Time().Format(time.RFC3339Nano)
+	return t.Time().Format(fixedWidthTimeFmt)
 }
 
 func (t Time) Time() time.Time {

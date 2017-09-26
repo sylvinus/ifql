@@ -73,6 +73,11 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 						Children: nil,
 					},
 				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("0"),
+					plan.ProcedureIDFromOperationID("1"),
+					plan.ProcedureIDFromOperationID("2"),
+				},
 			},
 		},
 		{
@@ -193,6 +198,15 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 						},
 						Children: nil,
 					},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select1"),
+					plan.ProcedureIDFromOperationID("range1"),
+					plan.ProcedureIDFromOperationID("sum1"),
+					plan.ProcedureIDFromOperationID("select0"),
+					plan.ProcedureIDFromOperationID("range0"),
+					plan.ProcedureIDFromOperationID("count0"),
+					plan.ProcedureIDFromOperationID("join"),
 				},
 			},
 		},
