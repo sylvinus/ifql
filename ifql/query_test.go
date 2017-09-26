@@ -386,8 +386,8 @@ func TestNewQuery(t *testing.T) {
 													},
 													&storage.Node{
 														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_FloatValue{
-															FloatValue: 10.0,
+														Value: &storage.Node_IntegerValue{
+															IntegerValue: 10.0,
 														},
 													},
 												},
@@ -478,8 +478,8 @@ func TestNewQuery(t *testing.T) {
 													},
 													&storage.Node{
 														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_FloatValue{
-															FloatValue: 10.0,
+														Value: &storage.Node_IntegerValue{
+															IntegerValue: 10.0,
 														},
 													},
 												},
@@ -519,7 +519,7 @@ func TestNewQuery(t *testing.T) {
 						.where(exp:{
 							"t1"==/val1/
 							and
-							$ == 10
+							$ == 10.5
 						})
 						.range(start:-4h, stop:-2h)
 						.count()`,
@@ -571,7 +571,7 @@ func TestNewQuery(t *testing.T) {
 													&storage.Node{
 														NodeType: storage.NodeTypeLiteral,
 														Value: &storage.Node_FloatValue{
-															FloatValue: 10.0,
+															FloatValue: 10.5,
 														},
 													},
 												},
@@ -759,7 +759,7 @@ func TestNewQuery(t *testing.T) {
 			t.Parallel()
 			got, err := ifql.NewQuery(tt.raw, ifql.Debug(false))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewQuery() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {

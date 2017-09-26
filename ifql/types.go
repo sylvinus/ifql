@@ -180,6 +180,17 @@ func stringLiteral(text []byte, pos position) (*ast.StringLiteral, error) {
 	}, nil
 }
 
+func integerLiteral(text []byte, pos position) (*ast.IntegerLiteral, error) {
+	n, err := strconv.ParseInt(string(text), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.IntegerLiteral{
+		BaseNode: base(text, pos),
+		Value:    n,
+	}, nil
+}
+
 func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
 	n, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {

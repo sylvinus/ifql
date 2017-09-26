@@ -8,10 +8,10 @@
   version = "v0.4"
 
 [[projects]]
+  branch = "master"
   name = "github.com/google/go-cmp"
   packages = ["cmp","cmp/cmpopts","cmp/internal/diff","cmp/internal/function","cmp/internal/value"]
-  revision = "8099a9787ce5dc5984ed879a3bda47dc730a8e97"
-  version = "v0.1.0"
+  revision = "d5735f74713c51f7450a43d0a98d41ce2c1db3cb"
 
 [[projects]]
   branch = "master"
@@ -26,10 +26,10 @@
   revision = "7d68715e9b3b188a817ce06732b634ff0c9a8a4b"
 
 [[projects]]
+  branch = "master"
   name = "github.com/mna/pigeon"
   packages = [".","ast","builder"]
-  revision = "9df264905d4734c0133161d8c67828ff522b154a"
-  version = "v1.0.0"
+  revision = "904fede4321f9aae0e347d296f56035410375fed"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -43,9 +43,15 @@
   revision = "879c5887cd475cd7864858769793b2ceb0d44feb"
   version = "v1.1.0"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/tools"
+  packages = ["go/ast/astutil","imports"]
+  revision = "e531a2a1c15f94033f6fa87666caeb19a688175f"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2d380fc1e615cb2f1e6ef7e42361addaf9fe9a4563a814a8e6f070e0d5915226"
+  inputs-digest = "c0adda38b01cb4170e433085b3e61b4018fcfc741646b62ca2467b1d538b744e"
   solver-name = "gps-cdcl"
   solver-version = 1

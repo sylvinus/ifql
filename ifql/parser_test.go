@@ -8,7 +8,7 @@ import (
 	"github.com/influxdata/ifql/ast"
 )
 
-func TestNewAST(t *testing.T) {
+func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		raw     string
@@ -31,6 +31,38 @@ func TestNewAST(t *testing.T) {
 			},
 		},
 		{
+			name: "declare variable as an int",
+			raw:  `var howdy = 1`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{
+							&ast.VariableDeclarator{
+								ID:   &ast.Identifier{Name: "howdy"},
+								Init: &ast.IntegerLiteral{Value: 1},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "declare variable as a float",
+			raw:  `var howdy = 1.1`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{
+							&ast.VariableDeclarator{
+								ID:   &ast.Identifier{Name: "howdy"},
+								Init: &ast.NumberLiteral{Value: 1.1},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "use variable to declare something",
 			raw: `var howdy = 1
 			select()`,
@@ -40,7 +72,7 @@ func TestNewAST(t *testing.T) {
 						Declarations: []*ast.VariableDeclarator{
 							&ast.VariableDeclarator{
 								ID:   &ast.Identifier{Name: "howdy"},
-								Init: &ast.NumberLiteral{Value: 1},
+								Init: &ast.IntegerLiteral{Value: 1},
 							},
 						},
 					},
@@ -155,7 +187,7 @@ func TestNewAST(t *testing.T) {
 		},
 		{
 			name: "select with database",
-			raw:  `select(database:"telegraf")`,
+			raw:  `select(db:"telegraf")`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
@@ -168,7 +200,7 @@ func TestNewAST(t *testing.T) {
 									Properties: []*ast.Property{
 										&ast.Property{
 											Key: &ast.Identifier{
-												Name: "database",
+												Name: "db",
 											},
 											Value: &ast.StringLiteral{
 												Value: "telegraf",
@@ -184,7 +216,7 @@ func TestNewAST(t *testing.T) {
 		},
 		{
 			name: "select with where with no parens",
-			raw:  `select(database:"telegraf").where(exp:{"other"=="mem" and "this"=="that" or "these"!="those"})`,
+			raw:  `select(db:"telegraf").where(exp:{"other"=="mem" and "this"=="that" or "these"!="those"})`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
@@ -199,7 +231,7 @@ func TestNewAST(t *testing.T) {
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
 												&ast.Property{
-													Key:   &ast.Identifier{Name: "database"},
+													Key:   &ast.Identifier{Name: "db"},
 													Value: &ast.StringLiteral{Value: "telegraf"},
 												},
 											},
@@ -244,7 +276,7 @@ func TestNewAST(t *testing.T) {
 		},
 		{
 			name: "select with range",
-			raw:  `select(database:"telegraf").range(start:-1h, end:10m)`,
+			raw:  `select(db:"telegraf").range(start:-1h, end:10m)`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
@@ -256,7 +288,7 @@ func TestNewAST(t *testing.T) {
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
 												&ast.Property{
-													Key:   &ast.Identifier{Name: "database"},
+													Key:   &ast.Identifier{Name: "db"},
 													Value: &ast.StringLiteral{Value: "telegraf"},
 												},
 											},
@@ -284,6 +316,234 @@ func TestNewAST(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "select with limit",
+			raw:  `select(db:"telegraf").limit(limit:100, offset:10)`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "select"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "db"},
+													Value: &ast.StringLiteral{Value: "telegraf"},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "limit"},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										&ast.Property{
+											Key:   &ast.Identifier{Name: "limit"},
+											Value: &ast.IntegerLiteral{Value: 100},
+										},
+										&ast.Property{
+											Key:   &ast.Identifier{Name: "offset"},
+											Value: &ast.IntegerLiteral{Value: 10},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with range and count",
+			raw: `select(db:"mydb")
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.MemberExpression{
+										Object: &ast.CallExpression{
+											Callee: &ast.Identifier{Name: "select"},
+											Arguments: []ast.Expression{
+												&ast.ObjectExpression{
+													Properties: []*ast.Property{
+														&ast.Property{
+															Key:   &ast.Identifier{Name: "db"},
+															Value: &ast.StringLiteral{Value: "mydb"},
+														},
+													},
+												},
+											},
+										},
+										Property: &ast.Identifier{Name: "range"},
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "start"},
+													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+												},
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "stop"},
+													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "count"},
+							},
+							Arguments: nil,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with range, limit and count",
+			raw: `select(db:"mydb")
+						.range(start:-4h, stop:-2h)
+						.limit(limit:10)
+						.count()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.MemberExpression{
+										Object: &ast.CallExpression{
+											Callee: &ast.MemberExpression{
+												Object: &ast.CallExpression{
+													Callee: &ast.Identifier{Name: "select"},
+													Arguments: []ast.Expression{
+														&ast.ObjectExpression{
+															Properties: []*ast.Property{
+																&ast.Property{
+																	Key:   &ast.Identifier{Name: "db"},
+																	Value: &ast.StringLiteral{Value: "mydb"},
+																},
+															},
+														},
+													},
+												},
+												Property: &ast.Identifier{Name: "range"},
+											},
+											Arguments: []ast.Expression{
+												&ast.ObjectExpression{
+													Properties: []*ast.Property{
+														&ast.Property{
+															Key:   &ast.Identifier{Name: "start"},
+															Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+														},
+														&ast.Property{
+															Key:   &ast.Identifier{Name: "stop"},
+															Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+														},
+													},
+												},
+											},
+										},
+										Property: &ast.Identifier{Name: "limit"},
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "limit"},
+													Value: &ast.IntegerLiteral{Value: 10},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "count"},
+							},
+							Arguments: nil,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "select with where, range and count",
+			raw: `select(db:"mydb")
+						.where(exp:{ $ == 10.1 })
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.MemberExpression{
+								Object: &ast.CallExpression{
+									Callee: &ast.MemberExpression{
+										Object: &ast.CallExpression{
+											Callee: &ast.MemberExpression{
+												Object: &ast.CallExpression{
+													Callee: &ast.Identifier{Name: "select"},
+													Arguments: []ast.Expression{
+														&ast.ObjectExpression{
+															Properties: []*ast.Property{
+																&ast.Property{
+																	Key:   &ast.Identifier{Name: "db"},
+																	Value: &ast.StringLiteral{Value: "mydb"},
+																},
+															},
+														},
+													},
+												},
+												Property: &ast.Identifier{Name: "where"},
+											},
+											Arguments: []ast.Expression{
+												&ast.ObjectExpression{
+													Properties: []*ast.Property{
+														&ast.Property{
+															Key: &ast.Identifier{Name: "exp"},
+															Value: &ast.BinaryExpression{
+																Operator: ast.EqualOperator,
+																Left:     &ast.FieldLiteral{Value: "_field"},
+																Right:    &ast.NumberLiteral{Value: 10.1},
+															},
+														},
+													},
+												},
+											},
+										},
+										Property: &ast.Identifier{Name: "range"},
+									},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "start"},
+													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+												},
+												&ast.Property{
+													Key:   &ast.Identifier{Name: "stop"},
+													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+												},
+											},
+										},
+									},
+								},
+								Property: &ast.Identifier{Name: "count"},
+							},
+							Arguments: nil,
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -298,7 +558,7 @@ func TestNewAST(t *testing.T) {
 				return
 			}
 			if !cmp.Equal(tt.want, got) {
-				t.Errorf("Parse() = -got/+want %s", cmp.Diff(tt.want, got))
+				t.Errorf("Parse() = -got/+want %s", cmp.Diff(got, tt.want))
 			}
 		})
 	}

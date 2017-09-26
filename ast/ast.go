@@ -132,6 +132,7 @@ func (*Identifier) expression()      {}
 func (*StringLiteral) expression()   {}
 func (*BooleanLiteral) expression()  {}
 func (*NumberLiteral) expression()   {}
+func (*IntegerLiteral) expression()  {}
 func (*RegexpLiteral) expression()   {}
 func (*DurationLiteral) expression() {}
 func (*DateTimeLiteral) expression() {}
@@ -307,6 +308,7 @@ type Literal interface {
 func (*StringLiteral) literal()   {}
 func (*BooleanLiteral) literal()  {}
 func (*NumberLiteral) literal()   {}
+func (*IntegerLiteral) literal()  {}
 func (*RegexpLiteral) literal()   {}
 func (*DurationLiteral) literal() {}
 func (*DateTimeLiteral) literal() {}
@@ -337,6 +339,15 @@ type NumberLiteral struct {
 
 // Type is the abstract type
 func (*NumberLiteral) Type() string { return "NumberLiteral" }
+
+// IntegerLiteral represent integer numbers.
+type IntegerLiteral struct {
+	*BaseNode
+	Value int64 `json:"value"`
+}
+
+// Type is the abstract type
+func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
 
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
