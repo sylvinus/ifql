@@ -1,7 +1,6 @@
 {
 package ifql
 
-//go:generate pigeon -o ifql.go ifql.peg
 }
 
 Start
@@ -46,12 +45,7 @@ Initializer
 // TODO: Perhaps this should be modeled like an AssignmentExpresssion
 VariableExpression
   = CallExpression
-  / StringLiteral
-  / RegularExpressionLiteral
-  / Duration
-  / DateTime
-  / Number
-  / Field
+  / Primary
 
 ExpressionStatement
   = call:CallExpression {
@@ -109,12 +103,7 @@ FunctionArg
 
 FunctionArgValues
   = WhereExpr
-  / StringLiteral
-  / RegularExpressionLiteral
-  / Duration
-  / DateTime
-  / Number
-  / Identifier
+  / Primary
 
 WhereExpr
   = "{" __ expr:Expr __  "}" {
@@ -193,6 +182,7 @@ Primary
   = '(' __ expr:Logical __ ')' {
       return expr, nil
     }
+  / PrimaryArray
   / StringLiteral
   / RegularExpressionLiteral
   / Duration
@@ -200,6 +190,16 @@ Primary
   / Number
   / Field
   / Identifier
+
+PrimaryArray = "[" __ "]" {
+    return array(nil, nil, c.text, c.pos), nil
+} / "[" __ first:Primary __ rest:PrimaryArrayRest * __ "]" {
+    return array(first, rest, c.text, c.pos), nil
+}
+
+PrimaryArrayRest =  "," __ element:Primary {
+    return element, nil
+}
 
 DateFullYear
   = Digit Digit Digit Digit

@@ -91,7 +91,7 @@ func TestQuery_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {
-		t.Errorf("unexpected query after marshalling:\n%s", cmp.Diff(gotQ, expQ))
+		t.Errorf("unexpected query after marshalling: -want/+got %s", cmp.Diff(expQ, gotQ))
 	}
 }
 
@@ -258,7 +258,7 @@ func TestQuery_Walk(t *testing.T) {
 			}
 
 			if !cmp.Equal(gotOrder, tc.walkOrder) {
-				t.Fatalf("unexpected walk order:\n%s", cmp.Diff(gotOrder, tc.walkOrder))
+				t.Fatalf("unexpected walk order -want/+got %s", cmp.Diff(tc.walkOrder, gotOrder))
 			}
 		})
 	}

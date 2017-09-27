@@ -162,7 +162,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !cmp.Equal(got, tc.cp) {
-				t.Errorf("unexpected physical plan:\n%s", cmp.Diff(got, tc.cp))
+				t.Errorf("unexpected physical plan -want/+got %s", cmp.Diff(tc.cp, got))
 			}
 		})
 	}

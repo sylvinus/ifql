@@ -767,7 +767,7 @@ func TestNewQuery(t *testing.T) {
 			}
 			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
 			if !cmp.Equal(tt.want, got, opts...) {
-				t.Errorf("NewQuery() = -got/+want %s", cmp.Diff(got, tt.want, opts...))
+				t.Errorf("NewQuery() = -want/+got %s", cmp.Diff(tt.want, got, opts...))
 			}
 		})
 	}

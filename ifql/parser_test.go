@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
+	"github.com/influxdata/ifql/ast/asttest"
 )
 
 func TestParse(t *testing.T) {
@@ -36,12 +37,10 @@ func TestParse(t *testing.T) {
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID:   &ast.Identifier{Name: "howdy"},
-								Init: &ast.IntegerLiteral{Value: 1},
-							},
-						},
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
 					},
 				},
 			},
@@ -52,12 +51,31 @@ func TestParse(t *testing.T) {
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID:   &ast.Identifier{Name: "howdy"},
-								Init: &ast.NumberLiteral{Value: 1.1},
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.NumberLiteral{Value: 1.1},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "declare variable as an array",
+			raw:  `var howdy = [1, 2, 3, 4]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{Name: "howdy"},
+							Init: &ast.ArrayExpression{
+								Elements: []ast.Expression{
+									&ast.IntegerLiteral{Value: 1},
+									&ast.IntegerLiteral{Value: 2},
+									&ast.IntegerLiteral{Value: 3},
+									&ast.IntegerLiteral{Value: 4},
+								},
 							},
-						},
+						}},
 					},
 				},
 			},
@@ -69,12 +87,10 @@ func TestParse(t *testing.T) {
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID:   &ast.Identifier{Name: "howdy"},
-								Init: &ast.IntegerLiteral{Value: 1},
-							},
-						},
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
 					},
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -93,18 +109,16 @@ func TestParse(t *testing.T) {
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID: &ast.Identifier{
-									Name: "howdy",
-								},
-								Init: &ast.CallExpression{
-									Callee: &ast.Identifier{
-										Name: "select",
-									},
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "howdy",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "select",
 								},
 							},
-						},
+						}},
 					},
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -130,32 +144,28 @@ func TestParse(t *testing.T) {
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID: &ast.Identifier{
-									Name: "howdy",
-								},
-								Init: &ast.CallExpression{
-									Callee: &ast.Identifier{
-										Name: "select",
-									},
-								},
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "howdy",
 							},
+							Init: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "select",
+								},
+							}},
 						},
 					},
 					&ast.VariableDeclaration{
-						Declarations: []*ast.VariableDeclarator{
-							&ast.VariableDeclarator{
-								ID: &ast.Identifier{
-									Name: "doody",
-								},
-								Init: &ast.CallExpression{
-									Callee: &ast.Identifier{
-										Name: "select",
-									},
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "doody",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "select",
 								},
 							},
-						},
+						}},
 					},
 
 					&ast.ExpressionStatement{
@@ -557,8 +567,8 @@ func TestParse(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if !cmp.Equal(tt.want, got) {
-				t.Errorf("Parse() = -got/+want %s", cmp.Diff(got, tt.want))
+			if !cmp.Equal(tt.want, got, asttest.IgnoreBaseNodeOptions...) {
+				t.Errorf("Parse() = -want/+got %s", cmp.Diff(tt.want, got, asttest.IgnoreBaseNodeOptions...))
 			}
 		})
 	}
