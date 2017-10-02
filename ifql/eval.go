@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/ast"
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 // Evaluate validates and converts an ast.Program to a query
@@ -14,32 +14,21 @@ func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
 	ev := evaluator{
 		scope: newScope(),
 	}
-	// TODO: There are other possible expression/variable statements
-	for _, stmt := range program.Body {
-		switch s := stmt.(type) {
-		case *ast.VariableDeclaration:
-			if err := ev.doVariableDeclaration(s); err != nil {
-				return nil, err
-			}
-		case *ast.ExpressionStatement:
-			value, err := ev.doExpression(s.Expression)
-			if err != nil {
-				return nil, err
-			}
-			if value.Type == TChain {
-				chain := value.Value.(*CallChain)
-				ev.operations = append(ev.operations, chain.Operations...)
-				ev.edges = append(ev.edges, chain.Edges...)
-			}
-		default:
-			return nil, fmt.Errorf("Unsupported program statement expression type %t", s)
-		}
+	err := ev.eval(program)
+	if err != nil {
+		return nil, err
 	}
-	// TODO: There are other possible expression/variable statements
 	return ev.spec(), nil
 }
 
-type CreateOperationSpec func(args map[string]Value) (query.OperationSpec, error)
+type Context interface {
+	// LookupIDFromIdentifier returns the operation ID of an existing operation for a given identifier.
+	LookupIDFromIdentifier(string) (query.OperationID, error)
+	// AdditionalParent indicates that additional parents IDs should be added to this operation.
+	AdditionalParent(id query.OperationID)
+}
+
+type CreateOperationSpec func(args map[string]Value, ctx Context) (query.OperationSpec, error)
 
 var functionsMap = make(map[string]CreateOperationSpec)
 
@@ -50,68 +39,6 @@ func RegisterFunction(name string, c CreateOperationSpec) {
 	functionsMap[name] = c
 }
 
-// TODO(nathanielc): Maybe we want Value to be an interface instead of a struct?
-// Value represents any value that can be the result of evaluating any expression.
-type Value struct {
-	Type  Type
-	Value interface{}
-}
-
-type Type int
-
-const (
-	TString     Type = iota // Go type string
-	TInt                    // Go type int64
-	TFloat                  // Go type float64
-	TBool                   // Go type bool
-	TTime                   // Go type time.Time
-	TDuration               // Go type time.Duration
-	TList                   // Go type List
-	TMap                    // Go type Map
-	TChain                  // Go type *CallChain
-	TExpression             // Go type *storage.Node TODO(nathanielc): create a type for this in this package
-)
-
-func (t Type) String() string {
-	switch t {
-	case TString:
-		return "string"
-	case TInt:
-		return "int"
-	case TFloat:
-		return "float"
-	case TBool:
-		return "bool"
-	case TTime:
-		return "time"
-	case TDuration:
-		return "duration"
-	case TList:
-		return "list"
-	case TMap:
-		return "map"
-	case TChain:
-		return "chain"
-	case TExpression:
-		return "expression"
-	default:
-		return fmt.Sprintf("unknown type %d", int(t))
-	}
-}
-
-type List struct {
-	Type Type
-	// Elements will be a typed slice of any other type
-	// []string, []float64, or possibly even []List and []Map
-	Elements interface{}
-}
-type Map struct {
-	Type Type
-	// Elements will be a typed map of any other type, keys are always strings
-	// map[strin]string, map[string]float64, or possibly even map[string]List and map[string]Map
-	Elements interface{}
-}
-
 type evaluator struct {
 	id    int
 	scope *scope
@@ -120,6 +47,31 @@ type evaluator struct {
 	edges      []query.Edge
 }
 
+func (ev *evaluator) eval(program *ast.Program) error {
+	// TODO: There are other possible expression/variable statements
+	for _, stmt := range program.Body {
+		switch s := stmt.(type) {
+		case *ast.VariableDeclaration:
+			if err := ev.doVariableDeclaration(s); err != nil {
+				return err
+			}
+		case *ast.ExpressionStatement:
+			value, err := ev.doExpression(s.Expression)
+			if err != nil {
+				return err
+			}
+			if value.Type == TChain {
+				chain := value.Value.(*CallChain)
+				ev.addChain(chain)
+			}
+		default:
+			return fmt.Errorf("unsupported program statement expression type %t", s)
+		}
+	}
+	return nil
+}
+
+// TODO: There are other possible expression/variable statements
 func (ev *evaluator) spec() *query.QuerySpec {
 	return &query.QuerySpec{
 		Operations: ev.operations,
@@ -133,6 +85,13 @@ func (ev *evaluator) nextID() int {
 	return id
 }
 
+func (ev *evaluator) addChain(chain *CallChain) {
+	ev.operations = append(ev.operations, chain.Operations...)
+	ev.edges = append(ev.edges, chain.Edges...)
+	chain.Operations = chain.Operations[0:0]
+	chain.Edges = chain.Edges[0:0]
+}
+
 func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration) error {
 	for _, vd := range declarations.Declarations {
 		value, err := ev.doExpression(vd.Init)
@@ -140,6 +99,10 @@ func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration
 			return err
 		}
 		ev.scope.Set(vd.ID.Name, value)
+		if value.Type == TChain {
+			chain := value.Value.(*CallChain)
+			ev.addChain(chain)
+		}
 	}
 	return nil
 }
@@ -164,16 +127,17 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 			Value: chain,
 		}, nil
 	case *ast.BinaryExpression:
-		root, err := ev.comparisonNode(e)
+		root, err := ev.binaryExpression(e)
 		if err != nil {
 			return Value{}, err
 		}
+		// TODO(nathanielc): Attempt to resolve the binary expression
 		return Value{
 			Type:  TExpression,
 			Value: root,
 		}, nil
 	case *ast.LogicalExpression:
-		root, err := ev.logicalNode(e)
+		root, err := ev.logicalExpression(e)
 		if err != nil {
 			return Value{}, err
 		}
@@ -181,9 +145,101 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 			Type:  TExpression,
 			Value: root,
 		}, nil
+	case *ast.FunctionExpression:
+		return ev.doExpression(e.Function)
+	case *ast.ArrayExpression:
+		return ev.doArray(e)
 	default:
 		return Value{}, fmt.Errorf("unsupported expression %T", expr)
 	}
+}
+
+func (ev *evaluator) doArray(a *ast.ArrayExpression) (Value, error) {
+	array := Array{
+		Type: TInvalid,
+	}
+	elements := make([]Value, len(a.Elements))
+	for i, el := range a.Elements {
+		v, err := ev.doExpression(el)
+		if err != nil {
+			return Value{}, err
+		}
+		if array.Type == TInvalid {
+			array.Type = v.Type
+		}
+		if array.Type != v.Type {
+			return Value{}, fmt.Errorf("cannot mix types in an array, found both %v and %v", array.Type, v.Type)
+		}
+		elements[i] = v
+	}
+	switch array.Type {
+	case TString:
+		value := make([]string, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(string)
+		}
+		array.Elements = value
+	case TInt:
+		value := make([]int64, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(int64)
+		}
+		array.Elements = value
+	case TFloat:
+		value := make([]float64, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(float64)
+		}
+		array.Elements = value
+	case TBool:
+		value := make([]bool, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(bool)
+		}
+		array.Elements = value
+	case TTime:
+		value := make([]time.Time, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(time.Time)
+		}
+		array.Elements = value
+	case TDuration:
+		value := make([]time.Duration, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(time.Duration)
+		}
+		array.Elements = value
+	case TArray:
+		value := make([]Array, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(Array)
+		}
+		array.Elements = value
+	case TMap:
+		value := make([]Map, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(Map)
+		}
+		array.Elements = value
+	case TChain:
+		value := make([]*CallChain, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(*CallChain)
+		}
+		array.Elements = value
+	case TExpression:
+		value := make([]expression.Node, len(elements))
+		for i, el := range elements {
+			value[i] = el.Value.(expression.Node)
+		}
+		array.Elements = value
+	default:
+		return Value{}, fmt.Errorf("cannot define an array with elements of type %v", array.Type)
+	}
+	return Value{
+		Type:  TArray,
+		Value: array,
+	}, nil
 }
 
 func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
@@ -235,30 +291,51 @@ type CallChain struct {
 func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
 	switch callee := call.Callee.(type) {
 	case *ast.Identifier:
-		op, err := ev.function(callee.Name, call.Arguments)
+		op, parents, err := ev.function(callee.Name, call.Arguments)
 		if err != nil {
 			return nil, err
 		}
-		return &CallChain{
+		chain := &CallChain{
 			Operations: []*query.Operation{op},
 			Parent:     op.ID,
-		}, nil
+		}
+		// Add any additional parents
+		for _, p := range parents {
+			chain.Edges = append(chain.Edges, query.Edge{
+				Parent: p,
+				Child:  op.ID,
+			})
+		}
+		return chain, nil
 	case *ast.MemberExpression:
 		chain, name, err := ev.memberFunction(callee, chain)
 		if err != nil {
 			return nil, err
 		}
 
-		op, err := ev.function(name, call.Arguments)
+		op, parents, err := ev.function(name, call.Arguments)
 		if err != nil {
 			return nil, err
 		}
 
+		// Update chain
 		chain.Operations = append(chain.Operations, op)
 		chain.Edges = append(chain.Edges, query.Edge{
 			Parent: chain.Parent,
 			Child:  op.ID,
 		})
+
+		// Add any additional parents
+		for _, p := range parents {
+			if p != chain.Parent {
+				chain.Edges = append(chain.Edges, query.Edge{
+					Parent: p,
+					Child:  op.ID,
+				})
+			}
+		}
+
+		// Update ParentID
 		chain.Parent = op.ID
 		return chain, nil
 	default:
@@ -275,40 +352,48 @@ func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallCha
 			return nil, "", err
 		}
 	case *ast.Identifier:
-		return nil, "", fmt.Errorf("Variables not support yet in member expression object type")
+		value, ok := ev.scope.Get(obj.Name)
+		if !ok {
+			return nil, "", fmt.Errorf("undefined identifier %q", obj.Name)
+		}
+		if value.Type != TChain {
+			return nil, "", fmt.Errorf("variable %q is not a function chain", obj.Name)
+		}
+		chain = value.Value.(*CallChain)
 	default:
-		return nil, "", fmt.Errorf("Unsupported member expression object type %t", obj)
+		return nil, "", fmt.Errorf("unsupported member expression object type %t", obj)
 	}
 
 	return chain, member.Property.Name, nil
 }
 
-func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, error) {
+func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
 	op := &query.Operation{
 		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
 	}
 	createOpSpec, ok := functionsMap[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown function %q", name)
+		return nil, nil, fmt.Errorf("unknown function %q", name)
 	}
 	var paramMap map[string]Value
 	if len(args) == 1 {
 		params, ok := args[0].(*ast.ObjectExpression)
 		if !ok {
-			return nil, fmt.Errorf("arguments not a valid object expression")
+			return nil, nil, fmt.Errorf("arguments not a valid object expression")
 		}
 		var err error
 		paramMap, err = ev.resolveParameters(params)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	spec, err := createOpSpec(paramMap)
+	ctx := &context{scope: ev.scope}
+	spec, err := createOpSpec(paramMap, ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	op.Spec = spec
-	return op, nil
+	return op, ctx.parents, nil
 }
 
 func (ev *evaluator) resolveParameters(params *ast.ObjectExpression) (map[string]Value, error) {
@@ -342,120 +427,151 @@ func ToQueryTime(value Value) (query.Time, error) {
 	}
 }
 
-func (ev *evaluator) binaryOperation(expr ast.Expression) (*storage.Node, error) {
+func (ev *evaluator) binaryOperation(expr ast.Expression) (expression.Node, error) {
 	switch op := expr.(type) {
 	case *ast.BinaryExpression:
-		return ev.comparisonNode(op)
+		return ev.binaryExpression(op)
 	case *ast.LogicalExpression:
-		return ev.logicalNode(op)
+		return ev.logicalExpression(op)
 	default:
 		return nil, fmt.Errorf("Expression type expected to be arithmatic, relational or logical, but is %t", op)
 	}
 }
 
-func (ev *evaluator) comparisonNode(expr *ast.BinaryExpression) (*storage.Node, error) {
-	lhs, err := primaryNode(expr.Left.(ast.Literal), true /* isLeft */)
+func (ev *evaluator) binaryExpression(expr *ast.BinaryExpression) (expression.Node, error) {
+	lhs, err := ev.primaryNode(expr.Left, true /* isLeft */)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := primaryNode(expr.Right.(ast.Literal), false /* isLeft */)
+	rhs, err := ev.primaryNode(expr.Right, false /* isLeft */)
 	if err != nil {
 		return nil, err
 	}
 
-	isRegex := rhs.GetRegexValue() != "" || lhs.GetRegexValue() != ""
-	op, err := comparisonOp(expr.Operator, isRegex)
+	isRegexp := lhs.Type() == expression.RegexpLiteral || rhs.Type() == expression.RegexpLiteral
+	op, err := expressionOperator(expr.Operator, isRegexp)
 	if err != nil {
 		return nil, err
 	}
 
-	return &storage.Node{
-		NodeType: storage.NodeTypeComparisonExpression,
-		Value:    &storage.Node_Comparison_{Comparison: op},
-		Children: []*storage.Node{lhs, rhs},
+	return &expression.BinaryNode{
+		Operator: op,
+		Left:     lhs,
+		Right:    rhs,
 	}, nil
 }
 
-func comparisonOp(op ast.OperatorKind, isRegex bool) (storage.Node_Comparison, error) {
+func expressionOperator(op ast.OperatorKind, isRegexp bool) (expression.Operator, error) {
 	switch op {
 	case ast.EqualOperator:
-		if isRegex {
-			return storage.ComparisonRegex, nil
+		if isRegexp {
+			return expression.RegexpMatchOperator, nil
 		}
-		return storage.ComparisonEqual, nil
+		return expression.EqualOperator, nil
 	case ast.NotEqualOperator:
-		if isRegex {
-			return storage.ComparisonNotRegex, nil
+		if isRegexp {
+			return expression.RegexpNotMatchOperator, nil
 		}
-		return storage.ComparisonNotEqual, nil
+		return expression.NotEqualOperator, nil
 	case ast.StartsWithOperator:
-		return storage.ComparisonStartsWith, nil
-	case ast.MultiplicationOperator, ast.DivisionOperator, ast.AdditionOperator, ast.SubtractionOperator:
-		fallthrough
-	case ast.LessThanEqualOperator, ast.LessThanOperator, ast.GreaterThanEqualOperator, ast.GreaterThanOperator:
-		fallthrough
-	case ast.InOperator, ast.NotEmptyOperator:
-		return 0, fmt.Errorf("Unimplemented comparison operator %s", op)
+		return expression.StartsWithOperator, nil
+	case ast.MultiplicationOperator:
+		return expression.MultiplicationOperator, nil
+	case ast.DivisionOperator:
+		return expression.DivisionOperator, nil
+	case ast.AdditionOperator:
+		return expression.AdditionOperator, nil
+	case ast.SubtractionOperator:
+		return expression.SubtractionOperator, nil
+	case ast.LessThanEqualOperator:
+		return expression.LessThanEqualOperator, nil
+	case ast.LessThanOperator:
+		return expression.LessThanOperator, nil
+	case ast.GreaterThanEqualOperator:
+		return expression.GreaterThanEqualOperator, nil
+	case ast.GreaterThanOperator:
+		return expression.GreaterThanOperator, nil
+	case ast.InOperator:
+		return expression.InOperator, nil
+	case ast.NotEmptyOperator:
+		return expression.NotEmptyOperator, nil
 	default:
-		return 0, fmt.Errorf("Unknown comparison operator %s", op)
+		return 0, fmt.Errorf("unknown operator %s", op)
 	}
 }
 
-func primaryNode(expr ast.Literal, isLeft bool) (*storage.Node, error) {
-	switch lit := expr.(type) {
+func logicalOperator(op ast.LogicalOperatorKind) (expression.Operator, error) {
+	switch op {
+	case ast.AndOperator:
+		return expression.AndOperator, nil
+	case ast.OrOperator:
+		return expression.OrOperator, nil
+	default:
+		return 0, fmt.Errorf("unknown logical operator %s", op)
+	}
+}
+
+const (
+	tagRefKind   = "tag"
+	fieldRefKind = "field"
+	identRefKind = "identifier"
+)
+
+func (ev *evaluator) primaryNode(expr ast.Expression, isLeft bool) (expression.Node, error) {
+	switch e := expr.(type) {
+	case *ast.BinaryExpression:
+		return ev.binaryExpression(e)
 	case *ast.StringLiteral:
 		if isLeft {
-			return &storage.Node{
-				NodeType: storage.NodeTypeTagRef,
-				Value: &storage.Node_TagRefValue{
-					TagRefValue: lit.Value,
-				},
+			return &expression.ReferenceNode{
+				Name: e.Value,
+				Kind: tagRefKind,
 			}, nil
 		}
-		return &storage.Node{
-			NodeType: storage.NodeTypeLiteral,
-			Value: &storage.Node_StringValue{
-				StringValue: lit.Value,
-			},
+		return &expression.StringLiteralNode{
+			Value: e.Value,
 		}, nil
-
+	case *ast.BooleanLiteral:
+		return &expression.BooleanLiteralNode{
+			Value: e.Value,
+		}, nil
 	case *ast.NumberLiteral:
-		return &storage.Node{
-			NodeType: storage.NodeTypeLiteral,
-			Value: &storage.Node_FloatValue{
-				FloatValue: lit.Value,
-			},
+		return &expression.FloatLiteralNode{
+			Value: e.Value,
 		}, nil
 	case *ast.IntegerLiteral:
-		return &storage.Node{
-			NodeType: storage.NodeTypeLiteral,
-			Value: &storage.Node_IntegerValue{
-				IntegerValue: lit.Value,
-			},
+		return &expression.IntegerLiteralNode{
+			Value: e.Value,
+		}, nil
+	case *ast.DurationLiteral:
+		return &expression.DurationLiteralNode{
+			Value: e.Value,
+		}, nil
+	case *ast.DateTimeLiteral:
+		return &expression.TimeLiteralNode{
+			Value: e.Value,
 		}, nil
 	case *ast.RegexpLiteral:
-		return &storage.Node{
-			NodeType: storage.NodeTypeLiteral,
-			Value: &storage.Node_RegexValue{
-				RegexValue: lit.Value.String(),
-			},
+		return &expression.RegexpLiteralNode{
+			Value: e.Value.String(),
 		}, nil
 	case *ast.FieldLiteral:
-		return &storage.Node{
-			NodeType: storage.NodeTypeTagRef,
-			Value: &storage.Node_TagRefValue{
-				TagRefValue: lit.Value,
-			},
+		return &expression.ReferenceNode{
+			Name: e.Value,
+			Kind: fieldRefKind,
 		}, nil
-	case *ast.DurationLiteral, *ast.DateTimeLiteral, *ast.BooleanLiteral:
-		return nil, fmt.Errorf("durations, datetimes and booleans not yet support in expressions")
+	case *ast.Identifier:
+		return &expression.ReferenceNode{
+			Name: e.Name,
+			Kind: identRefKind,
+		}, nil
 	default:
-		return nil, fmt.Errorf("unknown primary literal type: %T", expr)
+		return nil, fmt.Errorf("unknown primary type: %T", expr)
 	}
 }
 
-func (ev *evaluator) logicalNode(expr *ast.LogicalExpression) (*storage.Node, error) {
+func (ev *evaluator) logicalExpression(expr *ast.LogicalExpression) (expression.Node, error) {
 	lhs, err := ev.binaryOperation(expr.Left)
 	if err != nil {
 		return nil, err
@@ -465,18 +581,15 @@ func (ev *evaluator) logicalNode(expr *ast.LogicalExpression) (*storage.Node, er
 	if err != nil {
 		return nil, err
 	}
-
-	value := func(op ast.LogicalOperatorKind) *storage.Node_Logical_ {
-		if op == ast.AndOperator {
-			return &storage.Node_Logical_{Logical: storage.LogicalAnd}
-		}
-		return &storage.Node_Logical_{Logical: storage.LogicalOr}
+	op, err := logicalOperator(expr.Operator)
+	if err != nil {
+		return nil, err
 	}
 
-	return &storage.Node{
-		NodeType: storage.NodeTypeLogicalExpression,
-		Value:    value(expr.Operator),
-		Children: []*storage.Node{lhs, rhs},
+	return &expression.BinaryNode{
+		Operator: op,
+		Left:     lhs,
+		Right:    rhs,
 	}, nil
 }
 
@@ -496,4 +609,94 @@ func (s *scope) Get(name string) (Value, bool) {
 }
 func (s *scope) Set(name string, value Value) {
 	s.vars[name] = value
+}
+
+// TODO(nathanielc): Maybe we want Value to be an interface instead of a struct?
+// Value represents any value that can be the result of evaluating any expression.
+type Value struct {
+	Type  Type
+	Value interface{}
+}
+
+type Type int
+
+const (
+	TInvalid    Type = iota // Go type nil
+	TString                 // Go type string
+	TInt                    // Go type int64
+	TFloat                  // Go type float64
+	TBool                   // Go type bool
+	TTime                   // Go type time.Time
+	TDuration               // Go type time.Duration
+	TArray                  // Go type Array
+	TMap                    // Go type Map
+	TChain                  // Go type *CallChain
+	TExpression             // Go type expression.Node
+)
+
+func (t Type) String() string {
+	switch t {
+	case TString:
+		return "string"
+	case TInt:
+		return "int"
+	case TFloat:
+		return "float"
+	case TBool:
+		return "bool"
+	case TTime:
+		return "time"
+	case TDuration:
+		return "duration"
+	case TArray:
+		return "list"
+	case TMap:
+		return "map"
+	case TChain:
+		return "chain"
+	case TExpression:
+		return "expression"
+	default:
+		return fmt.Sprintf("unknown type %d", int(t))
+	}
+}
+
+type Array struct {
+	Type Type
+	// Elements will be a typed slice of any other type
+	// []string, []float64, or possibly even []Array and []Map
+	Elements interface{}
+}
+type Map struct {
+	Type Type
+	// Elements will be a typed map of any other type, keys are always strings
+	// map[string]string, map[string]float64, or possibly even map[string]Array and map[string]Map
+	Elements interface{}
+}
+
+type context struct {
+	scope   *scope
+	parents []query.OperationID
+}
+
+func (c *context) LookupIDFromIdentifier(ident string) (id query.OperationID, err error) {
+	v, ok := c.scope.Get(ident)
+	if !ok {
+		err = fmt.Errorf("unknown identifier %q", ident)
+		return
+	}
+	if v.Type != TChain {
+		err = fmt.Errorf("identifier not a function chain %q, got %v", ident, v.Type)
+		return
+	}
+	id = v.Value.(*CallChain).Parent
+	return
+}
+func (c *context) AdditionalParent(id query.OperationID) {
+	for _, p := range c.parents {
+		if p == id {
+			return
+		}
+	}
+	c.parents = append(c.parents, id)
 }

@@ -9,8 +9,15 @@ type PlanSpec struct {
 	Now time.Time
 	// Procedures is a set of all operations
 	Procedures map[ProcedureID]*Procedure
+	Order      []ProcedureID
 	// Results is a list of datasets that are the result of the plan
 	Results []ProcedureID
+}
+
+func (p *PlanSpec) Do(f func(pr *Procedure)) {
+	for _, id := range p.Order {
+		f(p.Procedures[id])
+	}
 }
 
 type Planner interface {
@@ -30,25 +37,27 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 	p.plan = &PlanSpec{
 		Now:        now,
 		Procedures: make(map[ProcedureID]*Procedure, len(ap.Procedures)),
+		Order:      make([]ProcedureID, 0, len(ap.Order)),
 	}
 
 	// Find the datasets that are results and populate mappings
-	for id, pr := range ap.Procedures {
-		p.plan.Procedures[id] = pr
+	ap.Do(func(pr *Procedure) {
+		p.plan.Procedures[pr.ID] = pr
+		p.plan.Order = append(p.plan.Order, pr.ID)
 
 		if len(pr.Children) == 0 {
-			p.plan.Results = append(p.plan.Results, id)
+			p.plan.Results = append(p.plan.Results, pr.ID)
 		}
-	}
+	})
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
-	for _, pr := range ap.Procedures {
+	ap.Do(func(pr *Procedure) {
 		if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
 			rule := pd.PushDownRule()
 			p.pushDownAndSearch(pr, rule, pd.PushDown)
 			p.removeProcedure(pr)
 		}
-	}
+	})
 
 	return p.plan, nil
 }
@@ -79,6 +88,7 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 
 func (p *planner) removeProcedure(pr *Procedure) {
 	delete(p.plan.Procedures, pr.ID)
+	p.plan.Order = removeID(p.plan.Order, pr.ID)
 
 	for _, id := range pr.Parents {
 		parent := p.plan.Procedures[id]
@@ -94,9 +104,11 @@ func (p *planner) removeProcedure(pr *Procedure) {
 
 func removeID(ids []ProcedureID, remove ProcedureID) []ProcedureID {
 	filtered := ids[0:0]
-	for _, id := range ids {
-		if id != remove {
-			filtered = append(filtered, id)
+	for i, id := range ids {
+		if id == remove {
+			filtered = append(filtered, ids[0:i]...)
+			filtered = append(filtered, ids[i+1:]...)
+			break
 		}
 	}
 	return filtered

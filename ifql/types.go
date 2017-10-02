@@ -104,6 +104,12 @@ func callexprs(head, tail interface{}, text []byte, pos position) (ast.Expressio
 	return expr, nil
 }
 
+func function(e interface{}) *ast.FunctionExpression {
+	return &ast.FunctionExpression{
+		Function: e.(ast.Expression),
+	}
+}
+
 func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
 	props := []*ast.Property{first.(*ast.Property)}
 	if rest != nil {
@@ -221,7 +227,7 @@ func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
 func fieldLiteral(text []byte, pos position) (*ast.FieldLiteral, error) {
 	return &ast.FieldLiteral{
 		BaseNode: base(text, pos),
-		Value:    "_field",
+		Value:    "$",
 	}, nil
 }
 

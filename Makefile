@@ -1,6 +1,6 @@
 SUBDIRS := ast ifql promql
 
-SOURCES := $(shell find . -name '*.go') 
+SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
 
 all: Gopkg.lock $(SUBDIRS) bin/ifql
 

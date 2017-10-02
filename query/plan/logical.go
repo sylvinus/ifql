@@ -12,6 +12,13 @@ var RootUUID = NilUUID
 
 type LogicalPlanSpec struct {
 	Procedures map[ProcedureID]*Procedure
+	Order      []ProcedureID
+}
+
+func (lp *LogicalPlanSpec) Do(f func(pr *Procedure)) {
+	for _, id := range lp.Order {
+		f(lp.Procedures[id])
+	}
 }
 
 type LogicalPlanner interface {
@@ -53,6 +60,7 @@ func (p *logicalPlanner) walkQuery(o *query.Operation) error {
 		ID:   ProcedureIDFromOperationID(o.ID),
 		Spec: spec,
 	}
+	p.plan.Order = append(p.plan.Order, pr.ID)
 	p.plan.Procedures[pr.ID] = pr
 
 	// Link parent/child relations

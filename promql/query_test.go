@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/functions"
 )
 
@@ -370,67 +370,39 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_metric",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "node_cpu",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "mode",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "user",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "cpu",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "cpu2",
-														},
-													},
-												},
-											},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "_metric",
+											Kind: "tag",
 										},
+										Right: &expression.StringLiteralNode{
+											Value: "node_cpu",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "mode",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "user",
+										},
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "cpu",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "cpu2",
 									},
 								},
 							},
@@ -470,49 +442,26 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_metric",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "node_cpu",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "mode",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "user",
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_metric",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "node_cpu",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "mode",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "user",
 									},
 								},
 							},
@@ -550,49 +499,26 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &query.ExpressionSpec{
-								Predicate: &storage.Predicate{
-									Root: &storage.Node{
-										NodeType: storage.NodeTypeLogicalExpression,
-										Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-										Children: []*storage.Node{
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_metric",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "node_cpu",
-														},
-													},
-												},
-											},
-											&storage.Node{
-												NodeType: storage.NodeTypeComparisonExpression,
-												Value:    &storage.Node_Comparison_{Comparison: storage.ComparisonEqual},
-												Children: []*storage.Node{
-													&storage.Node{
-														NodeType: storage.NodeTypeTagRef,
-														Value: &storage.Node_TagRefValue{
-															TagRefValue: "_measurement",
-														},
-													},
-													&storage.Node{
-														NodeType: storage.NodeTypeLiteral,
-														Value: &storage.Node_StringValue{
-															StringValue: "m0",
-														},
-													},
-												},
-											},
-										},
+							Exp: &expression.BinaryNode{
+								Operator: expression.AndOperator,
+								Left: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_metric",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "node_cpu",
+									},
+								},
+								Right: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "m0",
 									},
 								},
 							},
@@ -629,7 +555,7 @@ func TestBuild(t *testing.T) {
 			}
 			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
 			if !cmp.Equal(tt.want, got, opts...) {
-				t.Errorf("Build() = %s -want/+got%s", tt.promql, cmp.Diff(tt.want, got, opts...))
+				t.Errorf("Build() = %s -want/+got\n%s", tt.promql, cmp.Diff(tt.want, got, opts...))
 			}
 		})
 	}

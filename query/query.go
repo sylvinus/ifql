@@ -3,8 +3,6 @@ package query
 import (
 	"errors"
 	"fmt"
-
-	"github.com/influxdata/ifql/query/execute/storage"
 )
 
 // QuerySpec specifies a query.
@@ -20,11 +18,6 @@ type QuerySpec struct {
 type Edge struct {
 	Parent OperationID `json:"parent"`
 	Child  OperationID `json:"child"`
-}
-
-// TODO: instead of taking a predicate, define a spec for expressions native to queries.
-type ExpressionSpec struct {
-	Predicate *storage.Predicate
 }
 
 // Walk calls f on each operation exactly once.
@@ -136,7 +129,7 @@ func (q *QuerySpec) determineParentsChildrenAndRoots() (parents, children map[Op
 		}
 		parents[e.Child] = append(parents[e.Child], p)
 	}
-	// Find roots, i.e operations with not parents.
+	// Find roots, i.e operations with no parents.
 	for _, o := range q.Operations {
 		if len(parents[o.ID]) == 0 {
 			roots = append(roots, o)

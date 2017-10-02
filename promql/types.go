@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/functions"
 )
 
@@ -199,85 +199,58 @@ func NewRangeOp(rng, offset time.Duration) (*query.Operation, error) {
 	}, nil
 }
 
-var compareLookup = map[MatchKind]storage.Node_Comparison{
-	Equal:        storage.ComparisonEqual,
-	NotEqual:     storage.ComparisonNotEqual,
-	RegexMatch:   storage.ComparisonRegex,
-	RegexNoMatch: storage.ComparisonNotRegex,
+var operatorLookup = map[MatchKind]expression.Operator{
+	Equal:        expression.EqualOperator,
+	NotEqual:     expression.NotEqualOperator,
+	RegexMatch:   expression.RegexpMatchOperator,
+	RegexNoMatch: expression.RegexpNotMatchOperator,
 }
 
 func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operation, error) {
-	node := &storage.Predicate{
-		Root: &storage.Node{
-			NodeType: storage.NodeTypeLogicalExpression,
-			Value:    &storage.Node_Logical_{Logical: storage.LogicalAnd},
-			Children: []*storage.Node{
-				&storage.Node{
-					NodeType: storage.NodeTypeComparisonExpression,
-					Value: &storage.Node_Comparison_{
-						Comparison: storage.ComparisonEqual,
-					},
-					Children: []*storage.Node{
-						&storage.Node{
-							NodeType: storage.NodeTypeTagRef,
-							Value: &storage.Node_TagRefValue{
-								TagRefValue: "_metric",
-							},
-						},
-						&storage.Node{
-							NodeType: storage.NodeTypeLiteral,
-							Value: &storage.Node_StringValue{
-								StringValue: metricName,
-							},
-						},
-					},
-				},
-			},
+	node := &expression.BinaryNode{
+		Operator: expression.EqualOperator,
+		Left: &expression.ReferenceNode{
+			Name: "_metric",
+			Kind: "tag",
+		},
+		Right: &expression.StringLiteralNode{
+			Value: metricName,
 		},
 	}
 	for _, label := range labels {
-		cmp, ok := compareLookup[label.Kind]
+		op, ok := operatorLookup[label.Kind]
 		if !ok {
-			return nil, fmt.Errorf("Unknown label match kind %d", label.Kind)
+			return nil, fmt.Errorf("unknown label match kind %d", label.Kind)
 		}
-		ref := &storage.Node{
-			NodeType: storage.NodeTypeTagRef,
-			Value: &storage.Node_TagRefValue{
-				TagRefValue: label.Name,
-			},
+		ref := &expression.ReferenceNode{
+			Name: label.Name,
+			Kind: "tag",
 		}
-		var value *storage.Node
+		var value expression.Node
 		if label.Value.Type() == StringKind {
-			value = &storage.Node{
-				NodeType: storage.NodeTypeLiteral,
-				Value: &storage.Node_StringValue{
-					StringValue: label.Value.Value().(string),
-				},
+			value = &expression.StringLiteralNode{
+				Value: label.Value.Value().(string),
 			}
 		} else if label.Value.Type() == NumberKind {
-			value = &storage.Node{
-				NodeType: storage.NodeTypeLiteral,
-				Value: &storage.Node_FloatValue{
-					FloatValue: label.Value.Value().(float64),
-				},
+			value = &expression.FloatLiteralNode{
+				Value: label.Value.Value().(float64),
 			}
 		}
-		child := &storage.Node{
-			NodeType: storage.NodeTypeComparisonExpression,
-			Value: &storage.Node_Comparison_{
-				Comparison: cmp,
+		node = &expression.BinaryNode{
+			Operator: expression.AndOperator,
+			Left:     node,
+			Right: &expression.BinaryNode{
+				Operator: op,
+				Left:     ref,
+				Right:    value,
 			},
-			Children: []*storage.Node{ref, value},
 		}
-		node.Root.Children = append(node.Root.Children, child)
 	}
 
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.WhereOpSpec{
-			Exp: &query.ExpressionSpec{
-				Predicate: node,
-			},
+			Exp: node,
 		},
 	}, nil
 }

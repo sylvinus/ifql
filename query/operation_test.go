@@ -34,15 +34,11 @@ func TestOperation_JSON(t *testing.T) {
 			json: `{
 				"id": "where",
 				"kind": "where",
-				"spec": {
-					"exp": {}
-				}
+				"spec": {}
 			}`,
 			op: &query.Operation{
-				ID: "where",
-				Spec: &functions.WhereOpSpec{
-					Exp: &query.ExpressionSpec{},
-				},
+				ID:   "where",
+				Spec: &functions.WhereOpSpec{},
 			},
 		},
 		"range": {
