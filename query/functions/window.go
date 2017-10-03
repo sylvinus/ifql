@@ -150,22 +150,26 @@ func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta exec
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
 	tagKey := b.Tags().Key()
 
-	cells := b.Cells()
-	cells.Do(func(cs []execute.Cell) {
-		for _, c := range cs {
+	rows := b.Rows()
+	rows.Do(func(rs []execute.Row) {
+		for _, r := range rs {
 			found := false
 			t.cache.ForEachBuilder(func(bk execute.BlockKey, bld execute.BlockBuilder) {
-				if bld.Bounds().Contains(c.Time) && tagKey == bld.Tags().Key() {
-					bld.AddCell(c)
+				if bld.Bounds().Contains(r.Time()) && tagKey == bld.Tags().Key() {
+					bld.AppendTime(0, r.Time())
+					bld.AppendFloat(1, r.Value())
 					found = true
 				}
 			})
 			if !found {
 				builder := t.cache.BlockBuilder(blockMetadata{
 					tags:   b.Tags(),
-					bounds: t.getWindowBounds(c.Time),
+					bounds: t.getWindowBounds(r.Time()),
 				})
-				builder.AddCell(c)
+				builder.AddCol(execute.TimeCol)
+				builder.AddCol(execute.ValueCol)
+				builder.AppendTime(0, r.Time())
+				builder.AppendFloat(1, r.Value())
 			}
 		}
 	})

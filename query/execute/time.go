@@ -5,7 +5,7 @@ import "time"
 type Time int64
 type Duration int64
 
-const fixedWidthTimeFmt = "2006-01-02T15:04:05.000000000Z07:00"
+const fixedWidthTimeFmt = "2006-01-02T15:04:05.000000000Z"
 
 func (t Time) Round(d Duration) Time {
 	if d <= 0 {

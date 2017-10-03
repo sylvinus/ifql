@@ -3,7 +3,10 @@ package execute
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"runtime/debug"
 	"sort"
+	"strconv"
 
 	"github.com/influxdata/ifql/query"
 )
@@ -24,15 +27,16 @@ type Block interface {
 	BlockMetadata
 
 	Cols() []ColMeta
+	Col(c int) ValueIterator
 	Values() ValueIterator
-	Cells() CellIterator
+	Rows() RowIterator
 }
 
 // BlockBuilder builds blocks that can be used multiple times
 type BlockBuilder interface {
 	SetBounds(Bounds)
 
-	//SetTags sets tags that are global to all records of this block
+	//SetTags sets tags that are common to all records of this block
 	SetTags(Tags)
 
 	BlockMetadata
@@ -40,21 +44,27 @@ type BlockBuilder interface {
 	NRows() int
 	NCols() int
 
-	// AddRow increases the size of the block by one row
-	AddRow()
 	// AddCol increases the size of the block by one column
 	// Columns need not be added for tags that are common to the block
 	AddCol(ColMeta)
 
-	// AddCell increases the size of the block by one row and
+	// AddRow increases the size of the block by one row and
 	// sets the values based on the cell.
-	AddCell(Cell)
+	AddRow(Row) error
 
 	// Set sets the value at the specified coordinates
 	// The rows and columns must exist before calling set, otherwise Set panics.
 	SetFloat(i, j int, value float64)
 	SetString(i, j int, value string)
 	SetTime(i, j int, value Time)
+
+	AppendFloat(j int, value float64)
+	AppendString(j int, value string)
+	AppendTime(j int, value Time)
+
+	AppendFloats(j int, values []float64)
+	AppendStrings(j int, values []string)
+	AppendTimes(j int, values []Time)
 
 	// Clear removes all rows and columns from the block
 	ClearData()
@@ -76,15 +86,21 @@ const (
 type ColMeta struct {
 	Label string
 	Type  DataType
+	IsTag bool
 }
+
+const (
+	valueColLabel = "value"
+	timeColLabel  = "time"
+)
 
 var (
 	TimeCol = ColMeta{
-		Label: "time",
+		Label: timeColLabel,
 		Type:  TTime,
 	}
 	ValueCol = ColMeta{
-		Label: "value",
+		Label: valueColLabel,
 		Type:  TFloat,
 	}
 )
@@ -98,16 +114,34 @@ type BlockIterator interface {
 }
 
 type ValueIterator interface {
-	Do(f func([]float64))
+	DoFloat(f func([]float64))
+	DoString(f func([]string))
+	DoTime(f func([]Time))
 }
-type CellIterator interface {
-	Do(f func([]Cell))
+type RowIterator interface {
+	Do(f func([]Row))
 }
 
-type Cell struct {
-	Value float64
-	Time  Time
-	Tags  Tags
+type Row struct {
+	Values            []interface{}
+	cols              []ColMeta
+	valueIdx, timeIdx int
+}
+
+func (r Row) Time() Time {
+	return r.Values[r.timeIdx].(Time)
+}
+func (r Row) Value() float64 {
+	return r.Values[r.valueIdx].(float64)
+}
+func (r Row) Tags() Tags {
+	tags := make(Tags, len(r.Values)-2)
+	for j, v := range r.Values {
+		if r.cols[j].IsTag {
+			tags[r.cols[j].Label] = v.(string)
+		}
+	}
+	return tags
 }
 
 type Tags map[string]string
@@ -216,13 +250,6 @@ func (b colListBlockBuilder) NCols() int {
 	return len(b.blk.cols)
 }
 
-func (b colListBlockBuilder) AddRow() {
-	for _, c := range b.blk.cols {
-		c.Grow()
-	}
-	b.blk.nrows++
-}
-
 func (b colListBlockBuilder) AddCol(c ColMeta) {
 	var col column
 	switch c.Type {
@@ -242,43 +269,117 @@ func (b colListBlockBuilder) AddCol(c ColMeta) {
 	b.blk.cols = append(b.blk.cols, col)
 }
 
-func (b colListBlockBuilder) AddCell(cell Cell) {
-	//TODO(nathanielc): What do we do about new tags not as columns or as tags on the block.
-	for _, c := range b.blk.cols {
+func (b colListBlockBuilder) AddRow(row Row) error {
+	if len(row.Values) != len(b.blk.cols) {
+		return fmt.Errorf("row does not have the correct number of values %d, expected %d", len(row.Values), len(b.blk.cols))
+	}
+	for j, c := range b.blk.cols {
 		switch col := c.(type) {
 		case *floatColumn:
-			col.data = append(col.data, cell.Value)
+			v, ok := row.Values[j].(float64)
+			if !ok {
+				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
+			}
+			col.data = append(col.data, v)
 		case *stringColumn:
-			col.data = append(col.data, cell.Tags[col.Label])
+			v, ok := row.Values[j].(string)
+			if !ok {
+				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
+			}
+			col.data = append(col.data, v)
 		case *timeColumn:
-			col.data = append(col.data, cell.Time)
+			v, ok := row.Values[j].(Time)
+			if !ok {
+				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
+			}
+			col.data = append(col.data, v)
 		}
 	}
 	b.blk.nrows++
+	return nil
+}
+
+func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
+	b.checkColType(j, TFloat)
+	b.blk.cols[j].(*floatColumn).data[i] = value
+}
+func (b colListBlockBuilder) AppendFloat(j int, value float64) {
+	b.checkColType(j, TFloat)
+	col := b.blk.cols[j].(*floatColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) AppendFloats(j int, values []float64) {
+	b.checkColType(j, TFloat)
+	col := b.blk.cols[j].(*floatColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
+}
+
+func (b colListBlockBuilder) SetString(i int, j int, value string) {
+	b.checkColType(j, TString)
+	b.blk.cols[j].(*stringColumn).data[i] = value
+}
+func (b colListBlockBuilder) AppendString(j int, value string) {
+	b.checkColType(j, TString)
+	col := b.blk.cols[j].(*stringColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) AppendStrings(j int, values []string) {
+	b.checkColType(j, TString)
+	col := b.blk.cols[j].(*stringColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
 }
 
 func (b colListBlockBuilder) SetTime(i int, j int, value Time) {
-	if b.blk.cols[j].Meta().Type != TTime {
-		panic(fmt.Errorf("column %d is not of type time", j))
-	}
+	b.checkColType(j, TTime)
 	b.blk.cols[j].(*timeColumn).data[i] = value
 }
-func (b colListBlockBuilder) SetString(i int, j int, value string) {
-	if b.blk.cols[j].Meta().Type != TString {
-		panic(fmt.Errorf("column %d is not of type string", j))
-	}
-	b.blk.cols[j].(*stringColumn).data[i] = value
+func (b colListBlockBuilder) AppendTime(j int, value Time) {
+	b.checkColType(j, TTime)
+	col := b.blk.cols[j].(*timeColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
 }
-func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
-	if b.blk.cols[j].Meta().Type != TFloat {
-		panic(fmt.Errorf("column %d is not of type float", j))
+func (b colListBlockBuilder) AppendTimes(j int, values []Time) {
+	b.checkColType(j, TTime)
+	col := b.blk.cols[j].(*timeColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
+}
+
+func (b colListBlockBuilder) checkColType(j int, typ DataType) {
+	if b.blk.cols[j].Meta().Type != typ {
+		panic(fmt.Errorf("column %d is not of type %v", j, typ))
 	}
-	b.blk.cols[j].(*floatColumn).data[i] = value
 }
 
 func (b colListBlockBuilder) Block() Block {
-	//TODO(nathanielc): Construct Apache Arrow based block
-	return b.blk.Copy()
+	// Create copy in mutable state
+	blk := b.blk.Copy()
+
+	// Add tagColums
+	keys := blk.tags.Keys()
+	for _, k := range keys {
+		blk.cols = append(blk.cols, &tagColumn{
+			ColMeta: ColMeta{
+				Label: k,
+				Type:  TString,
+				IsTag: true,
+			},
+			value: blk.tags[k],
+			size:  b.blk.nrows,
+		})
+	}
+
+	// Build meta list
+	blk.colMeta = make([]ColMeta, len(blk.cols))
+	for i, c := range blk.cols {
+		blk.colMeta[i] = c.Meta()
+	}
+	return blk
 }
 
 func (b colListBlockBuilder) ClearData() {
@@ -293,8 +394,9 @@ type colListBlock struct {
 	bounds Bounds
 	tags   Tags
 
-	cols  []column
-	nrows int
+	colMeta []ColMeta
+	cols    []column
+	nrows   int
 }
 
 func (b *colListBlock) Bounds() Bounds {
@@ -304,19 +406,31 @@ func (b *colListBlock) Bounds() Bounds {
 func (b *colListBlock) Tags() Tags {
 	return b.tags
 }
+
 func (b *colListBlock) Cols() []ColMeta {
-	cols := make([]ColMeta, len(b.cols))
-	for i, c := range b.cols {
-		cols[i] = c.Meta()
+	return b.colMeta
+}
+
+func (b *colListBlock) Col(c int) ValueIterator {
+	meta := b.colMeta[c]
+	col := b.cols[c]
+	if meta.IsTag {
+		return &tagColValueIterator{col: col.(*tagColumn)}
 	}
-	return cols
+	return colListValueIterator{col: col}
 }
 
 func (b *colListBlock) Values() ValueIterator {
-	return colListValueIterator{blk: b}
+	for j, c := range b.colMeta {
+		// TODO(nathanielc): Change api to deal with multiple value columns
+		if c.Label == valueColLabel && c.Type == TFloat {
+			return colListValueIterator{col: b.cols[j]}
+		}
+	}
+	return nil
 }
-func (b *colListBlock) Cells() CellIterator {
-	return colListCellIterator{blk: b}
+func (b *colListBlock) Rows() RowIterator {
+	return colListRowIterator{blk: b}
 }
 
 func (b *colListBlock) Copy() *colListBlock {
@@ -324,6 +438,9 @@ func (b *colListBlock) Copy() *colListBlock {
 	cpy.bounds = b.bounds
 	cpy.tags = b.tags.Copy()
 	cpy.nrows = b.nrows
+
+	cpy.colMeta = make([]ColMeta, len(b.colMeta))
+	copy(cpy.colMeta, b.colMeta)
 
 	cpy.cols = make([]column, len(b.cols))
 	for i, c := range b.cols {
@@ -334,47 +451,82 @@ func (b *colListBlock) Copy() *colListBlock {
 }
 
 type colListValueIterator struct {
+	col column
+}
+
+func (itr colListValueIterator) DoFloat(f func([]float64)) {
+	if itr.col.Meta().Type != TFloat {
+		panic("column is not of type float")
+	}
+	f(itr.col.(*floatColumn).data)
+}
+func (itr colListValueIterator) DoString(f func([]string)) {
+	if itr.col.Meta().Type != TString {
+		panic("column is not of type string")
+	}
+	f(itr.col.(*stringColumn).data)
+}
+func (itr colListValueIterator) DoTime(f func([]Time)) {
+	if itr.col.Meta().Type != TTime {
+		panic("column is not of type time")
+	}
+	f(itr.col.(*timeColumn).data)
+}
+
+type colListRowIterator struct {
 	blk *colListBlock
 }
 
-func (vi colListValueIterator) Do(f func([]float64)) {
-	for _, c := range vi.blk.cols {
-		meta := c.Meta()
-		// TODO(nathanielc): Change api to deal with multiple value columns
-		if meta.Label == "value" && meta.Type == TFloat {
-			f(c.(*floatColumn).data)
-			break
+func (itr colListRowIterator) Do(f func([]Row)) {
+	cols := itr.blk.Cols()
+	rows := make([]Row, itr.blk.nrows)
+	var timeIdx, valueIdx int
+	for j, c := range itr.blk.cols {
+		switch c.Meta().Label {
+		case timeColLabel:
+			timeIdx = j
+		case valueColLabel:
+			valueIdx = j
 		}
 	}
-}
-
-type colListCellIterator struct {
-	blk *colListBlock
-}
-
-func (ci colListCellIterator) Do(f func([]Cell)) {
-	cells := make([]Cell, ci.blk.nrows)
-	for i := 0; i < ci.blk.nrows; i++ {
-		cells[i].Tags = ci.blk.tags.Copy()
-		for _, c := range ci.blk.cols {
-			// TODO(nathanielc): This assumes all string cols are tags and that
-			// there is only one float(value) and one time column.
-			switch col := c.(type) {
-			case *floatColumn:
-				cells[i].Value = col.data[i]
-			case *stringColumn:
-				cells[i].Tags[col.Label] = col.data[i]
-			case *timeColumn:
-				cells[i].Time = col.data[i]
-			}
+	for i := range rows {
+		rows[i].Values = make([]interface{}, len(itr.blk.cols))
+		rows[i].cols = cols
+		rows[i].timeIdx = timeIdx
+		rows[i].valueIdx = valueIdx
+	}
+	for j, c := range itr.blk.cols {
+		i := 0
+		values := itr.blk.Col(j)
+		switch c.Meta().Type {
+		case TFloat:
+			values.DoFloat(func(vs []float64) {
+				for _, v := range vs {
+					rows[i].Values[j] = v
+					i++
+				}
+			})
+		case TString:
+			values.DoString(func(vs []string) {
+				for _, v := range vs {
+					rows[i].Values[j] = v
+					i++
+				}
+			})
+		case TTime:
+			values.DoTime(func(vs []Time) {
+				for _, v := range vs {
+					rows[i].Values[j] = v
+					i++
+				}
+			})
 		}
 	}
-	f(cells)
+	f(rows)
 }
 
 type column interface {
 	Meta() ColMeta
-	Grow()
 	Clear()
 	Len() int
 	Copy() column
@@ -389,9 +541,6 @@ func (c *floatColumn) Meta() ColMeta {
 	return c.ColMeta
 }
 
-func (c *floatColumn) Grow() {
-	c.data = append(c.data, 0)
-}
 func (c *floatColumn) Clear() {
 	c.data = c.data[0:0]
 }
@@ -416,9 +565,6 @@ func (c *stringColumn) Meta() ColMeta {
 	return c.ColMeta
 }
 
-func (c *stringColumn) Grow() {
-	c.data = append(c.data, "")
-}
 func (c *stringColumn) Clear() {
 	c.data = c.data[0:0]
 }
@@ -443,9 +589,6 @@ func (c *timeColumn) Meta() ColMeta {
 	return c.ColMeta
 }
 
-func (c *timeColumn) Grow() {
-	c.data = append(c.data, 0)
-}
 func (c *timeColumn) Clear() {
 	c.data = c.data[0:0]
 }
@@ -460,6 +603,44 @@ func (c *timeColumn) Copy() column {
 	copy(cpy.data, c.data)
 	return cpy
 }
+
+//tagColumn has the same value for all rows
+type tagColumn struct {
+	ColMeta
+	value string
+	size  int
+}
+
+func (c *tagColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+func (c *tagColumn) Clear() {
+	c.size = 0
+}
+func (c *tagColumn) Len() int {
+	return c.size
+}
+func (c *tagColumn) Copy() column {
+	cpy := new(tagColumn)
+	*cpy = *c
+	return cpy
+}
+
+type tagColValueIterator struct {
+	col    *tagColumn
+	values []string
+}
+
+func (*tagColValueIterator) DoFloat(f func([]float64)) {}
+func (itr *tagColValueIterator) DoString(f func([]string)) {
+	strs := make([]string, itr.col.size)
+	for i := range strs {
+		strs[i] = itr.col.value
+	}
+	f(strs)
+}
+
+func (*tagColValueIterator) DoTime(f func([]Time)) {}
 
 type BlockBuilderCache interface {
 	BlockBuilder(meta BlockMetadata) BlockBuilder
@@ -541,54 +722,216 @@ func (d *blockBuilderCache) ForEachWithContext(f func(BlockKey, Trigger, BlockCo
 	}
 }
 
-type TableFmt struct {
-	Block Block
+type FormatOption func(*formatter)
+
+func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
+	f := formatter{
+		b: b,
+	}
+	for _, o := range opts {
+		o(&f)
+	}
+	return f
 }
 
-func (t TableFmt) String() string {
-	var buf bytes.Buffer
-	b := t.Block
-	tags := b.Tags()
-	keys := tags.Keys()
-	fmt.Fprintf(&buf, "Block: keys: %v bounds: %v\n", keys, b.Bounds())
-	cols := b.Cols()
-	size := 0
-	for _, c := range cols {
-		if c.Label == "time" {
-			fmt.Fprintf(&buf, "%31s", c.Label)
-			size += 31
-		} else {
-			fmt.Fprintf(&buf, "%20s", c.Label)
-			size += 20
+func Head(m int) FormatOption {
+	return func(f *formatter) { f.head = m }
+}
+func Squeeze() FormatOption {
+	return func(f *formatter) { f.squeeze = true }
+}
+
+type formatter struct {
+	b       Block
+	head    int
+	squeeze bool
+}
+
+func (f formatter) Format(fs fmt.State, c rune) {
+	if c == 'v' && fs.Flag('#') {
+		fmt.Fprintf(fs, "%#v", f.b)
+		return
+	}
+	defer func() {
+		r := recover()
+		if r != nil {
+			panic(fmt.Sprintf("%v\n%s", r, debug.Stack()))
 		}
+	}()
+	f.format(fs, c)
+}
+
+func (f formatter) format(fs fmt.State, c rune) {
+	tags := f.b.Tags()
+	keys := tags.Keys()
+	cols := f.b.Cols()
+	fmt.Fprintf(fs, "Block: keys: %v bounds: %v\n", keys, f.b.Bounds())
+	nCols := len(cols) + len(keys)
+
+	// Determine number of rows to print
+	nrows := math.MaxInt64
+	if f.head > 0 {
+		nrows = f.head
 	}
-	for _, k := range keys {
-		fmt.Fprintf(&buf, "%20s", k)
-		size += 20
+
+	// Determine precision of floating point values
+	prec, pOk := fs.Precision()
+	if !pOk {
+		prec = -1
 	}
-	buf.WriteRune('\n')
-	for i := 0; i < size; i++ {
-		buf.WriteRune('-')
+
+	var widths widther
+	if f.squeeze {
+		widths = make(columnWidth, nCols)
+	} else {
+		widths = new(uniformWidth)
 	}
-	buf.WriteRune('\n')
-	cells := b.Cells()
-	cells.Do(func(cs []Cell) {
-		for _, cell := range cs {
-			for _, c := range cols {
-				label := c.Label
-				if label == "time" {
-					fmt.Fprintf(&buf, "%31v", cell.Time)
-				} else if label == "value" {
-					fmt.Fprintf(&buf, "%20f", cell.Value)
-				} else {
-					fmt.Fprintf(&buf, "%20s", cell.Tags[label])
+
+	fmtC := byte(c)
+	if fmtC == 'v' {
+		fmtC = 'g'
+	}
+	floatBuf := make([]byte, 0, 64)
+	maxWidth := computeWidths(f.b, fmtC, nrows, prec, widths, floatBuf)
+
+	width, _ := fs.Width()
+	if width < maxWidth {
+		width = maxWidth
+	}
+	if width < 2 {
+		width = 2
+	}
+	pad := make([]byte, width)
+	for i := range pad {
+		pad[i] = ' '
+	}
+	dash := make([]byte, width)
+	for i := range dash {
+		dash[i] = '-'
+	}
+	eol := []byte{'\n'}
+
+	// Print column headers
+	for j, c := range cols {
+		buf := []byte(c.Label)
+		// Check justification
+		if fs.Flag('-') {
+			fs.Write(buf)
+			fs.Write(pad[:widths.width(j)-len(buf)])
+		} else {
+			fs.Write(pad[:widths.width(j)-len(buf)])
+			fs.Write(buf)
+		}
+		fs.Write(pad[:2])
+	}
+	fs.Write(eol)
+	// Print header separator
+	for j := range cols {
+		fs.Write(dash[:widths.width(j)])
+		fs.Write(pad[:2])
+	}
+	fs.Write(eol)
+
+	n := nrows
+	rows := f.b.Rows()
+	rows.Do(func(rs []Row) {
+		l := len(rs)
+		if n < l {
+			l = n
+			n = 0
+		} else {
+			n -= l
+		}
+		for _, row := range rs[:l] {
+			for j, v := range row.Values {
+				var buf []byte
+				switch value := v.(type) {
+				case float64:
+					buf = strconv.AppendFloat(floatBuf, value, fmtC, prec, 64)
+				case Time:
+					buf = []byte(value.String())
+				case string:
+					buf = []byte(value)
 				}
+				// Check justification
+				if fs.Flag('-') {
+					fs.Write(buf)
+					fs.Write(pad[:widths.width(j)-len(buf)])
+				} else {
+					fs.Write(pad[:widths.width(j)-len(buf)])
+					fs.Write(buf)
+				}
+				fs.Write(pad[:2])
 			}
-			for _, k := range keys {
-				fmt.Fprintf(&buf, "%20s", tags[k])
-			}
-			buf.WriteRune('\n')
+			fs.Write(eol)
 		}
 	})
-	return buf.String()
 }
+
+func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byte) int {
+	maxWidth := 0
+	for j, c := range b.Cols() {
+		n := rows
+		values := b.Col(j)
+		width := len(c.Label)
+		switch c.Type {
+		case TFloat:
+			values.DoFloat(func(vs []float64) {
+				l := len(vs)
+				if n < l {
+					l = n
+					n = 0
+				} else {
+					n -= l
+				}
+				for _, v := range vs[:l] {
+					buf = strconv.AppendFloat(buf, v, fmtC, prec, 64)
+					if w := len(buf); w > width {
+						width = w
+					}
+				}
+			})
+		case TString:
+			values.DoString(func(vs []string) {
+				l := len(vs)
+				if n < l {
+					l = n
+					n = 0
+				} else {
+					n -= l
+				}
+				for _, v := range vs[:l] {
+					if w := len(v); w > width {
+						width = w
+					}
+				}
+			})
+		case TTime:
+			width = len(fixedWidthTimeFmt)
+		}
+		widths.setWidth(j, width)
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+type widther interface {
+	width(i int) int
+	setWidth(i, w int)
+}
+
+type uniformWidth int
+
+func (u *uniformWidth) width(_ int) int { return int(*u) }
+func (u *uniformWidth) setWidth(_, w int) {
+	if uniformWidth(w) > *u {
+		*u = uniformWidth(w)
+	}
+}
+
+type columnWidth []int
+
+func (c columnWidth) width(i int) int   { return c[i] }
+func (c columnWidth) setWidth(i, w int) { c[i] = w }

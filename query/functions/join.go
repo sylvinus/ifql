@@ -180,10 +180,10 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 		table = tables.right
 	}
 
-	cells := b.Cells()
-	cells.Do(func(cs []execute.Cell) {
-		for _, c := range cs {
-			table.Insert(c.Value, c.Tags.Subset(t.keys), c.Time)
+	rows := b.Rows()
+	rows.Do(func(rs []execute.Row) {
+		for _, r := range rs {
+			table.Insert(r.Value(), r.Tags().Subset(t.keys), r.Time())
 		}
 	})
 }
@@ -374,7 +374,6 @@ func (t *joinTables) Join() execute.Block {
 	builder.SetTags(t.tags)
 	builder.AddCol(execute.TimeCol)
 	builder.AddCol(execute.ValueCol)
-	rIdx := 0
 
 	var left, leftSet, right, rightSet []joinCell
 	var leftKey, rightKey joinKey
@@ -393,11 +392,8 @@ func (t *joinTables) Join() execute.Block {
 			for _, l := range leftSet {
 				for _, r := range rightSet {
 					v := t.eval(l.Value, r.Value)
-					builder.AddRow()
-					builder.SetTime(rIdx, 0, l.Key.Time)
-					builder.SetFloat(rIdx, 1, v)
-					//log.Println("AddCell", l.Key.Time, l.Tags, v)
-					rIdx++
+					builder.AppendTime(0, l.Key.Time)
+					builder.AppendFloat(1, v)
 				}
 			}
 

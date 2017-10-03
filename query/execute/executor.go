@@ -3,6 +3,7 @@ package execute
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ func Execute(qSpec *query.QuerySpec) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create physical plan")
 	}
+	log.Println("plan", plan.Formatted(p))
 
 	storage, err := NewStorageReader()
 	if err != nil {

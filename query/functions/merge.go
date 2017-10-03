@@ -125,12 +125,32 @@ func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
 	})
-	cells := b.Cells()
-	cells.Do(func(cs []execute.Cell) {
-		for _, c := range cs {
-			builder.AddCell(c)
+	cols := b.Cols()
+	nj := 0
+	for j, c := range cols {
+		// TODO check the `keep` list to determine which tags are kept
+		if c.IsTag {
+			continue
 		}
-	})
+		builder.AddCol(c)
+
+		values := b.Col(j)
+		switch c.Type {
+		case execute.TString:
+			values.DoString(func(vs []string) {
+				builder.AppendStrings(nj, vs)
+			})
+		case execute.TFloat:
+			values.DoFloat(func(vs []float64) {
+				builder.AppendFloats(nj, vs)
+			})
+		case execute.TTime:
+			values.DoTime(func(vs []execute.Time) {
+				builder.AppendTimes(nj, vs)
+			})
+		}
+		nj++
+	}
 }
 
 func (t *mergeTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {

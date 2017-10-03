@@ -35,14 +35,15 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	builder := t.cache.BlockBuilder(b)
 
 	values := b.Values()
-	values.Do(t.agg.Do)
+	//TODO(nathanielc): Add types to the aggFuncs
+	values.DoFloat(t.agg.Do)
 
 	builder.AddCol(TimeCol)
-	//TODO(nathanielc): Add types to the aggFuncs
 	builder.AddCol(ValueCol)
-	builder.AddRow()
-	builder.SetTime(0, 0, b.Bounds().Stop)
-	builder.SetFloat(0, 1, t.agg.Value())
+
+	builder.AppendTime(0, b.Bounds().Stop)
+	builder.AppendFloat(1, t.agg.Value())
+
 	t.agg.Reset()
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-var allowUnexportedDataFrame = cmp.AllowUnexported(blockList{}, block{})
+var allowUnexported = cmp.AllowUnexported(blockList{}, block{}, execute.Row{})
 
 var epoch = time.Unix(0, 0)
 
@@ -32,12 +32,12 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					cells: []execute.Cell{
-						{Value: 1, Time: 0},
-						{Value: 2, Time: 1},
-						{Value: 3, Time: 2},
-						{Value: 4, Time: 3},
-						{Value: 5, Time: 4},
+					rows: []execute.Row{
+						{Values: []interface{}{1.0, execute.Time(0)}},
+						{Values: []interface{}{2.0, execute.Time(1)}},
+						{Values: []interface{}{3.0, execute.Time(2)}},
+						{Values: []interface{}{4.0, execute.Time(4)}},
+						{Values: []interface{}{5.0, execute.Time(5)}},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -80,8 +80,8 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					cells: []execute.Cell{
-						{Value: 15, Time: 5, Tags: execute.Tags{}},
+					rows: []execute.Row{
+						{Values: []interface{}{15.0, execute.Time(5)}},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -97,12 +97,12 @@ func TestExecutor_Execute(t *testing.T) {
 					Stop:  5,
 				},
 				tags: execute.Tags{},
-				cells: []execute.Cell{
-					{Value: 1, Time: 0},
-					{Value: 2, Time: 1},
-					{Value: 3, Time: 2},
-					{Value: 4, Time: 3},
-					{Value: 5, Time: 4},
+				rows: []execute.Row{
+					{Values: []interface{}{1.0, execute.Time(0)}},
+					{Values: []interface{}{2.0, execute.Time(1)}},
+					{Values: []interface{}{3.0, execute.Time(2)}},
+					{Values: []interface{}{4.0, execute.Time(3)}},
+					{Values: []interface{}{5.0, execute.Time(4)}},
 				},
 				cols: []execute.ColMeta{
 					execute.TimeCol,
@@ -173,8 +173,8 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					cells: []execute.Cell{
-						{Value: 3, Time: 5, Tags: execute.Tags{}},
+					rows: []execute.Row{
+						{Values: []interface{}{3.0, execute.Time(5)}},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -200,8 +200,8 @@ func TestExecutor_Execute(t *testing.T) {
 				got[i] = convertToBlockList(r)
 			}
 
-			if !cmp.Equal(got, tc.exp, allowUnexportedDataFrame) {
-				t.Error("unexpected results -want/+got", cmp.Diff(tc.exp, got, allowUnexportedDataFrame))
+			if !cmp.Equal(got, tc.exp, allowUnexported) {
+				t.Error("unexpected results -want/+got", cmp.Diff(tc.exp, got, allowUnexported))
 			}
 		})
 	}
@@ -263,7 +263,7 @@ func (bi *blockIterator) Do(f func(execute.Block)) {
 type block struct {
 	bounds execute.Bounds
 	tags   execute.Tags
-	cells  []execute.Cell
+	rows   []execute.Row
 	cols   []execute.ColMeta
 }
 
@@ -278,30 +278,37 @@ func (b block) Cols() []execute.ColMeta {
 	return b.cols
 }
 
+func (b block) Col(c int) execute.ValueIterator {
+	return &valueIterator{b.rows}
+}
 func (b block) Values() execute.ValueIterator {
-	return &valueIterator{b.cells}
+	return &valueIterator{b.rows}
 }
 
-func (b block) Cells() execute.CellIterator {
-	return &cellIterator{b.cells}
+func (b block) Rows() execute.RowIterator {
+	return &rowIterator{b.rows}
 }
 
 type valueIterator struct {
-	cells []execute.Cell
+	rows []execute.Row
 }
 
-func (vi *valueIterator) Do(f func([]float64)) {
-	for _, c := range vi.cells {
-		f([]float64{c.Value})
+func (vi *valueIterator) DoFloat(f func([]float64)) {
+	for _, r := range vi.rows {
+		f([]float64{r.Value()})
 	}
 }
-
-type cellIterator struct {
-	cells []execute.Cell
+func (vi *valueIterator) DoString(f func([]string)) {
+}
+func (vi *valueIterator) DoTime(f func([]execute.Time)) {
 }
 
-func (ci *cellIterator) Do(f func([]execute.Cell)) {
-	f(ci.cells)
+type rowIterator struct {
+	rows []execute.Row
+}
+
+func (ci *rowIterator) Do(f func([]execute.Row)) {
+	f(ci.rows)
 }
 
 func convertToTestBlock(b execute.Block) block {
@@ -310,10 +317,10 @@ func convertToTestBlock(b execute.Block) block {
 		tags:   b.Tags(),
 		cols:   b.Cols(),
 	}
-	cells := b.Cells()
+	rows := b.Rows()
 
-	cells.Do(func(cs []execute.Cell) {
-		blk.cells = append(blk.cells, cs...)
+	rows.Do(func(rs []execute.Row) {
+		blk.rows = append(blk.rows, rs...)
 	})
 	return blk
 }
