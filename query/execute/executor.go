@@ -18,6 +18,7 @@ func Execute(qSpec *query.QuerySpec) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create logical plan")
 	}
+	log.Println("logical plan", plan.Formatted(lp))
 
 	planner := plan.NewPlanner()
 	p, err := planner.Plan(lp, nil, time.Now())

@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -20,6 +19,9 @@ func (p *PlanSpec) Do(f func(pr *Procedure)) {
 	for _, id := range p.Order {
 		f(p.Procedures[id])
 	}
+}
+func (p *PlanSpec) lookup(id ProcedureID) *Procedure {
+	return p.Procedures[id]
 }
 
 type Planner interface {
@@ -47,9 +49,6 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		p.plan.Procedures[pr.ID] = pr
 		p.plan.Order = append(p.plan.Order, pr.ID)
 
-		if len(pr.Children) == 0 {
-			p.plan.Results = append(p.plan.Results, pr.ID)
-		}
 	})
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
@@ -62,6 +61,13 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
 			bounds := bounded.TimeBounds()
 			p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
+		}
+	})
+
+	// Now that plan is complete find results
+	p.plan.Do(func(pr *Procedure) {
+		if len(pr.Children) == 0 {
+			p.plan.Results = append(p.plan.Results, pr.ID)
 		}
 	})
 
@@ -118,49 +124,4 @@ func removeID(ids []ProcedureID, remove ProcedureID) []ProcedureID {
 		}
 	}
 	return filtered
-}
-
-type FormatOption func(*formatter)
-
-func Formatted(p *PlanSpec, opts ...FormatOption) fmt.Formatter {
-	f := formatter{
-		p: p,
-	}
-	for _, o := range opts {
-		o(&f)
-	}
-	return f
-}
-
-func UseIDs() FormatOption {
-	return func(f *formatter) {
-		f.useIDs = true
-	}
-}
-
-type formatter struct {
-	p      *PlanSpec
-	useIDs bool
-}
-
-func (f formatter) Format(fs fmt.State, c rune) {
-	if c == 'v' && fs.Flag('#') {
-		fmt.Fprintf(fs, "%#v", f.p)
-		return
-	}
-	f.format(fs)
-}
-
-func (f formatter) format(fs fmt.State) {
-	fmt.Fprint(fs, "digraph PlanSpec {\n")
-	f.p.Do(func(pr *Procedure) {
-		for _, child := range pr.Children {
-			if f.useIDs {
-				fmt.Fprintf(fs, "%s->%s\n", pr.ID, child)
-			} else {
-				fmt.Fprintf(fs, "%s->%s\n", pr.Spec.Kind(), f.p.Procedures[child].Spec.Kind())
-			}
-		}
-	})
-	fmt.Fprintln(fs, "}")
 }

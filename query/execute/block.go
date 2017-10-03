@@ -916,7 +916,7 @@ func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byt
 					n -= l
 				}
 				for _, v := range vs[:l] {
-					buf = strconv.AppendFloat(buf, v, fmtC, prec, 64)
+					buf = strconv.AppendFloat(buf[0:0], v, fmtC, prec, 64)
 					if w := len(buf); w > width {
 						width = w
 					}
