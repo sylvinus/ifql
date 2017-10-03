@@ -6,7 +6,8 @@ import (
 
 type PlanSpec struct {
 	// Now represents the relative currentl time of the plan.
-	Now time.Time
+	Now    time.Time
+	Bounds BoundsSpec
 	// Procedures is a set of all operations
 	Procedures map[ProcedureID]*Procedure
 	Order      []ProcedureID
@@ -18,6 +19,9 @@ func (p *PlanSpec) Do(f func(pr *Procedure)) {
 	for _, id := range p.Order {
 		f(p.Procedures[id])
 	}
+}
+func (p *PlanSpec) lookup(id ProcedureID) *Procedure {
+	return p.Procedures[id]
 }
 
 type Planner interface {
@@ -45,9 +49,6 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		p.plan.Procedures[pr.ID] = pr
 		p.plan.Order = append(p.plan.Order, pr.ID)
 
-		if len(pr.Children) == 0 {
-			p.plan.Results = append(p.plan.Results, pr.ID)
-		}
 	})
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
@@ -56,6 +57,17 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 			rule := pd.PushDownRule()
 			p.pushDownAndSearch(pr, rule, pd.PushDown)
 			p.removeProcedure(pr)
+		}
+		if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
+			bounds := bounded.TimeBounds()
+			p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
+		}
+	})
+
+	// Now that plan is complete find results
+	p.plan.Do(func(pr *Procedure) {
+		if len(pr.Children) == 0 {
+			p.plan.Results = append(p.plan.Results, pr.ID)
 		}
 	})
 

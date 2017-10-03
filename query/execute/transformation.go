@@ -2,8 +2,8 @@ package execute
 
 import (
 	"fmt"
-	"time"
 
+	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -16,7 +16,12 @@ type Transformation interface {
 	SetParents(ids []DatasetID)
 }
 
-type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, now time.Time) (Transformation, Dataset, error)
+type Context interface {
+	ResolveTime(qt query.Time) Time
+	Bounds() Bounds
+}
+
+type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, ctx Context) (Transformation, Dataset, error)
 
 var procedureToTransformation = make(map[plan.ProcedureKind]CreateTransformation)
 

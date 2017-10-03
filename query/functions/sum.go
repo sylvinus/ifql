@@ -2,7 +2,6 @@ package functions
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
@@ -53,10 +52,8 @@ type SumAgg struct {
 	sum float64
 }
 
-func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
-	cache := execute.NewBlockBuilderCache()
-	d := execute.NewDataset(id, mode, cache)
-	t := execute.NewAggregateTransformation(d, cache, new(SumAgg))
+func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformation(id, mode, ctx.Bounds(), new(SumAgg))
 	return t, d, nil
 }
 

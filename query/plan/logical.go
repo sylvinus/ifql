@@ -21,6 +21,10 @@ func (lp *LogicalPlanSpec) Do(f func(pr *Procedure)) {
 	}
 }
 
+func (lp *LogicalPlanSpec) lookup(id ProcedureID) *Procedure {
+	return lp.Procedures[id]
+}
+
 type LogicalPlanner interface {
 	Plan(*query.QuerySpec) (*LogicalPlanSpec, error)
 }

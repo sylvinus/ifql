@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/influxdata/ifql/query"
 	uuid "github.com/satori/go.uuid"
@@ -35,6 +36,10 @@ type PushDownProcedureSpec interface {
 	PushDown(root *Procedure)
 }
 
+type BoundedProcedureSpec interface {
+	TimeBounds() BoundsSpec
+}
+
 // TODO(nathanielc): make this more formal using commute/associative properties
 type PushDownRule struct {
 	Root    ProcedureKind
@@ -47,6 +52,18 @@ type ProcedureKind string
 type BoundsSpec struct {
 	Start query.Time
 	Stop  query.Time
+}
+
+func (b BoundsSpec) Union(o BoundsSpec, now time.Time) (u BoundsSpec) {
+	u.Start = b.Start
+	if o.Start.Time(now).Before(b.Start.Time(now)) {
+		u.Start = o.Start
+	}
+	u.Stop = b.Stop
+	if o.Stop.Time(now).After(b.Stop.Time(now)) {
+		u.Stop = o.Stop
+	}
+	return
 }
 
 type WindowSpec struct {

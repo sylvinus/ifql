@@ -25,7 +25,7 @@ func main() {
 	for _, r := range results {
 		blocks := r.Blocks()
 		blocks.Do(func(b execute.Block) {
-			fmt.Println(execute.TableFmt{Block: b})
+			fmt.Printf("%v\n", execute.Formatted(b, execute.Squeeze()))
 		})
 	}
 

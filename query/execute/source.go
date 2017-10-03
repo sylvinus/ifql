@@ -3,7 +3,6 @@ package execute
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/influxdata/ifql/query/plan"
 )
@@ -17,7 +16,7 @@ type Source interface {
 	Run()
 }
 
-type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, now time.Time) Source
+type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, ctx Context) Source
 
 var procedureToSource = make(map[plan.ProcedureKind]CreateSource)
 

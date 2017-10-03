@@ -14,7 +14,7 @@ import (
 func TestPhysicalPlanner_Plan(t *testing.T) {
 	testCases := []struct {
 		lp *plan.LogicalPlanSpec
-		cp *plan.PlanSpec
+		pp *plan.PlanSpec
 	}{
 		{
 			lp: &plan.LogicalPlanSpec{
@@ -54,8 +54,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					plan.ProcedureIDFromOperationID("count"),
 				},
 			},
-			cp: &plan.PlanSpec{
+			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{Relative: -1 * time.Hour},
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -136,8 +139,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					plan.ProcedureIDFromOperationID("count"),
 				},
 			},
-			cp: &plan.PlanSpec{
+			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{Relative: -1 * time.Hour},
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -180,8 +186,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !cmp.Equal(got, tc.cp) {
-				t.Errorf("unexpected physical plan -want/+got %s", cmp.Diff(tc.cp, got))
+			if !cmp.Equal(got, tc.pp) {
+				t.Errorf("unexpected physical plan -want/+got %s", cmp.Diff(tc.pp, got))
 			}
 		})
 	}

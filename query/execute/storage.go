@@ -95,44 +95,52 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 func (bi *storageBlockIterator) readBlocks() {
 	defer close(bi.blocks)
 
+	newBuilder := func() BlockBuilder {
+		builder := NewColListBlockBuilder()
+		builder.SetBounds(bi.bounds)
+		builder.AddCol(TimeCol)
+		builder.AddCol(ValueCol)
+		return builder
+	}
+
+	var builder BlockBuilder
+
 	for {
 		// Recv the next response
 		var rep storage.ReadResponse
 		if err := bi.stream.RecvMsg(&rep); err != nil {
 			if err == io.EOF {
+				if builder != nil {
+					b := builder.Block()
+					bi.blocks <- b
+				}
 				return
 			}
 			//TODO add proper error handling
 			return
 		}
 
-		builder := NewColListBlockBuilder()
-		builder.SetBounds(bi.bounds)
-
 		for _, frame := range rep.Frames {
 			if s := frame.GetSeries(); s != nil {
+				if builder != nil {
+					b := builder.Block()
+					bi.blocks <- b
+				}
+
+				builder = newBuilder()
+
 				tags := make(Tags)
 				for _, t := range s.Tags {
 					tags[string(t.Key)] = string(t.Value)
 				}
 				builder.SetTags(tags)
-				builder.AddCol(TimeCol)
-				builder.AddCol(ValueCol)
 			} else if p := frame.GetIntegerPoints(); p != nil {
 				panic("ints not supported")
 			} else if p := frame.GetFloatPoints(); p != nil {
 				for i, c := range p.Timestamps {
-					builder.AddRow()
-					builder.SetTime(0, 0, Time(c))
-					builder.SetFloat(0, 1, p.Values[i])
-					b := builder.Block()
-					bi.blocks <- b
-					builder.ClearData()
+					builder.AppendTime(0, Time(c))
+					builder.AppendFloat(1, p.Values[i])
 				}
-
-				// Series is complete, create a new builder with new bound and tags
-				builder = NewColListBlockBuilder()
-				builder.SetBounds(bi.bounds)
 			}
 		}
 	}

@@ -96,3 +96,7 @@ func (s *RangeProcedureSpec) PushDown(root *plan.Procedure) {
 	selectSpec.BoundsSet = true
 	selectSpec.Bounds = s.Bounds
 }
+
+func (s *RangeProcedureSpec) TimeBounds() plan.BoundsSpec {
+	return s.Bounds
+}

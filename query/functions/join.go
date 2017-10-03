@@ -6,7 +6,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
@@ -105,7 +104,7 @@ func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeJoinKind
 }
 
-func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
+func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
@@ -180,10 +179,15 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 		table = tables.right
 	}
 
-	cells := b.Cells()
-	cells.Do(func(cs []execute.Cell) {
-		for _, c := range cs {
-			table.Insert(c.Value, c.Tags.Subset(t.keys), c.Time)
+	valueIdx := execute.ValueIdx(b)
+	times := b.Times()
+	i := 0
+	times.DoTime(func(ts []execute.Time) {
+		for _, time := range ts {
+			v := b.AtFloat(i, valueIdx)
+			tags := execute.TagsForRow(b, i).Subset(t.keys)
+			table.Insert(v, tags, time)
+			i++
 		}
 	})
 }
@@ -374,7 +378,6 @@ func (t *joinTables) Join() execute.Block {
 	builder.SetTags(t.tags)
 	builder.AddCol(execute.TimeCol)
 	builder.AddCol(execute.ValueCol)
-	rIdx := 0
 
 	var left, leftSet, right, rightSet []joinCell
 	var leftKey, rightKey joinKey
@@ -393,11 +396,8 @@ func (t *joinTables) Join() execute.Block {
 			for _, l := range leftSet {
 				for _, r := range rightSet {
 					v := t.eval(l.Value, r.Value)
-					builder.AddRow()
-					builder.SetTime(rIdx, 0, l.Key.Time)
-					builder.SetFloat(rIdx, 1, v)
-					//log.Println("AddCell", l.Key.Time, l.Tags, v)
-					rIdx++
+					builder.AppendTime(0, l.Key.Time)
+					builder.AppendFloat(1, v)
 				}
 			}
 

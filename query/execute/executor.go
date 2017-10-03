@@ -17,12 +17,14 @@ func Execute(qSpec *query.QuerySpec) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create logical plan")
 	}
+	//log.Println("logical plan", plan.Formatted(lp))
 
 	planner := plan.NewPlanner()
 	p, err := planner.Plan(lp, nil, time.Now())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create physical plan")
 	}
+	//log.Println("plan", plan.Formatted(p))
 
 	storage, err := NewStorageReader()
 	if err != nil {
@@ -55,6 +57,8 @@ type executionState struct {
 	p  *plan.PlanSpec
 	sr StorageReader
 
+	bounds Bounds
+
 	results []Result
 	runners []Runner
 }
@@ -73,6 +77,10 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 		p:       p,
 		sr:      e.sr,
 		results: make([]Result, len(p.Results)),
+		bounds: Bounds{
+			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
+			Stop:  Time(p.Bounds.Stop.Time(p.Now).UnixNano()),
+		},
 	}
 	for i, id := range p.Results {
 		ds, err := es.createNode(p.Procedures[id])
@@ -96,7 +104,7 @@ type triggeringSpec interface {
 
 func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
-		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es.p.Now)
+		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es)
 		es.runners = append(es.runners, s)
 		return s, nil
 	}
@@ -106,7 +114,7 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported procedure %v", pr.Spec.Kind())
 	}
-	t, ds, err := createT(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es.p.Now)
+	t, ds, err := createT(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +153,15 @@ func (es *executionState) do(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
+}
+
+// Satisfy the ExecutionContext interface
+
+func (es *executionState) ResolveTime(qt query.Time) Time {
+	return Time(qt.Time(es.p.Now).UnixNano())
+}
+func (es *executionState) Bounds() Bounds {
+	return es.bounds
 }
 
 type Runner interface {
