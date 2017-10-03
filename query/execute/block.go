@@ -29,6 +29,7 @@ type Block interface {
 	Cols() []ColMeta
 	Col(c int) ValueIterator
 	Values() ValueIterator
+	Times() ValueIterator
 	Rows() RowIterator
 }
 
@@ -82,6 +83,21 @@ const (
 	TString
 	TFloat
 )
+
+func (t DataType) String() string {
+	switch t {
+	case TInvalid:
+		return "invalid"
+	case TTime:
+		return "time"
+	case TString:
+		return "string"
+	case TFloat:
+		return "float"
+	default:
+		return "unknown"
+	}
+}
 
 type ColMeta struct {
 	Label string
@@ -251,6 +267,9 @@ func (b colListBlockBuilder) NCols() int {
 }
 
 func (b colListBlockBuilder) AddCol(c ColMeta) {
+	if len(b.blk.cols) > 4 {
+		panic("asdf")
+	}
 	var col column
 	switch c.Type {
 	case TFloat:
@@ -422,13 +441,23 @@ func (b *colListBlock) Col(c int) ValueIterator {
 
 func (b *colListBlock) Values() ValueIterator {
 	for j, c := range b.colMeta {
-		// TODO(nathanielc): Change api to deal with multiple value columns
+		// TODO(nathanielc): Maybe change api to deal with multiple value columns?
 		if c.Label == valueColLabel && c.Type == TFloat {
 			return colListValueIterator{col: b.cols[j]}
 		}
 	}
 	return nil
 }
+
+func (b *colListBlock) Times() ValueIterator {
+	for j, c := range b.colMeta {
+		if c.Label == timeColLabel && c.Type == TTime {
+			return colListValueIterator{col: b.cols[j]}
+		}
+	}
+	return nil
+}
+
 func (b *colListBlock) Rows() RowIterator {
 	return colListRowIterator{blk: b}
 }
@@ -643,7 +672,9 @@ func (itr *tagColValueIterator) DoString(f func([]string)) {
 func (*tagColValueIterator) DoTime(f func([]Time)) {}
 
 type BlockBuilderCache interface {
-	BlockBuilder(meta BlockMetadata) BlockBuilder
+	// BlockBuilder returns an existing or new BlockBuilder for the given meta data.
+	// The boolean return value indicates if BlockBuilder is new.
+	BlockBuilder(meta BlockMetadata) (BlockBuilder, bool)
 	ForEachBuilder(f func(BlockKey, BlockBuilder))
 }
 
@@ -677,7 +708,7 @@ func (d *blockBuilderCache) BlockMetadata(key BlockKey) BlockMetadata {
 
 // BlockBuilder will return the builder for the specified block.
 // If no builder exists, one will be created.
-func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
+func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) (BlockBuilder, bool) {
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
@@ -691,7 +722,7 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) BlockBuilder {
 		}
 		d.blocks[key] = b
 	}
-	return b.builder
+	return b.builder, !ok
 }
 
 func (d *blockBuilderCache) ForEachBuilder(f func(BlockKey, BlockBuilder)) {

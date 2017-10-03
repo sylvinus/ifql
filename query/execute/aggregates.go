@@ -3,48 +3,47 @@ package execute
 type aggregateTransformation struct {
 	d     Dataset
 	cache BlockBuilderCache
-	agg   aggFunc
-
-	trigger Trigger
 
 	parents []DatasetID
 }
 
-func NewAggregateTransformation(d Dataset, cache *blockBuilderCache, agg aggFunc) *aggregateTransformation {
+func NewAggregateTransformation(id DatasetID, mode AccumulationMode, bounds Bounds, agg AggFunc) (*aggregateTransformation, Dataset) {
+	bbCache := NewBlockBuilderCache()
+	cache := aggBlockCache{
+		blockBuilderCache: bbCache,
+		agg:               agg,
+		bounds:            bounds,
+	}
+	d := NewDataset(id, mode, cache)
 	return &aggregateTransformation{
 		d:     d,
 		cache: cache,
-		agg:   agg,
-	}
-}
-
-func (t *aggregateTransformation) setTrigger(trigger Trigger) {
-	t.trigger = trigger
-}
-
-func (t *aggregateTransformation) IsPerfect() bool {
-	return false
+	}, d
 }
 
 func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
+	//TODO(nathanielc): Store intermediate state for retractions
 	key := ToBlockKey(meta)
 	t.d.RetractBlock(key)
 }
 
 func (t *aggregateTransformation) Process(id DatasetID, b Block) {
-	builder := t.cache.BlockBuilder(b)
+	builder, new := t.cache.BlockBuilder(b)
+	if new {
+		builder.AddCol(TimeCol)
+		builder.AddCol(ValueCol)
+	}
 
+	// Append block to builder
+	times := b.Times()
+	times.DoTime(func(vs []Time) {
+		builder.AppendTimes(0, vs)
+	})
 	values := b.Values()
-	//TODO(nathanielc): Add types to the aggFuncs
-	values.DoFloat(t.agg.Do)
+	values.DoFloat(func(vs []float64) {
+		builder.AppendFloats(1, vs)
+	})
 
-	builder.AddCol(TimeCol)
-	builder.AddCol(ValueCol)
-
-	builder.AppendTime(0, b.Bounds().Stop)
-	builder.AppendFloat(1, t.agg.Value())
-
-	t.agg.Reset()
 }
 
 func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) {
@@ -60,38 +59,34 @@ func (t *aggregateTransformation) SetParents(ids []DatasetID) {
 	t.parents = ids
 }
 
-type aggFunc interface {
+type AggFunc interface {
 	Do([]float64)
 	Value() float64
 	Reset()
 }
 
-type sumAgg struct {
-	sum float64
+type aggBlockCache struct {
+	*blockBuilderCache
+	agg    AggFunc
+	bounds Bounds
 }
 
-func (a *sumAgg) Do(vs []float64) {
-	for _, v := range vs {
-		a.sum += v
-	}
-}
-func (a *sumAgg) Value() float64 {
-	return a.sum
-}
-func (a *sumAgg) Reset() {
-	a.sum = 0
-}
+func (c aggBlockCache) Block(key BlockKey) Block {
+	//TODO(nathanielc): Add types to the aggFuncs
 
-type countAgg struct {
-	count float64
-}
+	b := c.blockBuilderCache.Block(key)
 
-func (a *countAgg) Do(vs []float64) {
-	a.count += float64(len(vs))
-}
-func (a *countAgg) Value() float64 {
-	return a.count
-}
-func (a *countAgg) Reset() {
-	a.count = 0
+	values := b.Values()
+	values.DoFloat(c.agg.Do)
+
+	builder := NewColListBlockBuilder()
+	builder.SetBounds(c.bounds)
+	builder.SetTags(b.Tags())
+	builder.AddCol(TimeCol)
+	builder.AddCol(ValueCol)
+	builder.AppendTime(0, b.Bounds().Stop)
+	builder.AppendFloat(1, c.agg.Value())
+
+	c.agg.Reset()
+	return builder.Block()
 }

@@ -107,7 +107,7 @@ func (s *WindowProcedureSpec) TriggerSpec() query.TriggerSpec {
 	return s.Triggering
 }
 
-func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
+func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*WindowProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
@@ -118,7 +118,7 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 		Every:  execute.Duration(s.Window.Every),
 		Period: execute.Duration(s.Window.Period),
 		Round:  execute.Duration(s.Window.Round),
-		Start:  execute.Time(s.Window.Start.Time(now).UnixNano()),
+		Start:  ctx.ResolveQueryTime(s.Window.Start),
 	})
 	return t, d, nil
 }
@@ -154,22 +154,27 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 	rows.Do(func(rs []execute.Row) {
 		for _, r := range rs {
 			found := false
-			t.cache.ForEachBuilder(func(bk execute.BlockKey, bld execute.BlockBuilder) {
-				if bld.Bounds().Contains(r.Time()) && tagKey == bld.Tags().Key() {
-					bld.AppendTime(0, r.Time())
-					bld.AppendFloat(1, r.Value())
+			time := r.Time()
+			value := r.Value()
+			t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
+				if builder.Bounds().Contains(time) && tagKey == builder.Tags().Key() {
+					builder.AppendTime(0, time)
+					builder.AppendFloat(1, value)
 					found = true
 				}
 			})
 			if !found {
-				builder := t.cache.BlockBuilder(blockMetadata{
+				builder, new := t.cache.BlockBuilder(blockMetadata{
 					tags:   b.Tags(),
-					bounds: t.getWindowBounds(r.Time()),
+					bounds: t.getWindowBounds(time),
 				})
-				builder.AddCol(execute.TimeCol)
-				builder.AddCol(execute.ValueCol)
-				builder.AppendTime(0, r.Time())
-				builder.AppendFloat(1, r.Value())
+				if new {
+					builder.AddCol(execute.TimeCol)
+					builder.AddCol(execute.ValueCol)
+				}
+
+				builder.AppendTime(0, time)
+				builder.AppendFloat(1, value)
 			}
 		}
 	})

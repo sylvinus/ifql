@@ -2,7 +2,6 @@ package functions
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
@@ -52,10 +51,8 @@ type CountAgg struct {
 	count float64
 }
 
-func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
-	cache := execute.NewBlockBuilderCache()
-	d := execute.NewDataset(id, mode, cache)
-	t := execute.NewAggregateTransformation(d, cache, new(CountAgg))
+func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformation(id, mode, ctx.Bounds(), new(CountAgg))
 	return t, d, nil
 }
 

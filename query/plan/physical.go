@@ -7,7 +7,8 @@ import (
 
 type PlanSpec struct {
 	// Now represents the relative currentl time of the plan.
-	Now time.Time
+	Now    time.Time
+	Bounds BoundsSpec
 	// Procedures is a set of all operations
 	Procedures map[ProcedureID]*Procedure
 	Order      []ProcedureID
@@ -57,6 +58,10 @@ func (p *planner) Plan(ap *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 			rule := pd.PushDownRule()
 			p.pushDownAndSearch(pr, rule, pd.PushDown)
 			p.removeProcedure(pr)
+		}
+		if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
+			bounds := bounded.TimeBounds()
+			p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
 		}
 	})
 

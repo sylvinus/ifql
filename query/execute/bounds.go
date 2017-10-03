@@ -7,6 +7,11 @@ type Bounds struct {
 	Stop  Time
 }
 
+var AllTime = Bounds{
+	Start: MinTime,
+	Stop:  MaxTime,
+}
+
 func (b Bounds) String() string {
 	return fmt.Sprintf("[%v, %v)", b.Start, b.Stop)
 }

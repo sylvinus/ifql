@@ -3,7 +3,6 @@ package functions
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
@@ -81,7 +80,7 @@ func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
 	return SelectKind
 }
 
-func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, now time.Time) execute.Source {
+func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.ExecutionContext) execute.Source {
 	spec := prSpec.(*SelectProcedureSpec)
 	var w execute.Window
 	if spec.WindowSet {
@@ -89,19 +88,20 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 			Every:  execute.Duration(spec.Window.Every),
 			Period: execute.Duration(spec.Window.Period),
 			Round:  execute.Duration(spec.Window.Round),
-			Start:  execute.Time(spec.Window.Start.Time(now).UnixNano()),
+			Start:  ctx.ResolveQueryTime(spec.Window.Start),
 		}
 	} else {
+		duration := execute.Duration(ctx.ResolveQueryTime(spec.Bounds.Stop)) - execute.Duration(ctx.ResolveQueryTime(spec.Bounds.Start))
 		w = execute.Window{
-			Every:  execute.Duration(spec.Bounds.Stop.Time(now).UnixNano() - spec.Bounds.Start.Time(now).UnixNano()),
-			Period: execute.Duration(spec.Bounds.Stop.Time(now).UnixNano() - spec.Bounds.Start.Time(now).UnixNano()),
-			Start:  execute.Time(spec.Bounds.Start.Time(now).UnixNano()),
+			Every:  duration,
+			Period: duration,
+			Start:  ctx.ResolveQueryTime(spec.Bounds.Start),
 		}
 	}
 	currentTime := w.Start + execute.Time(w.Period)
 	bounds := execute.Bounds{
-		Start: execute.Time(spec.Bounds.Start.Time(now).UnixNano()),
-		Stop:  execute.Time(spec.Bounds.Stop.Time(now).UnixNano()),
+		Start: ctx.ResolveQueryTime(spec.Bounds.Start),
+		Stop:  ctx.ResolveQueryTime(spec.Bounds.Stop),
 	}
 	return execute.NewStorageSource(
 		id,

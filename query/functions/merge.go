@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
@@ -84,7 +83,7 @@ func (s *MergeProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeKind
 }
 
-func createMergeTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
+func createMergeTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
@@ -121,7 +120,7 @@ func (t *mergeTransformation) RetractBlock(id execute.DatasetID, meta execute.Bl
 }
 
 func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
-	builder := t.cache.BlockBuilder(blockMetadata{
+	builder, new := t.cache.BlockBuilder(blockMetadata{
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
 	})
@@ -132,7 +131,9 @@ func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
 		if c.IsTag {
 			continue
 		}
-		builder.AddCol(c)
+		if new {
+			builder.AddCol(c)
+		}
 
 		values := b.Col(j)
 		switch c.Type {

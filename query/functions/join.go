@@ -6,7 +6,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
@@ -105,7 +104,7 @@ func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeJoinKind
 }
 
-func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, now time.Time) (execute.Transformation, execute.Dataset, error) {
+func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
