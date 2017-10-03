@@ -107,7 +107,7 @@ func (s *WindowProcedureSpec) TriggerSpec() query.TriggerSpec {
 	return s.Triggering
 }
 
-func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*WindowProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
@@ -118,7 +118,7 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 		Every:  execute.Duration(s.Window.Every),
 		Period: execute.Duration(s.Window.Period),
 		Round:  execute.Duration(s.Window.Round),
-		Start:  ctx.ResolveQueryTime(s.Window.Start),
+		Start:  ctx.ResolveTime(s.Window.Start),
 	})
 	return t, d, nil
 }
@@ -150,12 +150,13 @@ func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta exec
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
 	tagKey := b.Tags().Key()
 
-	rows := b.Rows()
-	rows.Do(func(rs []execute.Row) {
-		for _, r := range rs {
+	valueIdx := execute.ValueIdx(b)
+	times := b.Times()
+	i := 0
+	times.DoTime(func(ts []execute.Time) {
+		for _, time := range ts {
 			found := false
-			time := r.Time()
-			value := r.Value()
+			value := b.AtFloat(i, valueIdx)
 			t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
 				if builder.Bounds().Contains(time) && tagKey == builder.Tags().Key() {
 					builder.AppendTime(0, time)
@@ -176,6 +177,7 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 				builder.AppendTime(0, time)
 				builder.AppendFloat(1, value)
 			}
+			i++
 		}
 	})
 }

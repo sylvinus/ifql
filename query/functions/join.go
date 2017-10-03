@@ -104,7 +104,7 @@ func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeJoinKind
 }
 
-func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
@@ -179,10 +179,15 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 		table = tables.right
 	}
 
-	rows := b.Rows()
-	rows.Do(func(rs []execute.Row) {
-		for _, r := range rs {
-			table.Insert(r.Value(), r.Tags().Subset(t.keys), r.Time())
+	valueIdx := execute.ValueIdx(b)
+	times := b.Times()
+	i := 0
+	times.DoTime(func(ts []execute.Time) {
+		for _, time := range ts {
+			v := b.AtFloat(i, valueIdx)
+			tags := execute.TagsForRow(b, i).Subset(t.keys)
+			table.Insert(v, tags, time)
+			i++
 		}
 	})
 }

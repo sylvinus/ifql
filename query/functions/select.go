@@ -80,7 +80,7 @@ func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
 	return SelectKind
 }
 
-func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.ExecutionContext) execute.Source {
+func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.Context) execute.Source {
 	spec := prSpec.(*SelectProcedureSpec)
 	var w execute.Window
 	if spec.WindowSet {
@@ -88,20 +88,20 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 			Every:  execute.Duration(spec.Window.Every),
 			Period: execute.Duration(spec.Window.Period),
 			Round:  execute.Duration(spec.Window.Round),
-			Start:  ctx.ResolveQueryTime(spec.Window.Start),
+			Start:  ctx.ResolveTime(spec.Window.Start),
 		}
 	} else {
-		duration := execute.Duration(ctx.ResolveQueryTime(spec.Bounds.Stop)) - execute.Duration(ctx.ResolveQueryTime(spec.Bounds.Start))
+		duration := execute.Duration(ctx.ResolveTime(spec.Bounds.Stop)) - execute.Duration(ctx.ResolveTime(spec.Bounds.Start))
 		w = execute.Window{
 			Every:  duration,
 			Period: duration,
-			Start:  ctx.ResolveQueryTime(spec.Bounds.Start),
+			Start:  ctx.ResolveTime(spec.Bounds.Start),
 		}
 	}
 	currentTime := w.Start + execute.Time(w.Period)
 	bounds := execute.Bounds{
-		Start: ctx.ResolveQueryTime(spec.Bounds.Start),
-		Stop:  ctx.ResolveQueryTime(spec.Bounds.Stop),
+		Start: ctx.ResolveTime(spec.Bounds.Start),
+		Stop:  ctx.ResolveTime(spec.Bounds.Stop),
 	}
 	return execute.NewStorageSource(
 		id,

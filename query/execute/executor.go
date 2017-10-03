@@ -3,7 +3,6 @@ package execute
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -18,14 +17,14 @@ func Execute(qSpec *query.QuerySpec) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create logical plan")
 	}
-	log.Println("logical plan", plan.Formatted(lp))
+	//log.Println("logical plan", plan.Formatted(lp))
 
 	planner := plan.NewPlanner()
 	p, err := planner.Plan(lp, nil, time.Now())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create physical plan")
 	}
-	log.Println("plan", plan.Formatted(p))
+	//log.Println("plan", plan.Formatted(p))
 
 	storage, err := NewStorageReader()
 	if err != nil {
@@ -158,7 +157,7 @@ func (es *executionState) do(ctx context.Context) {
 
 // Satisfy the ExecutionContext interface
 
-func (es *executionState) ResolveQueryTime(qt query.Time) Time {
+func (es *executionState) ResolveTime(qt query.Time) Time {
 	return Time(qt.Time(es.p.Now).UnixNano())
 }
 func (es *executionState) Bounds() Bounds {

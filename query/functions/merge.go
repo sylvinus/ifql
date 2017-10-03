@@ -83,7 +83,7 @@ func (s *MergeProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeKind
 }
 
-func createMergeTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+func createMergeTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)

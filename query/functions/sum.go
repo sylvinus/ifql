@@ -52,7 +52,7 @@ type SumAgg struct {
 	sum float64
 }
 
-func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	t, d := execute.NewAggregateTransformation(id, mode, ctx.Bounds(), new(SumAgg))
 	return t, d, nil
 }

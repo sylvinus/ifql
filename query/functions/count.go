@@ -51,7 +51,7 @@ type CountAgg struct {
 	count float64
 }
 
-func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.ExecutionContext) (execute.Transformation, execute.Dataset, error) {
+func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	t, d := execute.NewAggregateTransformation(id, mode, ctx.Bounds(), new(CountAgg))
 	return t, d, nil
 }

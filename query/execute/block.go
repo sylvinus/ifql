@@ -28,9 +28,30 @@ type Block interface {
 
 	Cols() []ColMeta
 	Col(c int) ValueIterator
+
 	Values() ValueIterator
 	Times() ValueIterator
-	Rows() RowIterator
+
+	AtFloat(i, j int) float64
+	AtString(i, j int) string
+	AtTime(i, j int) Time
+}
+
+func ValueIdx(b Block) int {
+	for j, c := range b.Cols() {
+		if c.Label == valueColLabel {
+			return j
+		}
+	}
+	return -1
+}
+func TimeIdx(b Block) int {
+	for j, c := range b.Cols() {
+		if c.Label == timeColLabel {
+			return j
+		}
+	}
+	return -1
 }
 
 // BlockBuilder builds blocks that can be used multiple times
@@ -48,10 +69,6 @@ type BlockBuilder interface {
 	// AddCol increases the size of the block by one column
 	// Columns need not be added for tags that are common to the block
 	AddCol(ColMeta)
-
-	// AddRow increases the size of the block by one row and
-	// sets the values based on the cell.
-	AddRow(Row) error
 
 	// Set sets the value at the specified coordinates
 	// The rows and columns must exist before calling set, otherwise Set panics.
@@ -121,10 +138,6 @@ var (
 	}
 )
 
-type Record struct {
-	Values []interface{}
-}
-
 type BlockIterator interface {
 	Do(f func(Block))
 }
@@ -134,27 +147,13 @@ type ValueIterator interface {
 	DoString(f func([]string))
 	DoTime(f func([]Time))
 }
-type RowIterator interface {
-	Do(f func([]Row))
-}
 
-type Row struct {
-	Values            []interface{}
-	cols              []ColMeta
-	valueIdx, timeIdx int
-}
-
-func (r Row) Time() Time {
-	return r.Values[r.timeIdx].(Time)
-}
-func (r Row) Value() float64 {
-	return r.Values[r.valueIdx].(float64)
-}
-func (r Row) Tags() Tags {
-	tags := make(Tags, len(r.Values)-2)
-	for j, v := range r.Values {
-		if r.cols[j].IsTag {
-			tags[r.cols[j].Label] = v.(string)
+func TagsForRow(b Block, i int) Tags {
+	cols := b.Cols()
+	tags := make(Tags, len(cols)-2)
+	for j, c := range cols {
+		if c.IsTag {
+			tags[c.Label] = b.AtString(i, j)
 		}
 	}
 	return tags
@@ -288,36 +287,6 @@ func (b colListBlockBuilder) AddCol(c ColMeta) {
 	b.blk.cols = append(b.blk.cols, col)
 }
 
-func (b colListBlockBuilder) AddRow(row Row) error {
-	if len(row.Values) != len(b.blk.cols) {
-		return fmt.Errorf("row does not have the correct number of values %d, expected %d", len(row.Values), len(b.blk.cols))
-	}
-	for j, c := range b.blk.cols {
-		switch col := c.(type) {
-		case *floatColumn:
-			v, ok := row.Values[j].(float64)
-			if !ok {
-				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
-			}
-			col.data = append(col.data, v)
-		case *stringColumn:
-			v, ok := row.Values[j].(string)
-			if !ok {
-				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
-			}
-			col.data = append(col.data, v)
-		case *timeColumn:
-			v, ok := row.Values[j].(Time)
-			if !ok {
-				return fmt.Errorf("row value at %d is wrong type %T, exp %v", j, row.Values[j], col.Meta().Type)
-			}
-			col.data = append(col.data, v)
-		}
-	}
-	b.blk.nrows++
-	return nil
-}
-
 func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
 	b.checkColType(j, TFloat)
 	b.blk.cols[j].(*floatColumn).data[i] = value
@@ -370,8 +339,12 @@ func (b colListBlockBuilder) AppendTimes(j int, values []Time) {
 }
 
 func (b colListBlockBuilder) checkColType(j int, typ DataType) {
-	if b.blk.cols[j].Meta().Type != typ {
-		panic(fmt.Errorf("column %d is not of type %v", j, typ))
+	checkColType(b.blk.cols[j].Meta(), typ)
+}
+
+func checkColType(col ColMeta, typ DataType) {
+	if col.Type != typ {
+		panic(fmt.Errorf("column %s is not of type %v", col.Label, typ))
 	}
 }
 
@@ -440,26 +413,32 @@ func (b *colListBlock) Col(c int) ValueIterator {
 }
 
 func (b *colListBlock) Values() ValueIterator {
-	for j, c := range b.colMeta {
-		// TODO(nathanielc): Maybe change api to deal with multiple value columns?
-		if c.Label == valueColLabel && c.Type == TFloat {
-			return colListValueIterator{col: b.cols[j]}
-		}
+	j := ValueIdx(b)
+	if j >= 0 {
+		return colListValueIterator{col: b.cols[j]}
 	}
 	return nil
 }
 
 func (b *colListBlock) Times() ValueIterator {
-	for j, c := range b.colMeta {
-		if c.Label == timeColLabel && c.Type == TTime {
-			return colListValueIterator{col: b.cols[j]}
-		}
+	j := TimeIdx(b)
+	if j >= 0 {
+		return colListValueIterator{col: b.cols[j]}
 	}
 	return nil
 }
 
-func (b *colListBlock) Rows() RowIterator {
-	return colListRowIterator{blk: b}
+func (b *colListBlock) AtFloat(i, j int) float64 {
+	checkColType(b.colMeta[j], TFloat)
+	return b.cols[j].(*floatColumn).data[i]
+}
+func (b *colListBlock) AtString(i, j int) string {
+	checkColType(b.colMeta[j], TString)
+	return b.cols[j].(*stringColumn).data[i]
+}
+func (b *colListBlock) AtTime(i, j int) Time {
+	checkColType(b.colMeta[j], TTime)
+	return b.cols[j].(*timeColumn).data[i]
 }
 
 func (b *colListBlock) Copy() *colListBlock {
@@ -500,58 +479,6 @@ func (itr colListValueIterator) DoTime(f func([]Time)) {
 		panic("column is not of type time")
 	}
 	f(itr.col.(*timeColumn).data)
-}
-
-type colListRowIterator struct {
-	blk *colListBlock
-}
-
-func (itr colListRowIterator) Do(f func([]Row)) {
-	cols := itr.blk.Cols()
-	rows := make([]Row, itr.blk.nrows)
-	var timeIdx, valueIdx int
-	for j, c := range itr.blk.cols {
-		switch c.Meta().Label {
-		case timeColLabel:
-			timeIdx = j
-		case valueColLabel:
-			valueIdx = j
-		}
-	}
-	for i := range rows {
-		rows[i].Values = make([]interface{}, len(itr.blk.cols))
-		rows[i].cols = cols
-		rows[i].timeIdx = timeIdx
-		rows[i].valueIdx = valueIdx
-	}
-	for j, c := range itr.blk.cols {
-		i := 0
-		values := itr.blk.Col(j)
-		switch c.Meta().Type {
-		case TFloat:
-			values.DoFloat(func(vs []float64) {
-				for _, v := range vs {
-					rows[i].Values[j] = v
-					i++
-				}
-			})
-		case TString:
-			values.DoString(func(vs []string) {
-				for _, v := range vs {
-					rows[i].Values[j] = v
-					i++
-				}
-			})
-		case TTime:
-			values.DoTime(func(vs []Time) {
-				for _, v := range vs {
-					rows[i].Values[j] = v
-					i++
-				}
-			})
-		}
-	}
-	f(rows)
 }
 
 type column interface {
@@ -864,25 +791,26 @@ func (f formatter) format(fs fmt.State, c rune) {
 	fs.Write(eol)
 
 	n := nrows
-	rows := f.b.Rows()
-	rows.Do(func(rs []Row) {
-		l := len(rs)
+	times := f.b.Times()
+	i := 0
+	times.DoTime(func(ts []Time) {
+		l := len(ts)
 		if n < l {
 			l = n
 			n = 0
 		} else {
 			n -= l
 		}
-		for _, row := range rs[:l] {
-			for j, v := range row.Values {
+		for range ts[:l] {
+			for j, c := range cols {
 				var buf []byte
-				switch value := v.(type) {
-				case float64:
-					buf = strconv.AppendFloat(floatBuf, value, fmtC, prec, 64)
-				case Time:
-					buf = []byte(value.String())
-				case string:
-					buf = []byte(value)
+				switch c.Type {
+				case TFloat:
+					buf = strconv.AppendFloat(floatBuf, f.b.AtFloat(i, j), fmtC, prec, 64)
+				case TTime:
+					buf = []byte(f.b.AtTime(i, j).String())
+				case TString:
+					buf = []byte(f.b.AtString(i, j))
 				}
 				// Check justification
 				if fs.Flag('-') {
@@ -895,6 +823,7 @@ func (f formatter) format(fs fmt.State, c rune) {
 				fs.Write(pad[:2])
 			}
 			fs.Write(eol)
+			i++
 		}
 	})
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-var allowUnexported = cmp.AllowUnexported(blockList{}, block{}, execute.Row{})
+var allowUnexported = cmp.AllowUnexported(blockList{}, block{})
 
 var epoch = time.Unix(0, 0)
 
@@ -32,12 +32,12 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					rows: []execute.Row{
-						{Values: []interface{}{1.0, execute.Time(0)}},
-						{Values: []interface{}{2.0, execute.Time(1)}},
-						{Values: []interface{}{3.0, execute.Time(2)}},
-						{Values: []interface{}{4.0, execute.Time(4)}},
-						{Values: []interface{}{5.0, execute.Time(5)}},
+					points: []point{
+						{Value: 1.0, Time: 0},
+						{Value: 2.0, Time: 1},
+						{Value: 3.0, Time: 2},
+						{Value: 4.0, Time: 3},
+						{Value: 5.0, Time: 4},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -47,6 +47,10 @@ func TestExecutor_Execute(t *testing.T) {
 			},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{Absolute: time.Unix(0, 1)},
+					Stop:  query.Time{Absolute: time.Unix(0, 5)},
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -80,8 +84,8 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					rows: []execute.Row{
-						{Values: []interface{}{15.0, execute.Time(5)}},
+					points: []point{
+						{Value: 15.0, Time: 5},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -97,12 +101,12 @@ func TestExecutor_Execute(t *testing.T) {
 					Stop:  5,
 				},
 				tags: execute.Tags{},
-				rows: []execute.Row{
-					{Values: []interface{}{1.0, execute.Time(0)}},
-					{Values: []interface{}{2.0, execute.Time(1)}},
-					{Values: []interface{}{3.0, execute.Time(2)}},
-					{Values: []interface{}{4.0, execute.Time(3)}},
-					{Values: []interface{}{5.0, execute.Time(4)}},
+				points: []point{
+					{Value: 1.0, Time: 0},
+					{Value: 2.0, Time: 1},
+					{Value: 3.0, Time: 2},
+					{Value: 4.0, Time: 3},
+					{Value: 5.0, Time: 4},
 				},
 				cols: []execute.ColMeta{
 					execute.TimeCol,
@@ -111,6 +115,10 @@ func TestExecutor_Execute(t *testing.T) {
 			}},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{Absolute: time.Unix(0, 1)},
+					Stop:  query.Time{Absolute: time.Unix(0, 5)},
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
@@ -173,8 +181,8 @@ func TestExecutor_Execute(t *testing.T) {
 						Stop:  5,
 					},
 					tags: execute.Tags{},
-					rows: []execute.Row{
-						{Values: []interface{}{3.0, execute.Time(5)}},
+					points: []point{
+						{Value: 3.0, Time: 5},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
@@ -263,8 +271,14 @@ func (bi *blockIterator) Do(f func(execute.Block)) {
 type block struct {
 	bounds execute.Bounds
 	tags   execute.Tags
-	rows   []execute.Row
+	points []point
 	cols   []execute.ColMeta
+}
+
+type point struct {
+	Value float64
+	Time  execute.Time
+	Tags  execute.Tags
 }
 
 func (b block) Bounds() execute.Bounds {
@@ -279,23 +293,32 @@ func (b block) Cols() []execute.ColMeta {
 }
 
 func (b block) Col(c int) execute.ValueIterator {
-	return &valueIterator{b.rows}
+	return &valueIterator{b.points}
 }
 func (b block) Values() execute.ValueIterator {
-	return &valueIterator{b.rows}
+	return &valueIterator{b.points}
+}
+func (b block) Times() execute.ValueIterator {
+	return &timesIterator{b.points}
 }
 
-func (b block) Rows() execute.RowIterator {
-	return &rowIterator{b.rows}
+func (b block) AtFloat(i, j int) float64 {
+	return b.points[i].Value
+}
+func (b block) AtString(i, j int) string {
+	return b.points[i].Tags[b.cols[j].Label]
+}
+func (b block) AtTime(i, j int) execute.Time {
+	return b.points[i].Time
 }
 
 type valueIterator struct {
-	rows []execute.Row
+	points []point
 }
 
 func (vi *valueIterator) DoFloat(f func([]float64)) {
-	for _, r := range vi.rows {
-		f([]float64{r.Value()})
+	for _, p := range vi.points {
+		f([]float64{p.Value})
 	}
 }
 func (vi *valueIterator) DoString(f func([]string)) {
@@ -303,12 +326,18 @@ func (vi *valueIterator) DoString(f func([]string)) {
 func (vi *valueIterator) DoTime(f func([]execute.Time)) {
 }
 
-type rowIterator struct {
-	rows []execute.Row
+type timesIterator struct {
+	points []point
 }
 
-func (ci *rowIterator) Do(f func([]execute.Row)) {
-	f(ci.rows)
+func (vi *timesIterator) DoFloat(f func([]float64)) {
+}
+func (vi *timesIterator) DoString(f func([]string)) {
+}
+func (vi *timesIterator) DoTime(f func([]execute.Time)) {
+	for _, p := range vi.points {
+		f([]execute.Time{p.Time})
+	}
 }
 
 func convertToTestBlock(b execute.Block) block {
@@ -317,10 +346,20 @@ func convertToTestBlock(b execute.Block) block {
 		tags:   b.Tags(),
 		cols:   b.Cols(),
 	}
-	rows := b.Rows()
-
-	rows.Do(func(rs []execute.Row) {
-		blk.rows = append(blk.rows, rs...)
+	valueIdx := execute.ValueIdx(b)
+	times := b.Times()
+	i := 0
+	times.DoTime(func(ts []execute.Time) {
+		for _, time := range ts {
+			v := b.AtFloat(i, valueIdx)
+			tags := execute.TagsForRow(b, i)
+			blk.points = append(blk.points, point{
+				Time:  time,
+				Value: v,
+				Tags:  tags,
+			})
+			i++
+		}
 	})
 	return blk
 }

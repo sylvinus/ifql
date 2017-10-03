@@ -16,12 +16,12 @@ type Transformation interface {
 	SetParents(ids []DatasetID)
 }
 
-type ExecutionContext interface {
-	ResolveQueryTime(qt query.Time) Time
+type Context interface {
+	ResolveTime(qt query.Time) Time
 	Bounds() Bounds
 }
 
-type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, ctx ExecutionContext) (Transformation, Dataset, error)
+type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, ctx Context) (Transformation, Dataset, error)
 
 var procedureToTransformation = make(map[plan.ProcedureKind]CreateTransformation)
 
