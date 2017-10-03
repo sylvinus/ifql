@@ -433,6 +433,9 @@ func (b *colListBlock) AtFloat(i, j int) float64 {
 	return b.cols[j].(*floatColumn).data[i]
 }
 func (b *colListBlock) AtString(i, j int) string {
+	if b.colMeta[j].IsTag {
+		return b.cols[j].(*tagColumn).value
+	}
 	checkColType(b.colMeta[j], TString)
 	return b.cols[j].(*stringColumn).data[i]
 }
