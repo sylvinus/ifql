@@ -3,6 +3,7 @@ package execute
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -10,20 +11,41 @@ import (
 	"github.com/pkg/errors"
 )
 
-func Execute(qSpec *query.QuerySpec) ([]Result, error) {
+type Option func(*options)
+type options struct {
+	verbose bool
+}
+
+func Verbose() Option {
+	return func(o *options) { o.verbose = true }
+}
+
+func Execute(qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
+	var opts options
+	for _, o := range os {
+		o(&opts)
+	}
+	if opts.verbose {
+		log.Println("query", query.Formatted(qSpec))
+	}
+
 	lplanner := plan.NewLogicalPlanner()
 	lp, err := lplanner.Plan(qSpec)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create logical plan")
 	}
-	//log.Println("logical plan", plan.Formatted(lp))
+	if opts.verbose {
+		log.Println("logical plan", plan.Formatted(lp))
+	}
 
 	planner := plan.NewPlanner()
 	p, err := planner.Plan(lp, nil, time.Now())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create physical plan")
 	}
-	//log.Println("plan", plan.Formatted(p))
+	if opts.verbose {
+		log.Println("physical plan", plan.Formatted(p))
+	}
 
 	storage, err := NewStorageReader()
 	if err != nil {

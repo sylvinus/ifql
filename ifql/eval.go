@@ -359,7 +359,11 @@ func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallCha
 		if value.Type != TChain {
 			return nil, "", fmt.Errorf("variable %q is not a function chain", obj.Name)
 		}
-		chain = value.Value.(*CallChain)
+		// Create a copy of the chain since we do not want to mutate the version stored in the scope.
+		if chain == nil {
+			chain = new(CallChain)
+		}
+		*chain = *(value.Value.(*CallChain))
 	default:
 		return nil, "", fmt.Errorf("unsupported member expression object type %t", obj)
 	}

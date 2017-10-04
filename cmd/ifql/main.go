@@ -18,6 +18,7 @@ import (
 var queryStr = flag.String("query", `select(database:"mydb").where(exp:{"_measurement" == "m0"}).range(start:-170h).sum()`, "Query to run")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+var verbose = flag.Bool("v", false, "print verbose output")
 
 func main() {
 	flag.Parse()
@@ -35,7 +36,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	results, err := doQuery(*queryStr)
+	results, err := doQuery(*queryStr, *verbose)
 	if err != nil {
 		fmt.Println("E!", err)
 		os.Exit(1)
@@ -69,12 +70,16 @@ func promqlSpec(query string) (*query.QuerySpec, error) {
 	return promql.Build(query)
 }
 
-func doQuery(queryStr string) ([]execute.Result, error) {
+func doQuery(queryStr string, verbose bool) ([]execute.Result, error) {
 	fmt.Println("Running query", queryStr)
 	qSpec, err := ifql.NewQuery(queryStr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse query")
 	}
 
-	return execute.Execute(qSpec)
+	var opts []execute.Option
+	if verbose {
+		opts = append(opts, execute.Verbose())
+	}
+	return execute.Execute(qSpec, opts...)
 }
