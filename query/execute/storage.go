@@ -275,10 +275,21 @@ func (b *storageBlockValueIterator) advance() bool {
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetIntegerPoints()
+			l := len(p.Timestamps)
+			if l > cap(b.timeBuf) {
+				b.timeBuf = make([]Time, l)
+			} else {
+				b.timeBuf = b.timeBuf[:l]
+			}
+			if l > cap(b.intBuf) {
+				b.intBuf = make([]int64, l)
+			} else {
+				b.intBuf = b.intBuf[:l]
+			}
 
 			for i, c := range p.Timestamps {
-				b.timeBuf = append(b.timeBuf, Time(c))
-				b.intBuf = append(b.intBuf, p.Values[i])
+				b.timeBuf[i] = Time(c)
+				b.intBuf[i] = p.Values[i]
 			}
 			b.colBufs[0] = b.timeBuf
 			b.colBufs[1] = b.intBuf
@@ -288,9 +299,21 @@ func (b *storageBlockValueIterator) advance() bool {
 			frame := b.data.next()
 			p := frame.GetFloatPoints()
 
+			l := len(p.Timestamps)
+			if l > cap(b.timeBuf) {
+				b.timeBuf = make([]Time, l)
+			} else {
+				b.timeBuf = b.timeBuf[:l]
+			}
+			if l > cap(b.floatBuf) {
+				b.floatBuf = make([]float64, l)
+			} else {
+				b.floatBuf = b.floatBuf[:l]
+			}
+
 			for i, c := range p.Timestamps {
-				b.timeBuf = append(b.timeBuf, Time(c))
-				b.floatBuf = append(b.floatBuf, p.Values[i])
+				b.timeBuf[i] = Time(c)
+				b.floatBuf[i] = p.Values[i]
 			}
 			b.colBufs[0] = b.timeBuf
 			b.colBufs[1] = b.floatBuf
