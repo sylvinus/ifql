@@ -27,22 +27,71 @@ type Block interface {
 	BlockMetadata
 
 	Cols() []ColMeta
+	// Col returns an iterator to consume the values for a given column.
 	Col(c int) ValueIterator
 
-	Values() ValueIterator
+	// Times returns an iterator to consume the values for the "time" column.
 	Times() ValueIterator
+	// Values returns an iterator to consume the values for the "value" column.
+	Values() ValueIterator
 }
 
-func ValueIdx(b Block) int {
-	for j, c := range b.Cols() {
+// OneTimeBlock is a Block that permits reading data only once.
+// Specifically the ValueIterator may only be consumed once.
+type OneTimeBlock interface {
+	Block
+	onetime()
+}
+
+// CacheOneTimeBlock returns a block that can be read multiple times.
+// If the block is not a OneTimeBlock it is returned directly.
+// Otherwise its contents are read into a new block.
+func CacheOneTimeBlock(b Block) Block {
+	ob, ok := b.(OneTimeBlock)
+	if !ok {
+		return b
+	}
+	builder := NewColListBlockBuilder()
+	builder.SetBounds(ob.Bounds())
+	builder.SetTags(ob.Tags())
+
+	cols := ob.Cols()
+	timeIdx := TimeIdx(cols)
+	for _, c := range cols {
+		builder.AddCol(c)
+	}
+	times := ob.Col(timeIdx)
+	times.DoTime(func(ts []Time, rr RowReader) {
+		builder.AppendTimes(timeIdx, ts)
+		for i := range ts {
+			for j, c := range cols {
+				if j == timeIdx {
+					continue
+				}
+				switch c.Type {
+				case TString:
+					builder.AppendString(j, rr.AtString(i, j))
+				case TFloat:
+					builder.AppendFloat(j, rr.AtFloat(i, j))
+				case TTime:
+					builder.AppendTime(j, rr.AtTime(i, j))
+				}
+			}
+		}
+	})
+	return builder.Block()
+}
+
+func ValueIdx(cols []ColMeta) int {
+	for j, c := range cols {
 		if c.Label == valueColLabel {
 			return j
 		}
 	}
 	return -1
 }
-func TimeIdx(b Block) int {
-	for j, c := range b.Cols() {
+func TimeIdx(cols []ColMeta) int {
+	for j, c := range cols {
 		if c.Label == timeColLabel {
 			return j
 		}
@@ -412,7 +461,7 @@ func (b *colListBlock) Col(c int) ValueIterator {
 }
 
 func (b *colListBlock) Values() ValueIterator {
-	j := ValueIdx(b)
+	j := ValueIdx(b.colMeta)
 	if j >= 0 {
 		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
 	}
@@ -420,7 +469,7 @@ func (b *colListBlock) Values() ValueIterator {
 }
 
 func (b *colListBlock) Times() ValueIterator {
-	j := TimeIdx(b)
+	j := TimeIdx(b.colMeta)
 	if j >= 0 {
 		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
 	}
@@ -677,7 +726,7 @@ type FormatOption func(*formatter)
 
 func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
 	f := formatter{
-		b: b,
+		b: CacheOneTimeBlock(b),
 	}
 	for _, o := range opts {
 		o(&f)

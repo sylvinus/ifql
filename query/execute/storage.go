@@ -172,6 +172,9 @@ func (b *storageBlock) wait() {
 	<-b.done
 }
 
+// onetime satisfies the OneTimeBlock interface since this block may only be read once.
+func (b *storageBlock) onetime() {}
+
 func (b *storageBlock) Bounds() Bounds {
 	return b.bounds
 }

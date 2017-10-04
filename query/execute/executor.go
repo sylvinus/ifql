@@ -3,7 +3,6 @@ package execute
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -143,16 +142,11 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 }
 
 func (es *executionState) do(ctx context.Context) {
-	wg := new(sync.WaitGroup)
-	wg.Add(len(es.runners))
+	// TODO: plumb context.Context through the Runnables
 	for _, r := range es.runners {
 		r := r
-		go func() {
-			defer wg.Done()
-			r.Run()
-		}()
+		go r.Run()
 	}
-	wg.Wait()
 }
 
 // Satisfy the ExecutionContext interface

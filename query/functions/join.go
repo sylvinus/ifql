@@ -180,7 +180,7 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 	}
 
 	cols := b.Cols()
-	valueIdx := execute.ValueIdx(b)
+	valueIdx := execute.ValueIdx(cols)
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {

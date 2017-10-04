@@ -152,7 +152,7 @@ func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta exec
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
 	tagKey := b.Tags().Key()
 
-	valueIdx := execute.ValueIdx(b)
+	valueIdx := execute.ValueIdx(b.Cols())
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {

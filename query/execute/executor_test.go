@@ -334,7 +334,7 @@ func convertToTestBlock(b execute.Block) block {
 		tags:   b.Tags(),
 		cols:   b.Cols(),
 	}
-	valueIdx := execute.ValueIdx(b)
+	valueIdx := execute.ValueIdx(b.Cols())
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {
