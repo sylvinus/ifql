@@ -2,6 +2,7 @@ package functions
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
@@ -64,6 +65,9 @@ func (a *MeanAgg) Do(vs []float64) {
 	}
 }
 func (a *MeanAgg) Value() float64 {
+	if a.count < 1 {
+		return math.NaN()
+	}
 	return a.sum / a.count
 }
 func (a *MeanAgg) Reset() {
