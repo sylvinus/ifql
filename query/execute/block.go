@@ -27,26 +27,71 @@ type Block interface {
 	BlockMetadata
 
 	Cols() []ColMeta
+	// Col returns an iterator to consume the values for a given column.
 	Col(c int) ValueIterator
 
-	Values() ValueIterator
+	// Times returns an iterator to consume the values for the "time" column.
 	Times() ValueIterator
-
-	AtFloat(i, j int) float64
-	AtString(i, j int) string
-	AtTime(i, j int) Time
+	// Values returns an iterator to consume the values for the "value" column.
+	Values() ValueIterator
 }
 
-func ValueIdx(b Block) int {
-	for j, c := range b.Cols() {
+// OneTimeBlock is a Block that permits reading data only once.
+// Specifically the ValueIterator may only be consumed once.
+type OneTimeBlock interface {
+	Block
+	onetime()
+}
+
+// CacheOneTimeBlock returns a block that can be read multiple times.
+// If the block is not a OneTimeBlock it is returned directly.
+// Otherwise its contents are read into a new block.
+func CacheOneTimeBlock(b Block) Block {
+	ob, ok := b.(OneTimeBlock)
+	if !ok {
+		return b
+	}
+	builder := NewColListBlockBuilder()
+	builder.SetBounds(ob.Bounds())
+	builder.SetTags(ob.Tags())
+
+	cols := ob.Cols()
+	timeIdx := TimeIdx(cols)
+	for _, c := range cols {
+		builder.AddCol(c)
+	}
+	times := ob.Col(timeIdx)
+	times.DoTime(func(ts []Time, rr RowReader) {
+		builder.AppendTimes(timeIdx, ts)
+		for i := range ts {
+			for j, c := range cols {
+				if j == timeIdx {
+					continue
+				}
+				switch c.Type {
+				case TString:
+					builder.AppendString(j, rr.AtString(i, j))
+				case TFloat:
+					builder.AppendFloat(j, rr.AtFloat(i, j))
+				case TTime:
+					builder.AppendTime(j, rr.AtTime(i, j))
+				}
+			}
+		}
+	})
+	return builder.Block()
+}
+
+func ValueIdx(cols []ColMeta) int {
+	for j, c := range cols {
 		if c.Label == valueColLabel {
 			return j
 		}
 	}
 	return -1
 }
-func TimeIdx(b Block) int {
-	for j, c := range b.Cols() {
+func TimeIdx(cols []ColMeta) int {
+	for j, c := range cols {
 		if c.Label == timeColLabel {
 			return j
 		}
@@ -99,6 +144,7 @@ const (
 	TTime
 	TString
 	TFloat
+	TInt
 )
 
 func (t DataType) String() string {
@@ -111,6 +157,8 @@ func (t DataType) String() string {
 		return "string"
 	case TFloat:
 		return "float"
+	case TInt:
+		return "int"
 	default:
 		return "unknown"
 	}
@@ -143,17 +191,25 @@ type BlockIterator interface {
 }
 
 type ValueIterator interface {
-	DoFloat(f func([]float64))
-	DoString(f func([]string))
-	DoTime(f func([]Time))
+	DoFloat(f func([]float64, RowReader))
+	DoString(f func([]string, RowReader))
+	DoTime(f func([]Time, RowReader))
 }
 
-func TagsForRow(b Block, i int) Tags {
-	cols := b.Cols()
+type RowReader interface {
+	// AtFloat returns the float value of another column and given index.
+	AtFloat(i, j int) float64
+	// AtString returns the string value of another column and given index.
+	AtString(i, j int) string
+	// AtTime returns the time value of another column and given index.
+	AtTime(i, j int) Time
+}
+
+func TagsForRow(cols []ColMeta, rr RowReader, i int) Tags {
 	tags := make(Tags, len(cols)-2)
 	for j, c := range cols {
 		if c.IsTag {
-			tags[c.Label] = b.AtString(i, j)
+			tags[c.Label] = rr.AtString(i, j)
 		}
 	}
 	return tags
@@ -266,9 +322,6 @@ func (b colListBlockBuilder) NCols() int {
 }
 
 func (b colListBlockBuilder) AddCol(c ColMeta) {
-	if len(b.blk.cols) > 4 {
-		panic("asdf")
-	}
 	var col column
 	switch c.Type {
 	case TFloat:
@@ -381,7 +434,7 @@ func (b colListBlockBuilder) ClearData() {
 	b.blk.nrows = 0
 }
 
-// Block implements Block using list of rows.
+// Block implements Block using list of columns.
 type colListBlock struct {
 	bounds Bounds
 	tags   Tags
@@ -404,44 +457,23 @@ func (b *colListBlock) Cols() []ColMeta {
 }
 
 func (b *colListBlock) Col(c int) ValueIterator {
-	meta := b.colMeta[c]
-	col := b.cols[c]
-	if meta.IsTag {
-		return &tagColValueIterator{col: col.(*tagColumn)}
-	}
-	return colListValueIterator{col: col}
+	return colListValueIterator{col: c, cols: b.cols, nrows: b.nrows}
 }
 
 func (b *colListBlock) Values() ValueIterator {
-	j := ValueIdx(b)
+	j := ValueIdx(b.colMeta)
 	if j >= 0 {
-		return colListValueIterator{col: b.cols[j]}
+		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
 	}
 	return nil
 }
 
 func (b *colListBlock) Times() ValueIterator {
-	j := TimeIdx(b)
+	j := TimeIdx(b.colMeta)
 	if j >= 0 {
-		return colListValueIterator{col: b.cols[j]}
+		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
 	}
 	return nil
-}
-
-func (b *colListBlock) AtFloat(i, j int) float64 {
-	checkColType(b.colMeta[j], TFloat)
-	return b.cols[j].(*floatColumn).data[i]
-}
-func (b *colListBlock) AtString(i, j int) string {
-	if b.colMeta[j].IsTag {
-		return b.cols[j].(*tagColumn).value
-	}
-	checkColType(b.colMeta[j], TString)
-	return b.cols[j].(*stringColumn).data[i]
-}
-func (b *colListBlock) AtTime(i, j int) Time {
-	checkColType(b.colMeta[j], TTime)
-	return b.cols[j].(*timeColumn).data[i]
 }
 
 func (b *colListBlock) Copy() *colListBlock {
@@ -462,26 +494,49 @@ func (b *colListBlock) Copy() *colListBlock {
 }
 
 type colListValueIterator struct {
-	col column
+	col   int
+	cols  []column
+	nrows int
 }
 
-func (itr colListValueIterator) DoFloat(f func([]float64)) {
-	if itr.col.Meta().Type != TFloat {
-		panic("column is not of type float")
-	}
-	f(itr.col.(*floatColumn).data)
+func (itr colListValueIterator) DoFloat(f func([]float64, RowReader)) {
+	checkColType(itr.cols[itr.col].Meta(), TFloat)
+	f(itr.cols[itr.col].(*floatColumn).data, itr)
 }
-func (itr colListValueIterator) DoString(f func([]string)) {
-	if itr.col.Meta().Type != TString {
-		panic("column is not of type string")
+func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
+	meta := itr.cols[itr.col].Meta()
+	checkColType(meta, TString)
+	if meta.IsTag {
+		// TODO(nathanielc): Is there a better way to do this?
+		value := itr.cols[itr.col].(*tagColumn).value
+		strs := make([]string, itr.nrows)
+		for i := range strs {
+			strs[i] = value
+		}
+		f(strs, itr)
+		return
 	}
-	f(itr.col.(*stringColumn).data)
+	f(itr.cols[itr.col].(*stringColumn).data, itr)
 }
-func (itr colListValueIterator) DoTime(f func([]Time)) {
-	if itr.col.Meta().Type != TTime {
-		panic("column is not of type time")
+func (itr colListValueIterator) DoTime(f func([]Time, RowReader)) {
+	checkColType(itr.cols[itr.col].Meta(), TTime)
+	f(itr.cols[itr.col].(*timeColumn).data, itr)
+}
+func (itr colListValueIterator) AtFloat(i, j int) float64 {
+	checkColType(itr.cols[j].Meta(), TFloat)
+	return itr.cols[j].(*floatColumn).data[i]
+}
+func (itr colListValueIterator) AtString(i, j int) string {
+	meta := itr.cols[j].Meta()
+	checkColType(meta, TString)
+	if meta.IsTag {
+		return itr.cols[j].(*tagColumn).value
 	}
-	f(itr.col.(*timeColumn).data)
+	return itr.cols[j].(*stringColumn).data[i]
+}
+func (itr colListValueIterator) AtTime(i, j int) Time {
+	checkColType(itr.cols[j].Meta(), TTime)
+	return itr.cols[j].(*timeColumn).data[i]
 }
 
 type column interface {
@@ -585,22 +640,6 @@ func (c *tagColumn) Copy() column {
 	return cpy
 }
 
-type tagColValueIterator struct {
-	col    *tagColumn
-	values []string
-}
-
-func (*tagColValueIterator) DoFloat(f func([]float64)) {}
-func (itr *tagColValueIterator) DoString(f func([]string)) {
-	strs := make([]string, itr.col.size)
-	for i := range strs {
-		strs[i] = itr.col.value
-	}
-	f(strs)
-}
-
-func (*tagColValueIterator) DoTime(f func([]Time)) {}
-
 type BlockBuilderCache interface {
 	// BlockBuilder returns an existing or new BlockBuilder for the given meta data.
 	// The boolean return value indicates if BlockBuilder is new.
@@ -687,7 +726,7 @@ type FormatOption func(*formatter)
 
 func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
 	f := formatter{
-		b: b,
+		b: CacheOneTimeBlock(b),
 	}
 	for _, o := range opts {
 		o(&f)
@@ -795,8 +834,7 @@ func (f formatter) format(fs fmt.State, c rune) {
 
 	n := nrows
 	times := f.b.Times()
-	i := 0
-	times.DoTime(func(ts []Time) {
+	times.DoTime(func(ts []Time, rr RowReader) {
 		l := len(ts)
 		if n < l {
 			l = n
@@ -804,16 +842,16 @@ func (f formatter) format(fs fmt.State, c rune) {
 		} else {
 			n -= l
 		}
-		for range ts[:l] {
+		for i := range ts[:l] {
 			for j, c := range cols {
 				var buf []byte
 				switch c.Type {
 				case TFloat:
-					buf = strconv.AppendFloat(floatBuf, f.b.AtFloat(i, j), fmtC, prec, 64)
+					buf = strconv.AppendFloat(floatBuf, rr.AtFloat(i, j), fmtC, prec, 64)
 				case TTime:
-					buf = []byte(f.b.AtTime(i, j).String())
+					buf = []byte(rr.AtTime(i, j).String())
 				case TString:
-					buf = []byte(f.b.AtString(i, j))
+					buf = []byte(rr.AtString(i, j))
 				}
 				// Check justification
 				if fs.Flag('-') {
@@ -826,7 +864,6 @@ func (f formatter) format(fs fmt.State, c rune) {
 				fs.Write(pad[:2])
 			}
 			fs.Write(eol)
-			i++
 		}
 	})
 }
@@ -839,7 +876,7 @@ func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byt
 		width := len(c.Label)
 		switch c.Type {
 		case TFloat:
-			values.DoFloat(func(vs []float64) {
+			values.DoFloat(func(vs []float64, _ RowReader) {
 				l := len(vs)
 				if n < l {
 					l = n
@@ -855,7 +892,7 @@ func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byt
 				}
 			})
 		case TString:
-			values.DoString(func(vs []string) {
+			values.DoString(func(vs []string, _ RowReader) {
 				l := len(vs)
 				if n < l {
 					l = n
