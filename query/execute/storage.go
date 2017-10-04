@@ -148,7 +148,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 		block := &storageBlock{
 			bounds:  bi.bounds,
 			tags:    tags,
-			colMeta: []ColMeta{TimeCol, ValueCol},
+			colMeta: [2]ColMeta{TimeCol, ValueCol},
 			data:    bi.data,
 			done:    make(chan struct{}),
 		}
@@ -161,7 +161,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 type storageBlock struct {
 	bounds  Bounds
 	tags    Tags
-	colMeta []ColMeta
+	colMeta [2]ColMeta
 
 	done chan struct{}
 
@@ -179,91 +179,121 @@ func (b *storageBlock) Tags() Tags {
 	return b.tags
 }
 func (b *storageBlock) Cols() []ColMeta {
-	return b.colMeta
+	return b.colMeta[:]
 }
 
 func (b *storageBlock) Col(c int) ValueIterator {
 	return &storageBlockValueIterator{
-		data: b.data,
-		col:  b.colMeta[c],
-		done: b.done,
+		data:    b.data,
+		colMeta: b.colMeta,
+		col:     c,
+		done:    b.done,
 	}
 }
 
-func (b *storageBlock) Values() ValueIterator {
-	valueIdx := ValueIdx(b)
-	return b.Col(valueIdx)
-}
 func (b *storageBlock) Times() ValueIterator {
-	timeIdx := TimeIdx(b)
-	return b.Col(timeIdx)
+	return b.Col(0)
 }
-
-// TODO(nathanielc): Maybe change this API to be part of the ValueIterator so you can scan a single column, and then get data horizonatally as needed.
-func (b *storageBlock) AtFloat(i, j int) float64 {
-	panic("not implemented")
-}
-func (b *storageBlock) AtString(i, j int) string {
-	panic("not implemented")
-}
-func (b *storageBlock) AtTime(i, j int) Time {
-	panic("not implemented")
+func (b *storageBlock) Values() ValueIterator {
+	return b.Col(1)
 }
 
 type storageBlockValueIterator struct {
 	data *readState
-	col  ColMeta
-
 	done chan<- struct{}
 
+	// colMeta is always two columns, where the first is a TimeCol
+	// and the second is any Value column.
+	colMeta [2]ColMeta
+	col     int
+
+	// colBufs are the buffers for the given columns.
+	colBufs [2]interface{}
+
+	// resuable buffer for the time column
+	timeBuf []Time
+
+	// resuable buffers for the different types of values
 	floatBuf  []float64
 	stringBuf []string
-	timeBuf   []Time
+	intBuf    []int64
 }
 
-func (b *storageBlockValueIterator) DoFloat(f func([]float64)) {
-	checkColType(b.col, TFloat)
+func (b *storageBlockValueIterator) DoFloat(f func([]float64, RowReader)) {
+	checkColType(b.colMeta[b.col], TFloat)
 	for b.advance() {
-		f(b.floatBuf)
+		f(b.colBufs[b.col].([]float64), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoString(f func([]string)) {
-	checkColType(b.col, TString)
+func (b *storageBlockValueIterator) DoString(f func([]string, RowReader)) {
+	checkColType(b.colMeta[b.col], TString)
 	for b.advance() {
-		f(b.stringBuf)
+		f(b.colBufs[b.col].([]string), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoTime(f func([]Time)) {
-	checkColType(b.col, TTime)
+
+func (b *storageBlockValueIterator) DoTime(f func([]Time, RowReader)) {
+	checkColType(b.colMeta[b.col], TTime)
 	for b.advance() {
-		f(b.timeBuf)
+		f(b.colBufs[b.col].([]Time), b)
 	}
 	close(b.done)
+}
+
+func (b *storageBlockValueIterator) AtFloat(i, j int) float64 {
+	checkColType(b.colMeta[j], TFloat)
+	return b.colBufs[j].([]float64)[i]
+}
+func (b *storageBlockValueIterator) AtString(i, j int) string {
+	checkColType(b.colMeta[j], TString)
+	return b.colBufs[j].([]string)[i]
+}
+func (b *storageBlockValueIterator) AtInt(i, j int) int64 {
+	checkColType(b.colMeta[j], TInt)
+	return b.colBufs[j].([]int64)[i]
+}
+func (b *storageBlockValueIterator) AtTime(i, j int) Time {
+	checkColType(b.colMeta[j], TTime)
+	return b.colBufs[j].([]Time)[i]
 }
 
 func (b *storageBlockValueIterator) advance() bool {
 	for b.data.more() {
+
+		//reset buffers
+		b.timeBuf = b.timeBuf[0:0]
+		b.floatBuf = b.floatBuf[0:0]
+		b.stringBuf = b.stringBuf[0:0]
+		b.intBuf = b.intBuf[0:0]
+
 		switch b.data.peek() {
 		case seriesType:
 			return false
 		case integerPointsType:
-			panic("integers not supported")
+			// read next frame
+			frame := b.data.next()
+			p := frame.GetIntegerPoints()
+
+			for i, c := range p.Timestamps {
+				b.timeBuf = append(b.timeBuf, Time(c))
+				b.intBuf = append(b.intBuf, p.Values[i])
+			}
+			b.colBufs[0] = b.timeBuf
+			b.colBufs[1] = b.intBuf
+			return true
 		case floatPointsType:
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetFloatPoints()
 
-			//reset buffers
-			b.timeBuf = b.timeBuf[0:0]
-			b.floatBuf = b.floatBuf[0:0]
-			b.stringBuf = b.stringBuf[0:0]
-
 			for i, c := range p.Timestamps {
 				b.timeBuf = append(b.timeBuf, Time(c))
 				b.floatBuf = append(b.floatBuf, p.Values[i])
 			}
+			b.colBufs[0] = b.timeBuf
+			b.colBufs[1] = b.floatBuf
 			return true
 		}
 	}

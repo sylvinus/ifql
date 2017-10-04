@@ -293,51 +293,39 @@ func (b block) Cols() []execute.ColMeta {
 }
 
 func (b block) Col(c int) execute.ValueIterator {
-	return &valueIterator{b.points}
+	return &valueIterator{points: b.points, cols: b.cols}
 }
 func (b block) Values() execute.ValueIterator {
-	return &valueIterator{b.points}
+	return &valueIterator{points: b.points, cols: b.cols}
 }
 func (b block) Times() execute.ValueIterator {
-	return &timesIterator{b.points}
-}
-
-func (b block) AtFloat(i, j int) float64 {
-	return b.points[i].Value
-}
-func (b block) AtString(i, j int) string {
-	return b.points[i].Tags[b.cols[j].Label]
-}
-func (b block) AtTime(i, j int) execute.Time {
-	return b.points[i].Time
+	return &valueIterator{points: b.points, cols: b.cols}
 }
 
 type valueIterator struct {
 	points []point
+	cols   []execute.ColMeta
 }
 
-func (vi *valueIterator) DoFloat(f func([]float64)) {
-	for _, p := range vi.points {
-		f([]float64{p.Value})
+func (itr *valueIterator) DoFloat(f func([]float64, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]float64{p.Value}, itr)
 	}
 }
-func (vi *valueIterator) DoString(f func([]string)) {
-}
-func (vi *valueIterator) DoTime(f func([]execute.Time)) {
-}
-
-type timesIterator struct {
-	points []point
-}
-
-func (vi *timesIterator) DoFloat(f func([]float64)) {
-}
-func (vi *timesIterator) DoString(f func([]string)) {
-}
-func (vi *timesIterator) DoTime(f func([]execute.Time)) {
-	for _, p := range vi.points {
-		f([]execute.Time{p.Time})
+func (itr *valueIterator) DoString(f func([]string, execute.RowReader)) {}
+func (itr *valueIterator) DoTime(f func([]execute.Time, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]execute.Time{p.Time}, itr)
 	}
+}
+func (itr *valueIterator) AtFloat(i, j int) float64 {
+	return itr.points[i].Value
+}
+func (itr *valueIterator) AtString(i, j int) string {
+	return itr.points[i].Tags[itr.cols[j].Label]
+}
+func (itr *valueIterator) AtTime(i, j int) execute.Time {
+	return itr.points[i].Time
 }
 
 func convertToTestBlock(b execute.Block) block {
@@ -348,17 +336,15 @@ func convertToTestBlock(b execute.Block) block {
 	}
 	valueIdx := execute.ValueIdx(b)
 	times := b.Times()
-	i := 0
-	times.DoTime(func(ts []execute.Time) {
-		for _, time := range ts {
-			v := b.AtFloat(i, valueIdx)
-			tags := execute.TagsForRow(b, i)
+	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		for i, time := range ts {
+			v := rr.AtFloat(i, valueIdx)
+			tags := execute.TagsForRow(blk.cols, rr, i)
 			blk.points = append(blk.points, point{
 				Time:  time,
 				Value: v,
 				Tags:  tags,
 			})
-			i++
 		}
 	})
 	return blk

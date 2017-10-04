@@ -37,7 +37,9 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	}
 
 	values := b.Values()
-	values.DoFloat(t.aggF.Do)
+	values.DoFloat(func(vs []float64, _ RowReader) {
+		t.aggF.Do(vs)
+	})
 
 	builder.AppendTime(0, b.Bounds().Stop)
 	builder.AppendFloat(1, t.aggF.Value())

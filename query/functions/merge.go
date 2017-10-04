@@ -138,15 +138,15 @@ func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
 		values := b.Col(j)
 		switch c.Type {
 		case execute.TString:
-			values.DoString(func(vs []string) {
+			values.DoString(func(vs []string, _ execute.RowReader) {
 				builder.AppendStrings(nj, vs)
 			})
 		case execute.TFloat:
-			values.DoFloat(func(vs []float64) {
+			values.DoFloat(func(vs []float64, _ execute.RowReader) {
 				builder.AppendFloats(nj, vs)
 			})
 		case execute.TTime:
-			values.DoTime(func(vs []execute.Time) {
+			values.DoTime(func(vs []execute.Time, _ execute.RowReader) {
 				builder.AppendTimes(nj, vs)
 			})
 		}

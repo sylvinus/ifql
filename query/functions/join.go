@@ -179,15 +179,14 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 		table = tables.right
 	}
 
+	cols := b.Cols()
 	valueIdx := execute.ValueIdx(b)
 	times := b.Times()
-	i := 0
-	times.DoTime(func(ts []execute.Time) {
-		for _, time := range ts {
-			v := b.AtFloat(i, valueIdx)
-			tags := execute.TagsForRow(b, i).Subset(t.keys)
+	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		for i, time := range ts {
+			v := rr.AtFloat(i, valueIdx)
+			tags := execute.TagsForRow(cols, rr, i).Subset(t.keys)
 			table.Insert(v, tags, time)
-			i++
 		}
 	})
 }

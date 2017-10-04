@@ -232,16 +232,16 @@ func TestOperation_JSON(t *testing.T) {
 				Spec: &functions.SumOpSpec{},
 			},
 		},
-		//"mean": {
-		//	json: `{
-		//		"id": "mean",
-		//		"kind": "mean"
-		//	}`,
-		//	op: &query.Operation{
-		//		ID:   "mean",
-		//		Spec: &functions.MeanOpSpec{},
-		//	},
-		//},
+		"mean": {
+			json: `{
+				"id": "mean",
+				"kind": "mean"
+			}`,
+			op: &query.Operation{
+				ID:   "mean",
+				Spec: &functions.MeanOpSpec{},
+			},
+		},
 		//"percentile": {
 		//	json: `{
 		//		"id": "percentile",

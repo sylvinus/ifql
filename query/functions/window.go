@@ -154,11 +154,10 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 
 	valueIdx := execute.ValueIdx(b)
 	times := b.Times()
-	i := 0
-	times.DoTime(func(ts []execute.Time) {
-		for _, time := range ts {
+	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		for i, time := range ts {
 			found := false
-			value := b.AtFloat(i, valueIdx)
+			value := rr.AtFloat(i, valueIdx)
 			t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
 				if builder.Bounds().Contains(time) && tagKey == builder.Tags().Key() {
 					builder.AppendTime(0, time)
@@ -179,7 +178,6 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 				builder.AppendTime(0, time)
 				builder.AppendFloat(1, value)
 			}
-			i++
 		}
 	})
 }
