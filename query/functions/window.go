@@ -114,7 +114,7 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 	}
 	cache := execute.NewBlockBuilderCache()
 	d := execute.NewDataset(id, mode, cache)
-	t := newFixedWindowTransformation(d, cache, execute.Window{
+	t := newFixedWindowTransformation(d, cache, ctx.Bounds(), execute.Window{
 		Every:  execute.Duration(s.Window.Every),
 		Period: execute.Duration(s.Window.Period),
 		Round:  execute.Duration(s.Window.Round),
@@ -128,13 +128,15 @@ type fixedWindowTransformation struct {
 	cache   execute.BlockBuilderCache
 	w       execute.Window
 	parents []execute.DatasetID
+	bounds  execute.Bounds
 }
 
-func newFixedWindowTransformation(d execute.Dataset, cache execute.BlockBuilderCache, w execute.Window) execute.Transformation {
+func newFixedWindowTransformation(d execute.Dataset, cache execute.BlockBuilderCache, bounds execute.Bounds, w execute.Window) execute.Transformation {
 	return &fixedWindowTransformation{
-		d:     d,
-		cache: cache,
-		w:     w,
+		d:      d,
+		cache:  cache,
+		w:      w,
+		bounds: bounds,
 	}
 }
 
@@ -185,9 +187,19 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 func (t *fixedWindowTransformation) getWindowBounds(time execute.Time) execute.Bounds {
 	stop := time.Truncate(t.w.Every)
 	stop += execute.Time(t.w.Every)
+	start := stop - execute.Time(t.w.Period)
+
+	if stop > t.bounds.Stop {
+		stop = t.bounds.Stop
+	}
+
+	if start < t.bounds.Start {
+		start = t.bounds.Start
+	}
+
 	return execute.Bounds{
 		Stop:  stop,
-		Start: stop - execute.Time(t.w.Period),
+		Start: start,
 	}
 }
 

@@ -1,23 +1,22 @@
 package execute
 
 type aggregateTransformation struct {
-	d     Dataset
-	cache BlockBuilderCache
+	d      Dataset
+	cache  BlockBuilderCache
+	bounds Bounds
+	aggF   AggFunc
 
 	parents []DatasetID
 }
 
-func NewAggregateTransformation(id DatasetID, mode AccumulationMode, bounds Bounds, agg AggFunc) (*aggregateTransformation, Dataset) {
-	bbCache := NewBlockBuilderCache()
-	cache := aggBlockCache{
-		blockBuilderCache: bbCache,
-		agg:               agg,
-		bounds:            bounds,
-	}
+func NewAggregateTransformation(id DatasetID, mode AccumulationMode, bounds Bounds, aggF AggFunc) (*aggregateTransformation, Dataset) {
+	cache := NewBlockBuilderCache()
 	d := NewDataset(id, mode, cache)
 	return &aggregateTransformation{
-		d:     d,
-		cache: cache,
+		d:      d,
+		cache:  cache,
+		bounds: bounds,
+		aggF:   aggF,
 	}, d
 }
 
@@ -28,22 +27,21 @@ func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata)
 }
 
 func (t *aggregateTransformation) Process(id DatasetID, b Block) {
-	builder, new := t.cache.BlockBuilder(b)
+	builder, new := t.cache.BlockBuilder(blockMetadata{
+		bounds: t.bounds,
+		tags:   b.Tags(),
+	})
 	if new {
 		builder.AddCol(TimeCol)
 		builder.AddCol(ValueCol)
 	}
 
-	// Append block to builder
-	times := b.Times()
-	times.DoTime(func(vs []Time) {
-		builder.AppendTimes(0, vs)
-	})
 	values := b.Values()
-	values.DoFloat(func(vs []float64) {
-		builder.AppendFloats(1, vs)
-	})
+	values.DoFloat(t.aggF.Do)
 
+	builder.AppendTime(0, b.Bounds().Stop)
+	builder.AppendFloat(1, t.aggF.Value())
+	t.aggF.Reset()
 }
 
 func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) {
@@ -63,30 +61,4 @@ type AggFunc interface {
 	Do([]float64)
 	Value() float64
 	Reset()
-}
-
-type aggBlockCache struct {
-	*blockBuilderCache
-	agg    AggFunc
-	bounds Bounds
-}
-
-func (c aggBlockCache) Block(key BlockKey) Block {
-	//TODO(nathanielc): Add types to the aggFuncs
-
-	b := c.blockBuilderCache.Block(key)
-
-	values := b.Values()
-	values.DoFloat(c.agg.Do)
-
-	builder := NewColListBlockBuilder()
-	builder.SetBounds(c.bounds)
-	builder.SetTags(b.Tags())
-	builder.AddCol(TimeCol)
-	builder.AddCol(ValueCol)
-	builder.AppendTime(0, b.Bounds().Stop)
-	builder.AppendFloat(1, c.agg.Value())
-
-	c.agg.Reset()
-	return builder.Block()
 }
