@@ -10,22 +10,22 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-const MergeKind = "merge"
+const GroupKind = "group"
 
-type MergeOpSpec struct {
+type GroupOpSpec struct {
 	Keys []string `json:"keys"`
 	Keep []string `json:"keep"`
 }
 
 func init() {
-	ifql.RegisterFunction(MergeKind, createMergeOpSpec)
-	query.RegisterOpSpec(MergeKind, newMergeOp)
-	plan.RegisterProcedureSpec(MergeKind, newMergeProcedure, MergeKind)
-	execute.RegisterTransformation(MergeKind, createMergeTransformation)
+	ifql.RegisterFunction(GroupKind, createGroupOpSpec)
+	query.RegisterOpSpec(GroupKind, newGroupOp)
+	plan.RegisterProcedureSpec(GroupKind, newGroupProcedure, GroupKind)
+	execute.RegisterTransformation(GroupKind, createGroupTransformation)
 }
 
-func createMergeOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	spec := new(MergeOpSpec)
+func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+	spec := new(GroupOpSpec)
 	if len(args) == 0 {
 		return spec, nil
 	}
@@ -54,63 +54,63 @@ func createMergeOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 	return spec, nil
 }
 
-func newMergeOp() query.OperationSpec {
-	return new(MergeOpSpec)
+func newGroupOp() query.OperationSpec {
+	return new(GroupOpSpec)
 }
 
-func (s *MergeOpSpec) Kind() query.OperationKind {
-	return MergeKind
+func (s *GroupOpSpec) Kind() query.OperationKind {
+	return GroupKind
 }
 
-type MergeProcedureSpec struct {
+type GroupProcedureSpec struct {
 	Keys []string `json:"keys"`
 }
 
-func newMergeProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
-	spec, ok := qs.(*MergeOpSpec)
+func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+	spec, ok := qs.(*GroupOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 
-	p := &MergeProcedureSpec{
+	p := &GroupProcedureSpec{
 		Keys: spec.Keys,
 	}
 	sort.Strings(p.Keys)
 	return p, nil
 }
 
-func (s *MergeProcedureSpec) Kind() plan.ProcedureKind {
-	return MergeKind
+func (s *GroupProcedureSpec) Kind() plan.ProcedureKind {
+	return GroupKind
 }
 
-func createMergeTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	s, ok := spec.(*MergeProcedureSpec)
+func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+	s, ok := spec.(*GroupProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
 	cache := execute.NewBlockBuilderCache()
 	d := execute.NewDataset(id, mode, cache)
-	t := newMergeTransformation(d, cache, s)
+	t := newGroupTransformation(d, cache, s)
 	return t, d, nil
 }
 
-type mergeTransformation struct {
+type groupTransformation struct {
 	d       execute.Dataset
 	cache   execute.BlockBuilderCache
 	keys    []string
 	parents []execute.DatasetID
 }
 
-func newMergeTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *MergeProcedureSpec) *mergeTransformation {
+func newGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *GroupProcedureSpec) *groupTransformation {
 	sort.Strings(spec.Keys)
-	return &mergeTransformation{
+	return &groupTransformation{
 		d:     d,
 		cache: cache,
 		keys:  spec.Keys,
 	}
 }
 
-func (t *mergeTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
 	//TODO(nathanielc): Investigate if this can be smarter and not retract all blocks with the same time bounds.
 	t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
 		if meta.Bounds().Equal(builder.Bounds()) {
@@ -119,7 +119,7 @@ func (t *mergeTransformation) RetractBlock(id execute.DatasetID, meta execute.Bl
 	})
 }
 
-func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 	builder, new := t.cache.BlockBuilder(blockMetadata{
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
@@ -154,16 +154,16 @@ func (t *mergeTransformation) Process(id execute.DatasetID, b execute.Block) {
 	}
 }
 
-func (t *mergeTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
 	t.d.UpdateWatermark(mark)
 }
-func (t *mergeTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+func (t *groupTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *mergeTransformation) Finish(id execute.DatasetID) {
+func (t *groupTransformation) Finish(id execute.DatasetID) {
 	t.d.Finish()
 }
-func (t *mergeTransformation) SetParents(ids []execute.DatasetID) {
+func (t *groupTransformation) SetParents(ids []execute.DatasetID) {
 	t.parents = ids
 }
 
