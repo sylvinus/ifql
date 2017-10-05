@@ -967,12 +967,22 @@ a.join(keys:["host"], exp:{$ + b})`,
 				},
 			},
 		},
+		{
+			name:    "parse error extra gibberish",
+			raw:     `select(db:"ifql") &^*&H#IUJBN`,
+			wantErr: true,
+		},
+		{
+			name:    "parse error extra gibberish and valid content",
+			raw:     `select(db:"ifql") &^*&H#IUJBN select(db:"other")`,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := Parse("", []byte(tt.raw))
+			got, err := Parse("", []byte(tt.raw), Debug(false))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
