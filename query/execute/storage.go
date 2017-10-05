@@ -3,7 +3,6 @@ package execute
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/yarpc"
@@ -22,32 +21,26 @@ type ReadSpec struct {
 }
 
 func NewStorageReader() (StorageReader, error) {
-	return &storageReader{}, nil
+	conn, err := connect("localhost:8082")
+	if err != nil {
+		return nil, err
+	}
+	return &storageReader{
+		conn: conn,
+		c:    storage.NewStorageClient(conn),
+	}, nil
 }
 
 type storageReader struct {
-	mu          sync.Mutex
-	connections []*yarpc.ClientConn
+	conn *yarpc.ClientConn
+	c    storage.StorageClient
 }
 
-func (sr *storageReader) connect() (*yarpc.ClientConn, error) {
-	conn, err := yarpc.Dial("localhost:8082")
-	if err != nil {
-		return nil, err
-	}
-	sr.mu.Lock()
-	sr.connections = append(sr.connections, conn)
-	sr.mu.Unlock()
-	return conn, nil
+func connect(addr string) (*yarpc.ClientConn, error) {
+	return yarpc.Dial(addr)
 }
 
 func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
-	conn, err := sr.connect()
-	if err != nil {
-		return nil, err
-	}
-	c := storage.NewStorageClient(conn)
-
 	var req storage.ReadRequest
 	req.Database = readSpec.Database
 	req.Predicate = readSpec.Predicate
@@ -56,7 +49,7 @@ func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterato
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
 
-	stream, err := c.Read(context.Background(), &req)
+	stream, err := sr.c.Read(context.Background(), &req)
 	if err != nil {
 		return nil, err
 	}
@@ -73,11 +66,7 @@ func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterato
 }
 
 func (sr *storageReader) Close() {
-	sr.mu.Lock()
-	defer sr.mu.Unlock()
-	for _, c := range sr.connections {
-		c.Close()
-	}
+	sr.conn.Close()
 }
 
 type storageBlockIterator struct {
