@@ -92,14 +92,14 @@ func TestOperation_JSON(t *testing.T) {
 			},
 		},
 		//TODO implement full spec unmarshalling for all OpSpecs below
-		"merge": {
+		"group": {
 			json: `{
-				"id": "merge",
-				"kind": "merge"
+				"id": "group",
+				"kind": "group"
 			}`,
 			op: &query.Operation{
-				ID:   "merge",
-				Spec: &functions.MergeOpSpec{},
+				ID:   "group",
+				Spec: &functions.GroupOpSpec{},
 			},
 		},
 		//"keys": {
