@@ -252,16 +252,16 @@ func TestOperation_JSON(t *testing.T) {
 		//		Spec: &functions.PercentileOpSpec{},
 		//	},
 		//},
-		//"stddev": {
-		//	json: `{
-		//		"id": "stddev",
-		//		"kind": "stddev"
-		//	}`,
-		//	op: &query.Operation{
-		//		ID:   "stddev",
-		//		Spec: &functions.StddevOpSpec{},
-		//	},
-		//},
+		"stddev": {
+			json: `{
+				"id": "stddev",
+				"kind": "stddev"
+			}`,
+			op: &query.Operation{
+				ID:   "stddev",
+				Spec: &functions.StddevOpSpec{},
+			},
+		},
 		//"min": {
 		//	json: `{
 		//		"id": "min",
