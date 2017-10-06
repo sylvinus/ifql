@@ -134,13 +134,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 		for _, t := range s.Tags {
 			tags[string(t.Key)] = string(t.Value)
 		}
-		block := &storageBlock{
-			bounds:  bi.bounds,
-			tags:    tags,
-			colMeta: [2]ColMeta{TimeCol, ValueCol},
-			data:    bi.data,
-			done:    make(chan struct{}),
-		}
+		block := newStorageBlock(bi.bounds, tags, bi.data)
 		f(block)
 		// Wait until the block has been read.
 		block.wait()
@@ -150,11 +144,34 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 type storageBlock struct {
 	bounds  Bounds
 	tags    Tags
-	colMeta [2]ColMeta
+	colMeta []ColMeta
 
 	done chan struct{}
 
 	data *readState
+}
+
+func newStorageBlock(bounds Bounds, tags Tags, data *readState) *storageBlock {
+	colMeta := make([]ColMeta, 2+len(tags))
+	colMeta[0] = TimeCol
+	colMeta[1] = ValueCol
+
+	keys := tags.Keys()
+	for i, k := range keys {
+		colMeta[i+2] = ColMeta{
+			Label:    k,
+			Type:     TString,
+			IsTag:    true,
+			IsCommon: true,
+		}
+	}
+	return &storageBlock{
+		bounds:  bounds,
+		tags:    tags,
+		colMeta: colMeta,
+		data:    data,
+		done:    make(chan struct{}),
+	}
 }
 
 func (b *storageBlock) wait() {
@@ -171,11 +188,12 @@ func (b *storageBlock) Tags() Tags {
 	return b.tags
 }
 func (b *storageBlock) Cols() []ColMeta {
-	return b.colMeta[:]
+	return b.colMeta
 }
 
 func (b *storageBlock) Col(c int) ValueIterator {
 	return &storageBlockValueIterator{
+		tags:    b.tags,
 		data:    b.data,
 		colMeta: b.colMeta,
 		col:     c,
@@ -191,12 +209,13 @@ func (b *storageBlock) Values() ValueIterator {
 }
 
 type storageBlockValueIterator struct {
+	tags Tags
 	data *readState
 	done chan<- struct{}
 
-	// colMeta is always two columns, where the first is a TimeCol
+	// colMeta always has at least two columns, where the first is a TimeCol
 	// and the second is any Value column.
-	colMeta [2]ColMeta
+	colMeta []ColMeta
 	col     int
 
 	// colBufs are the buffers for the given columns.
@@ -219,11 +238,38 @@ func (b *storageBlockValueIterator) DoFloat(f func([]float64, RowReader)) {
 	close(b.done)
 }
 func (b *storageBlockValueIterator) DoString(f func([]string, RowReader)) {
-	checkColType(b.colMeta[b.col], TString)
+	defer close(b.done)
+
+	meta := b.colMeta[b.col]
+	checkColType(meta, TString)
+	if meta.IsTag && meta.IsCommon {
+		// Handle creating a strs slice that can be ranged according to actual data received.
+		var strs []string
+		value := b.tags[meta.Label]
+		for b.advance() {
+			l := len(b.timeBuf)
+			if cap(strs) < l {
+				strs = make([]string, l)
+				for i := range strs {
+					strs[i] = value
+				}
+			} else if len(strs) < l {
+				new := strs[len(strs)-1 : l]
+				for i := range new {
+					new[i] = value
+				}
+				strs = strs[0:l]
+			} else {
+				strs = strs[0:l]
+			}
+			f(strs, b)
+		}
+		return
+	}
+	// Do ordinary range over column data.
 	for b.advance() {
 		f(b.colBufs[b.col].([]string), b)
 	}
-	close(b.done)
 }
 
 func (b *storageBlockValueIterator) DoTime(f func([]Time, RowReader)) {
@@ -239,7 +285,11 @@ func (b *storageBlockValueIterator) AtFloat(i, j int) float64 {
 	return b.colBufs[j].([]float64)[i]
 }
 func (b *storageBlockValueIterator) AtString(i, j int) string {
-	checkColType(b.colMeta[j], TString)
+	meta := b.colMeta[j]
+	checkColType(meta, TString)
+	if meta.IsTag && meta.IsCommon {
+		return b.tags[meta.Label]
+	}
 	return b.colBufs[j].([]string)[i]
 }
 func (b *storageBlockValueIterator) AtInt(i, j int) int64 {

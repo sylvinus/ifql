@@ -3,10 +3,7 @@ package execute
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"runtime/debug"
 	"sort"
-	"strconv"
 
 	"github.com/influxdata/ifql/query"
 )
@@ -37,7 +34,7 @@ type Block interface {
 }
 
 // OneTimeBlock is a Block that permits reading data only once.
-// Specifically the ValueIterator may only be consumed once.
+// Specifically the ValueIterator may only be consumed once from any of the columns.
 type OneTimeBlock interface {
 	Block
 	onetime()
@@ -47,39 +44,58 @@ type OneTimeBlock interface {
 // If the block is not a OneTimeBlock it is returned directly.
 // Otherwise its contents are read into a new block.
 func CacheOneTimeBlock(b Block) Block {
-	ob, ok := b.(OneTimeBlock)
+	_, ok := b.(OneTimeBlock)
 	if !ok {
 		return b
 	}
-	builder := NewColListBlockBuilder()
-	builder.SetBounds(ob.Bounds())
-	builder.SetTags(ob.Tags())
+	return CopyBlock(b)
+}
 
-	cols := ob.Cols()
-	timeIdx := TimeIdx(cols)
-	for _, c := range cols {
+// CopyBlock returns a copy of the block and is OneTimeBlock safe.
+func CopyBlock(b Block) Block {
+	builder := NewColListBlockBuilder()
+	builder.SetBounds(b.Bounds())
+
+	cols := b.Cols()
+	colMap := make([]int, len(cols))
+	for j, c := range cols {
+		colMap[j] = j
 		builder.AddCol(c)
+		if c.IsTag && c.IsCommon {
+			builder.SetCommonString(j, b.Tags()[c.Label])
+		}
 	}
-	times := ob.Col(timeIdx)
+
+	AppendBlock(b, builder, colMap)
+	return builder.Block()
+}
+
+// AppendBlock append data from block b onto builder.
+// The colMap is a map of builder columnm index to block column index.
+// AppendBlock is OneTimeBlock safe.
+func AppendBlock(b Block, builder BlockBuilder, colMap []int) {
+	times := b.Times()
+
+	cols := builder.Cols()
+	timeIdx := TimeIdx(cols)
 	times.DoTime(func(ts []Time, rr RowReader) {
 		builder.AppendTimes(timeIdx, ts)
-		for i := range ts {
-			for j, c := range cols {
-				if j == timeIdx {
-					continue
-				}
+		for j, c := range cols {
+			if j == timeIdx || c.IsCommon {
+				continue
+			}
+			for i := range ts {
 				switch c.Type {
 				case TString:
-					builder.AppendString(j, rr.AtString(i, j))
+					builder.AppendString(j, rr.AtString(i, colMap[j]))
 				case TFloat:
-					builder.AppendFloat(j, rr.AtFloat(i, j))
+					builder.AppendFloat(j, rr.AtFloat(i, colMap[j]))
 				case TTime:
-					builder.AppendTime(j, rr.AtTime(i, j))
+					builder.AppendTime(j, rr.AtTime(i, colMap[j]))
 				}
 			}
 		}
 	})
-	return builder.Block()
 }
 
 func ValueIdx(cols []ColMeta) int {
@@ -99,27 +115,43 @@ func TimeIdx(cols []ColMeta) int {
 	return -1
 }
 
+// AddTags add columns to the builder for the given tags.
+// It is assumed that all tags are common to all rows of this block.
+func AddTags(t Tags, b BlockBuilder) {
+	keys := t.Keys()
+	for _, k := range keys {
+		j := b.AddCol(ColMeta{
+			Label:    k,
+			Type:     TString,
+			IsTag:    true,
+			IsCommon: true,
+		})
+		b.SetCommonString(j, t[k])
+	}
+}
+
 // BlockBuilder builds blocks that can be used multiple times
 type BlockBuilder interface {
 	SetBounds(Bounds)
-
-	//SetTags sets tags that are common to all records of this block
-	SetTags(Tags)
 
 	BlockMetadata
 
 	NRows() int
 	NCols() int
+	Cols() []ColMeta
 
-	// AddCol increases the size of the block by one column
-	// Columns need not be added for tags that are common to the block
-	AddCol(ColMeta)
+	// AddCol increases the size of the block by one column.
+	// The index of the column is returned.
+	AddCol(ColMeta) int
 
 	// Set sets the value at the specified coordinates
 	// The rows and columns must exist before calling set, otherwise Set panics.
 	SetFloat(i, j int, value float64)
 	SetString(i, j int, value string)
 	SetTime(i, j int, value Time)
+
+	// SetCommonString sets a single value for the entire column.
+	SetCommonString(j int, value string)
 
 	AppendFloat(j int, value float64)
 	AppendString(j int, value string)
@@ -129,7 +161,7 @@ type BlockBuilder interface {
 	AppendStrings(j int, values []string)
 	AppendTimes(j int, values []Time)
 
-	// Clear removes all rows and columns from the block
+	// Clear removes all rows, while preserving the column meta data.
 	ClearData()
 
 	// Block returns the block that has been built.
@@ -168,6 +200,8 @@ type ColMeta struct {
 	Label string
 	Type  DataType
 	IsTag bool
+	// IsCommon indicates that the value for the column is shared by all rows.
+	IsCommon bool
 }
 
 const (
@@ -308,9 +342,6 @@ func (b colListBlockBuilder) Bounds() Bounds {
 	return b.blk.bounds
 }
 
-func (b colListBlockBuilder) SetTags(tags Tags) {
-	b.blk.tags = tags
-}
 func (b colListBlockBuilder) Tags() Tags {
 	return b.blk.tags
 }
@@ -320,8 +351,11 @@ func (b colListBlockBuilder) NRows() int {
 func (b colListBlockBuilder) NCols() int {
 	return len(b.blk.cols)
 }
+func (b colListBlockBuilder) Cols() []ColMeta {
+	return b.blk.colMeta
+}
 
-func (b colListBlockBuilder) AddCol(c ColMeta) {
+func (b colListBlockBuilder) AddCol(c ColMeta) int {
 	var col column
 	switch c.Type {
 	case TFloat:
@@ -329,15 +363,23 @@ func (b colListBlockBuilder) AddCol(c ColMeta) {
 			ColMeta: c,
 		}
 	case TString:
-		col = &stringColumn{
-			ColMeta: c,
+		if c.IsCommon {
+			col = &commonStrColumn{
+				ColMeta: c,
+			}
+		} else {
+			col = &stringColumn{
+				ColMeta: c,
+			}
 		}
 	case TTime:
 		col = &timeColumn{
 			ColMeta: c,
 		}
 	}
+	b.blk.colMeta = append(b.blk.colMeta, c)
 	b.blk.cols = append(b.blk.cols, col)
+	return len(b.blk.cols) - 1
 }
 
 func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
@@ -362,7 +404,15 @@ func (b colListBlockBuilder) SetString(i int, j int, value string) {
 	b.blk.cols[j].(*stringColumn).data[i] = value
 }
 func (b colListBlockBuilder) AppendString(j int, value string) {
-	b.checkColType(j, TString)
+	meta := b.blk.cols[j].Meta()
+	checkColType(meta, TString)
+	if meta.IsCommon {
+		v := b.blk.cols[j].(*commonStrColumn).value
+		if value != v {
+			panic(fmt.Errorf("attempting to append a different value to the column %s, which has all common values", meta.Label))
+		}
+		return
+	}
 	col := b.blk.cols[j].(*stringColumn)
 	col.data = append(col.data, value)
 	b.blk.nrows = len(col.data)
@@ -372,6 +422,20 @@ func (b colListBlockBuilder) AppendStrings(j int, values []string) {
 	col := b.blk.cols[j].(*stringColumn)
 	col.data = append(col.data, values...)
 	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) SetCommonString(j int, value string) {
+	meta := b.blk.cols[j].Meta()
+	checkColType(meta, TString)
+	if !meta.IsCommon {
+		panic(fmt.Errorf("cannot set common value for column %s, column is not marked as common", meta.Label))
+	}
+	b.blk.cols[j].(*commonStrColumn).value = value
+	if meta.IsTag {
+		if b.blk.tags == nil {
+			b.blk.tags = make(Tags)
+		}
+		b.blk.tags[meta.Label] = value
+	}
 }
 
 func (b colListBlockBuilder) SetTime(i int, j int, value Time) {
@@ -404,26 +468,6 @@ func checkColType(col ColMeta, typ DataType) {
 func (b colListBlockBuilder) Block() Block {
 	// Create copy in mutable state
 	blk := b.blk.Copy()
-
-	// Add tagColums
-	keys := blk.tags.Keys()
-	for _, k := range keys {
-		blk.cols = append(blk.cols, &tagColumn{
-			ColMeta: ColMeta{
-				Label: k,
-				Type:  TString,
-				IsTag: true,
-			},
-			value: blk.tags[k],
-			size:  b.blk.nrows,
-		})
-	}
-
-	// Build meta list
-	blk.colMeta = make([]ColMeta, len(blk.cols))
-	for i, c := range blk.cols {
-		blk.colMeta[i] = c.Meta()
-	}
 	return blk
 }
 
@@ -506,9 +550,8 @@ func (itr colListValueIterator) DoFloat(f func([]float64, RowReader)) {
 func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
 	meta := itr.cols[itr.col].Meta()
 	checkColType(meta, TString)
-	if meta.IsTag {
-		// TODO(nathanielc): Is there a better way to do this?
-		value := itr.cols[itr.col].(*tagColumn).value
+	if meta.IsTag && meta.IsCommon {
+		value := itr.cols[itr.col].(*commonStrColumn).value
 		strs := make([]string, itr.nrows)
 		for i := range strs {
 			strs[i] = value
@@ -529,8 +572,8 @@ func (itr colListValueIterator) AtFloat(i, j int) float64 {
 func (itr colListValueIterator) AtString(i, j int) string {
 	meta := itr.cols[j].Meta()
 	checkColType(meta, TString)
-	if meta.IsTag {
-		return itr.cols[j].(*tagColumn).value
+	if meta.IsTag && meta.IsCommon {
+		return itr.cols[j].(*commonStrColumn).value
 	}
 	return itr.cols[j].(*stringColumn).data[i]
 }
@@ -542,7 +585,6 @@ func (itr colListValueIterator) AtTime(i, j int) Time {
 type column interface {
 	Meta() ColMeta
 	Clear()
-	Len() int
 	Copy() column
 }
 
@@ -557,9 +599,6 @@ func (c *floatColumn) Meta() ColMeta {
 
 func (c *floatColumn) Clear() {
 	c.data = c.data[0:0]
-}
-func (c *floatColumn) Len() int {
-	return len(c.data)
 }
 func (c *floatColumn) Copy() column {
 	cpy := &floatColumn{
@@ -582,9 +621,6 @@ func (c *stringColumn) Meta() ColMeta {
 func (c *stringColumn) Clear() {
 	c.data = c.data[0:0]
 }
-func (c *stringColumn) Len() int {
-	return len(c.data)
-}
 func (c *stringColumn) Copy() column {
 	cpy := &stringColumn{
 		ColMeta: c.ColMeta,
@@ -606,9 +642,6 @@ func (c *timeColumn) Meta() ColMeta {
 func (c *timeColumn) Clear() {
 	c.data = c.data[0:0]
 }
-func (c *timeColumn) Len() int {
-	return len(c.data)
-}
 func (c *timeColumn) Copy() column {
 	cpy := &timeColumn{
 		ColMeta: c.ColMeta,
@@ -618,24 +651,19 @@ func (c *timeColumn) Copy() column {
 	return cpy
 }
 
-//tagColumn has the same value for all rows
-type tagColumn struct {
+//commonStrColumn has the same string value for all rows
+type commonStrColumn struct {
 	ColMeta
 	value string
-	size  int
 }
 
-func (c *tagColumn) Meta() ColMeta {
+func (c *commonStrColumn) Meta() ColMeta {
 	return c.ColMeta
 }
-func (c *tagColumn) Clear() {
-	c.size = 0
+func (c *commonStrColumn) Clear() {
 }
-func (c *tagColumn) Len() int {
-	return c.size
-}
-func (c *tagColumn) Copy() column {
-	cpy := new(tagColumn)
+func (c *commonStrColumn) Copy() column {
+	cpy := new(commonStrColumn)
 	*cpy = *c
 	return cpy
 }
@@ -682,8 +710,8 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) (BlockBuilder, bool
 	b, ok := d.blocks[key]
 	if !ok {
 		builder := NewColListBlockBuilder()
-		builder.SetTags(meta.Tags())
 		builder.SetBounds(meta.Bounds())
+		AddTags(meta.Tags(), builder)
 		t := NewTriggerFromSpec(d.triggerSpec)
 		b = blockState{
 			builder: builder,
@@ -721,217 +749,3 @@ func (d *blockBuilderCache) ForEachWithContext(f func(BlockKey, Trigger, BlockCo
 		})
 	}
 }
-
-type FormatOption func(*formatter)
-
-func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
-	f := formatter{
-		b: CacheOneTimeBlock(b),
-	}
-	for _, o := range opts {
-		o(&f)
-	}
-	return f
-}
-
-func Head(m int) FormatOption {
-	return func(f *formatter) { f.head = m }
-}
-func Squeeze() FormatOption {
-	return func(f *formatter) { f.squeeze = true }
-}
-
-type formatter struct {
-	b       Block
-	head    int
-	squeeze bool
-}
-
-func (f formatter) Format(fs fmt.State, c rune) {
-	if c == 'v' && fs.Flag('#') {
-		fmt.Fprintf(fs, "%#v", f.b)
-		return
-	}
-	defer func() {
-		r := recover()
-		if r != nil {
-			panic(fmt.Sprintf("%v\n%s", r, debug.Stack()))
-		}
-	}()
-	f.format(fs, c)
-}
-
-func (f formatter) format(fs fmt.State, c rune) {
-	tags := f.b.Tags()
-	keys := tags.Keys()
-	cols := f.b.Cols()
-	fmt.Fprintf(fs, "Block: keys: %v bounds: %v\n", keys, f.b.Bounds())
-	nCols := len(cols) + len(keys)
-
-	// Determine number of rows to print
-	nrows := math.MaxInt64
-	if f.head > 0 {
-		nrows = f.head
-	}
-
-	// Determine precision of floating point values
-	prec, pOk := fs.Precision()
-	if !pOk {
-		prec = -1
-	}
-
-	var widths widther
-	if f.squeeze {
-		widths = make(columnWidth, nCols)
-	} else {
-		widths = new(uniformWidth)
-	}
-
-	fmtC := byte(c)
-	if fmtC == 'v' {
-		fmtC = 'g'
-	}
-	floatBuf := make([]byte, 0, 64)
-	maxWidth := computeWidths(f.b, fmtC, nrows, prec, widths, floatBuf)
-
-	width, _ := fs.Width()
-	if width < maxWidth {
-		width = maxWidth
-	}
-	if width < 2 {
-		width = 2
-	}
-	pad := make([]byte, width)
-	for i := range pad {
-		pad[i] = ' '
-	}
-	dash := make([]byte, width)
-	for i := range dash {
-		dash[i] = '-'
-	}
-	eol := []byte{'\n'}
-
-	// Print column headers
-	for j, c := range cols {
-		buf := []byte(c.Label)
-		// Check justification
-		if fs.Flag('-') {
-			fs.Write(buf)
-			fs.Write(pad[:widths.width(j)-len(buf)])
-		} else {
-			fs.Write(pad[:widths.width(j)-len(buf)])
-			fs.Write(buf)
-		}
-		fs.Write(pad[:2])
-	}
-	fs.Write(eol)
-	// Print header separator
-	for j := range cols {
-		fs.Write(dash[:widths.width(j)])
-		fs.Write(pad[:2])
-	}
-	fs.Write(eol)
-
-	n := nrows
-	times := f.b.Times()
-	times.DoTime(func(ts []Time, rr RowReader) {
-		l := len(ts)
-		if n < l {
-			l = n
-			n = 0
-		} else {
-			n -= l
-		}
-		for i := range ts[:l] {
-			for j, c := range cols {
-				var buf []byte
-				switch c.Type {
-				case TFloat:
-					buf = strconv.AppendFloat(floatBuf, rr.AtFloat(i, j), fmtC, prec, 64)
-				case TTime:
-					buf = []byte(rr.AtTime(i, j).String())
-				case TString:
-					buf = []byte(rr.AtString(i, j))
-				}
-				// Check justification
-				if fs.Flag('-') {
-					fs.Write(buf)
-					fs.Write(pad[:widths.width(j)-len(buf)])
-				} else {
-					fs.Write(pad[:widths.width(j)-len(buf)])
-					fs.Write(buf)
-				}
-				fs.Write(pad[:2])
-			}
-			fs.Write(eol)
-		}
-	})
-}
-
-func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byte) int {
-	maxWidth := 0
-	for j, c := range b.Cols() {
-		n := rows
-		values := b.Col(j)
-		width := len(c.Label)
-		switch c.Type {
-		case TFloat:
-			values.DoFloat(func(vs []float64, _ RowReader) {
-				l := len(vs)
-				if n < l {
-					l = n
-					n = 0
-				} else {
-					n -= l
-				}
-				for _, v := range vs[:l] {
-					buf = strconv.AppendFloat(buf[0:0], v, fmtC, prec, 64)
-					if w := len(buf); w > width {
-						width = w
-					}
-				}
-			})
-		case TString:
-			values.DoString(func(vs []string, _ RowReader) {
-				l := len(vs)
-				if n < l {
-					l = n
-					n = 0
-				} else {
-					n -= l
-				}
-				for _, v := range vs[:l] {
-					if w := len(v); w > width {
-						width = w
-					}
-				}
-			})
-		case TTime:
-			width = len(fixedWidthTimeFmt)
-		}
-		widths.setWidth(j, width)
-		if width > maxWidth {
-			maxWidth = width
-		}
-	}
-	return maxWidth
-}
-
-type widther interface {
-	width(i int) int
-	setWidth(i, w int)
-}
-
-type uniformWidth int
-
-func (u *uniformWidth) width(_ int) int { return int(*u) }
-func (u *uniformWidth) setWidth(_, w int) {
-	if uniformWidth(w) > *u {
-		*u = uniformWidth(w)
-	}
-}
-
-type columnWidth []int
-
-func (c columnWidth) width(i int) int   { return c[i] }
-func (c columnWidth) setWidth(i, w int) { c[i] = w }

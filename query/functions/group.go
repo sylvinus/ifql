@@ -63,7 +63,8 @@ func (s *GroupOpSpec) Kind() query.OperationKind {
 }
 
 type GroupProcedureSpec struct {
-	Keys []string `json:"keys"`
+	Keys []string
+	Keep []string
 }
 
 func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -74,8 +75,8 @@ func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 
 	p := &GroupProcedureSpec{
 		Keys: spec.Keys,
+		Keep: spec.Keep,
 	}
-	sort.Strings(p.Keys)
 	return p, nil
 }
 
@@ -95,19 +96,24 @@ func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMo
 }
 
 type groupTransformation struct {
-	d       execute.Dataset
-	cache   execute.BlockBuilderCache
-	keys    []string
-	parents []execute.DatasetID
+	d     execute.Dataset
+	cache execute.BlockBuilderCache
+
+	keys []string
+	keep []string
 }
 
 func newGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *GroupProcedureSpec) *groupTransformation {
 	sort.Strings(spec.Keys)
-	return &groupTransformation{
+	t := &groupTransformation{
 		d:     d,
 		cache: cache,
 		keys:  spec.Keys,
+		keep:  spec.Keep,
 	}
+	sort.Strings(t.keys)
+	sort.Strings(t.keep)
+	return t
 }
 
 func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
@@ -124,34 +130,40 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 		tags:   b.Tags().Subset(t.keys),
 		bounds: b.Bounds(),
 	})
-	cols := b.Cols()
-	nj := 0
-	for j, c := range cols {
-		// TODO check the `keep` list to determine which tags are kept
-		if c.IsTag {
-			continue
-		}
-		if new {
-			builder.AddCol(c)
+	if new {
+		// Determine columns of new block
+
+		// Add existing columns skipping tags
+		for _, c := range b.Cols() {
+			if !c.IsTag {
+				builder.AddCol(c)
+			}
 		}
 
-		values := b.Col(j)
-		switch c.Type {
-		case execute.TString:
-			values.DoString(func(vs []string, _ execute.RowReader) {
-				builder.AppendStrings(nj, vs)
-			})
-		case execute.TFloat:
-			values.DoFloat(func(vs []float64, _ execute.RowReader) {
-				builder.AppendFloats(nj, vs)
-			})
-		case execute.TTime:
-			values.DoTime(func(vs []execute.Time, _ execute.RowReader) {
-				builder.AppendTimes(nj, vs)
+		// Add columns for tags that are to be kept.
+		for _, k := range t.keep {
+			builder.AddCol(execute.ColMeta{
+				Label: k,
+				Type:  execute.TString,
+				IsTag: true,
 			})
 		}
-		nj++
 	}
+
+	// Construct map of builder column index to block column index.
+	builderCols := builder.Cols()
+	blockCols := b.Cols()
+	colMap := make([]int, len(builderCols))
+	for j, c := range builderCols {
+		for nj, nc := range blockCols {
+			if c.Label == nc.Label {
+				colMap[j] = nj
+				break
+			}
+		}
+	}
+
+	execute.AppendBlock(b, builder, colMap)
 }
 
 func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
@@ -164,7 +176,6 @@ func (t *groupTransformation) Finish(id execute.DatasetID) {
 	t.d.Finish()
 }
 func (t *groupTransformation) SetParents(ids []execute.DatasetID) {
-	t.parents = ids
 }
 
 type blockMetadata struct {
