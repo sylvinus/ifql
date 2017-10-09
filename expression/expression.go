@@ -52,9 +52,9 @@ type Node interface {
 }
 
 type BinaryNode struct {
-	Operator Operator
-	Left     Node
-	Right    Node
+	Operator Operator `json:"operator"`
+	Left     Node     `json:"left"`
+	Right    Node     `json:"right"`
 }
 
 func (*BinaryNode) Type() Type {
@@ -62,8 +62,8 @@ func (*BinaryNode) Type() Type {
 }
 
 type UnaryNode struct {
-	Operator Operator
-	Node     Node
+	Operator Operator `json:"operator"`
+	Node     Node     `json:"node"`
 }
 
 func (*UnaryNode) Type() Type {
@@ -71,7 +71,7 @@ func (*UnaryNode) Type() Type {
 }
 
 type StringLiteralNode struct {
-	Value string
+	Value string `json:"value"`
 }
 
 func (*StringLiteralNode) Type() Type {
@@ -79,7 +79,7 @@ func (*StringLiteralNode) Type() Type {
 }
 
 type IntegerLiteralNode struct {
-	Value int64
+	Value int64 `json:"value"`
 }
 
 func (*IntegerLiteralNode) Type() Type {
@@ -87,7 +87,7 @@ func (*IntegerLiteralNode) Type() Type {
 }
 
 type BooleanLiteralNode struct {
-	Value bool
+	Value bool `json:"value"`
 }
 
 func (*BooleanLiteralNode) Type() Type {
@@ -95,7 +95,7 @@ func (*BooleanLiteralNode) Type() Type {
 }
 
 type FloatLiteralNode struct {
-	Value float64
+	Value float64 `json:"value"`
 }
 
 func (*FloatLiteralNode) Type() Type {
@@ -103,7 +103,7 @@ func (*FloatLiteralNode) Type() Type {
 }
 
 type DurationLiteralNode struct {
-	Value time.Duration
+	Value time.Duration `json:"value"`
 }
 
 func (*DurationLiteralNode) Type() Type {
@@ -111,7 +111,7 @@ func (*DurationLiteralNode) Type() Type {
 }
 
 type TimeLiteralNode struct {
-	Value time.Time
+	Value time.Time `json:"value"`
 }
 
 func (*TimeLiteralNode) Type() Type {
@@ -119,7 +119,7 @@ func (*TimeLiteralNode) Type() Type {
 }
 
 type RegexpLiteralNode struct {
-	Value string
+	Value string `json:"value"`
 }
 
 func (*RegexpLiteralNode) Type() Type {
@@ -128,9 +128,9 @@ func (*RegexpLiteralNode) Type() Type {
 
 type ReferenceNode struct {
 	// Name is the name of the item being referenced
-	Name string
+	Name string `json:"name"`
 	// Kind is any kind for the reference, can be used to indicate type information about the item being referenced.
-	Kind string
+	Kind string `json:"kind"`
 }
 
 func (*ReferenceNode) Type() Type {

@@ -14,7 +14,7 @@ import (
 const WhereKind = "where"
 
 type WhereOpSpec struct {
-	Exp expression.Node `json:"exp"`
+	Expression expression.Node `json:"exp"`
 }
 
 func init() {
@@ -35,7 +35,7 @@ func createWhereOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 	}
 
 	return &WhereOpSpec{
-		Exp: expValue.Value.(expression.Node),
+		Expression: expValue.Value.(expression.Node),
 	}, nil
 }
 func newWhereOp() query.OperationSpec {
@@ -57,7 +57,7 @@ func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	return &WhereProcedureSpec{
-		Exp: spec.Exp,
+		Exp: spec.Expression,
 	}, nil
 }
 

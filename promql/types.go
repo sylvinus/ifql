@@ -250,7 +250,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.WhereOpSpec{
-			Exp: node,
+			Expression: node,
 		},
 	}, nil
 }

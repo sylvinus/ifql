@@ -138,7 +138,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.AndOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -211,7 +211,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.OrOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -293,7 +293,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.AndOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -362,7 +362,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.AndOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -431,7 +431,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.AndOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.RegexpMatchOperator,
@@ -496,7 +496,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.RegexpMatchOperator,
 								Left: &expression.ReferenceNode{
 									Name: "t1",
@@ -533,7 +533,7 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.AndOperator,
 								Left: &expression.BinaryNode{
 									Operator: expression.RegexpMatchOperator,
@@ -668,7 +668,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.EqualOperator,
 								Left: &expression.ReferenceNode{
 									Name: "_measurement",
@@ -697,7 +697,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where4",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.EqualOperator,
 								Left: &expression.ReferenceNode{
 									Name: "_measurement",
@@ -760,7 +760,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.EqualOperator,
 								Left: &expression.ReferenceNode{
 									Name: "_measurement",
@@ -789,7 +789,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where4",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
+							Expression: &expression.BinaryNode{
 								Operator: expression.EqualOperator,
 								Left: &expression.ReferenceNode{
 									Name: "_measurement",
