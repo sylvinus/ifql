@@ -41,8 +41,11 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 		t.aggF.Do(vs)
 	})
 
-	builder.AppendTime(0, b.Bounds().Stop)
-	builder.AppendFloat(1, t.aggF.Value())
+	timeIdx := TimeIdx(builder.Cols())
+	valueIdx := ValueIdx(builder.Cols())
+
+	builder.AppendTime(timeIdx, b.Bounds().Stop)
+	builder.AppendFloat(valueIdx, t.aggF.Value())
 	t.aggF.Reset()
 }
 

@@ -374,7 +374,7 @@ func (t *joinTables) Join() execute.Block {
 
 	builder := execute.NewColListBlockBuilder()
 	builder.SetBounds(t.bounds)
-	builder.SetTags(t.tags)
+	execute.AddTags(t.tags, builder)
 	builder.AddCol(execute.TimeCol)
 	builder.AddCol(execute.ValueCol)
 
@@ -387,6 +387,9 @@ func (t *joinTables) Join() execute.Block {
 	//log.Println("left", tabularFmt(left))
 	//log.Println("right", tabularFmt(right))
 
+	timeIdx := execute.TimeIdx(builder.Cols())
+	valueIdx := execute.ValueIdx(builder.Cols())
+
 	left, leftSet, leftKey = t.advance(left)
 	right, rightSet, rightKey = t.advance(right)
 	for len(leftSet) > 0 && len(rightSet) > 0 {
@@ -395,8 +398,8 @@ func (t *joinTables) Join() execute.Block {
 			for _, l := range leftSet {
 				for _, r := range rightSet {
 					v := t.eval(l.Value, r.Value)
-					builder.AppendTime(0, l.Key.Time)
-					builder.AppendFloat(1, v)
+					builder.AppendTime(timeIdx, l.Key.Time)
+					builder.AppendFloat(valueIdx, v)
 				}
 			}
 
