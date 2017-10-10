@@ -109,15 +109,15 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 			return nil, err
 		}
 		rs := newResultSink()
-		ds.addTransformation(rs)
+		ds.AddTransformation(rs)
 		es.results[i] = rs
 	}
 	return es, nil
 }
 
-// defaultTriggerSpec defines the triggering that should be used for datasets
+// DefaultTriggerSpec defines the triggering that should be used for datasets
 // whose parent transformation is not a windowing transformation.
-var defaultTriggerSpec = query.AfterWatermarkTriggerSpec{}
+var DefaultTriggerSpec = query.AfterWatermarkTriggerSpec{}
 
 type triggeringSpec interface {
 	TriggerSpec() query.TriggerSpec
@@ -141,11 +141,11 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 	}
 
 	// Setup triggering
-	var ts query.TriggerSpec = defaultTriggerSpec
+	var ts query.TriggerSpec = DefaultTriggerSpec
 	if t, ok := pr.Spec.(triggeringSpec); ok {
 		ts = t.TriggerSpec()
 	}
-	ds.setTriggerSpec(ts)
+	ds.SetTriggerSpec(ts)
 
 	parentIDs := make([]DatasetID, len(pr.Parents))
 	for i, parentID := range pr.Parents {
@@ -154,7 +154,7 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 			return nil, err
 		}
 		transport := newTransformationTransport(t, nil)
-		parent.addTransformation(transport)
+		parent.AddTransformation(transport)
 		es.runners = append(es.runners, transport)
 		parentIDs[i] = DatasetID(parentID)
 	}

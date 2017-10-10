@@ -8,7 +8,7 @@ import (
 )
 
 type Node interface {
-	addTransformation(t Transformation)
+	AddTransformation(t Transformation)
 }
 
 type Source interface {
@@ -51,7 +51,7 @@ func NewStorageSource(id DatasetID, r StorageReader, readSpec ReadSpec, bounds B
 	}
 }
 
-func (s *storageSource) addTransformation(t Transformation) {
+func (s *storageSource) AddTransformation(t Transformation) {
 	s.ts = append(s.ts, t)
 }
 
