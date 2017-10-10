@@ -10,21 +10,42 @@ import (
 )
 
 func TestJoinOperation_Marshaling(t *testing.T) {
-	//TODO: Implement expression marshalling
-	t.Skip()
-	data := []byte(`{"id":"join","kind":"join","spec":{"keys":["t1","t2"]}}`)
+	data := []byte(`{
+		"id":"join",
+		"kind":"join",
+		"spec":{
+			"keys":["t1","t2"],
+			"expression":{
+				"root":{
+					"type":"binary",
+					"operator": "==",
+					"left":{
+						"type":"reference",
+						"name":"_measurement",
+						"kind":"identifier"
+					},
+					"right":{
+						"type":"stringLiteral",
+						"value":"abc"
+					}
+				}
+			}
+		}
+	}`)
 	op := &query.Operation{
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
 			Keys: []string{"t1", "t2"},
-			Expression: &expression.BinaryNode{
-				Operator: expression.AdditionOperator,
-				Left: &expression.ReferenceNode{
-					Name: "_measurement",
-					Kind: "identifier",
-				},
-				Right: &expression.IntegerLiteralNode{
-					Value: 42,
+			Expression: expression.Expression{
+				Root: &expression.BinaryNode{
+					Operator: expression.EqualOperator,
+					Left: &expression.ReferenceNode{
+						Name: "_measurement",
+						Kind: "identifier",
+					},
+					Right: &expression.StringLiteralNode{
+						Value: "abc",
+					},
 				},
 			},
 		},

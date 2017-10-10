@@ -13,7 +13,7 @@ func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Opera
 
 	// Ensure we can properly unmarshal a spec
 	gotOp := new(query.Operation)
-	if err := json.Unmarshal(data, &gotOp); err != nil {
+	if err := json.Unmarshal(data, gotOp); err != nil {
 		t.Fatal(err)
 	}
 	if !cmp.Equal(gotOp, expOp) {
@@ -26,7 +26,7 @@ func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Opera
 		t.Fatal(err)
 	}
 	gotOp = new(query.Operation)
-	if err := json.Unmarshal(data, &gotOp); err != nil {
+	if err := json.Unmarshal(data, gotOp); err != nil {
 		t.Fatal(err)
 	}
 

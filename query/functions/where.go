@@ -14,7 +14,7 @@ import (
 const WhereKind = "where"
 
 type WhereOpSpec struct {
-	Expression expression.Node `json:"exp"`
+	Expression expression.Expression `json:"expression"`
 }
 
 func init() {
@@ -35,7 +35,9 @@ func createWhereOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 	}
 
 	return &WhereOpSpec{
-		Expression: expValue.Value.(expression.Node),
+		Expression: expression.Expression{
+			Root: expValue.Value.(expression.Node),
+		},
 	}, nil
 }
 func newWhereOp() query.OperationSpec {
@@ -47,7 +49,7 @@ func (s *WhereOpSpec) Kind() query.OperationKind {
 }
 
 type WhereProcedureSpec struct {
-	Exp expression.Node
+	Expression expression.Expression
 }
 
 func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -57,7 +59,7 @@ func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	return &WhereProcedureSpec{
-		Exp: spec.Expression,
+		Expression: spec.Expression,
 	}, nil
 }
 
@@ -77,7 +79,7 @@ func (s *WhereProcedureSpec) PushDown(root *plan.Procedure) {
 		// TODO: create copy of select spec and set new where expression
 	}
 	selectSpec.WhereSet = true
-	p, err := execute.ExpressionToStoragePredicate(s.Exp)
+	p, err := execute.ExpressionToStoragePredicate(s.Expression.Root)
 	if err != nil {
 		//TODO(nathanielc): Handle this error
 		panic(err)
