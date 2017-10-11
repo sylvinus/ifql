@@ -1,6 +1,7 @@
 package functions_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/influxdata/ifql/query"
@@ -20,9 +21,36 @@ func TestMeanOperation_Marshaling(t *testing.T) {
 }
 
 func TestMean_Process(t *testing.T) {
-	executetest.AggregateProcessTestHelper(t,
-		new(functions.MeanAgg),
-		[]float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-		4.5,
-	)
+	testCases := []struct {
+		name string
+		data []float64
+		want float64
+	}{
+		{
+			name: "zero",
+			data: []float64{0, 0, 0},
+			want: 0.0,
+		},
+		{
+			name: "nonzero",
+			data: []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			want: 4.5,
+		},
+		{
+			name: "NaN",
+			data: []float64{},
+			want: math.NaN(),
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			executetest.AggregateProcessTestHelper(
+				t,
+				new(functions.MeanAgg),
+				tc.data,
+				tc.want,
+			)
+		})
+	}
 }
