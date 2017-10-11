@@ -27,3 +27,11 @@ func TestCount_Process(t *testing.T) {
 		10,
 	)
 }
+func BenchmarkCount(b *testing.B) {
+	executetest.AggregateProcessBnechmarkHelper(
+		b,
+		new(functions.CountAgg),
+		NormalData,
+		float64(len(NormalData)),
+	)
+}

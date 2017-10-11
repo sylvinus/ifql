@@ -54,3 +54,12 @@ func TestStddev_Process(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkStddev(b *testing.B) {
+	executetest.AggregateProcessBnechmarkHelper(
+		b,
+		new(functions.StddevAgg),
+		NormalData,
+		2.998926,
+	)
+}

@@ -64,3 +64,12 @@ func TestSkew_Process(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkSkew(b *testing.B) {
+	executetest.AggregateProcessBnechmarkHelper(
+		b,
+		new(functions.SkewAgg),
+		NormalData,
+		0.00322,
+	)
+}

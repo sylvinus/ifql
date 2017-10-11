@@ -71,3 +71,18 @@ func AggregateProcessTestHelper(t *testing.T, aggF execute.AggFunc, data []float
 		t.Errorf("unexpected blocks -want/+got\n%s", cmp.Diff(want, got))
 	}
 }
+
+const small = 1e-5
+
+func AggregateProcessBnechmarkHelper(b *testing.B, aggF execute.AggFunc, data []float64, wantValue float64) {
+	b.Helper()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		aggF.Reset()
+		aggF.Do(data)
+		v := aggF.Value()
+		if diff := v - wantValue; diff > small || diff < -small {
+			b.Fatalf("unexpected result: got: %f want: %f", v, wantValue)
+		}
+	}
+}

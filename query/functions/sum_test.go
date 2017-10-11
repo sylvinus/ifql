@@ -26,3 +26,12 @@ func TestSum_Process(t *testing.T) {
 		45,
 	)
 }
+
+func BenchmarkSum(b *testing.B) {
+	executetest.AggregateProcessBnechmarkHelper(
+		b,
+		new(functions.SumAgg),
+		NormalData,
+		10000816.9673,
+	)
+}

@@ -54,3 +54,12 @@ func TestMean_Process(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkMean(b *testing.B) {
+	executetest.AggregateProcessBnechmarkHelper(
+		b,
+		new(functions.MeanAgg),
+		NormalData,
+		10.000817,
+	)
+}

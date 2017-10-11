@@ -73,7 +73,7 @@ func (a *SkewAgg) Value() float64 {
 	if a.n < 2 {
 		return math.NaN()
 	}
-	return math.Sqrt(a.n) * a.m3 * math.Pow(a.m2, -1.5)
+	return math.Sqrt(a.n) * a.m3 / math.Pow(a.m2, 1.5)
 }
 func (a *SkewAgg) Reset() {
 	a.n = 0
