@@ -138,26 +138,28 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t1",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
 									},
-									Right: &expression.StringLiteralNode{
-										Value: "val1",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t2",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "val2",
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t2",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val2",
+										},
 									},
 								},
 							},
@@ -211,39 +213,41 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.OrOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.AndOperator,
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.OrOperator,
 									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "t1",
-											Kind: "tag",
+										Operator: expression.AndOperator,
+										Left: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "t1",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "val1",
+											},
 										},
-										Right: &expression.StringLiteralNode{
-											Value: "val1",
+										Right: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "t2",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "val2",
+											},
 										},
 									},
 									Right: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
 										Left: &expression.ReferenceNode{
-											Name: "t2",
+											Name: "t3",
 											Kind: "tag",
 										},
 										Right: &expression.StringLiteralNode{
-											Value: "val2",
+											Value: "val3",
 										},
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t3",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "val3",
 									},
 								},
 							},
@@ -293,26 +297,28 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t1",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
 									},
-									Right: &expression.StringLiteralNode{
-										Value: "val1",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
-									},
-									Right: &expression.IntegerLiteralNode{
-										Value: 10,
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.IntegerLiteralNode{
+											Value: 10,
+										},
 									},
 								},
 							},
@@ -362,26 +368,28 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t1",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
 									},
-									Right: &expression.StringLiteralNode{
-										Value: "val1",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
-									},
-									Right: &expression.IntegerLiteralNode{
-										Value: 10,
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.IntegerLiteralNode{
+											Value: 10,
+										},
 									},
 								},
 							},
@@ -431,26 +439,28 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.RegexpMatchOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t1",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.RegexpMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: "val1",
+										},
 									},
-									Right: &expression.RegexpLiteralNode{
-										Value: "val1",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
-									},
-									Right: &expression.FloatLiteralNode{
-										Value: 10.5,
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.FloatLiteralNode{
+											Value: 10.5,
+										},
 									},
 								},
 							},
@@ -496,14 +506,16 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.RegexpMatchOperator,
-								Left: &expression.ReferenceNode{
-									Name: "t1",
-									Kind: "tag",
-								},
-								Right: &expression.RegexpLiteralNode{
-									Value: `va/l1`,
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.RegexpMatchOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.RegexpLiteralNode{
+										Value: `va/l1`,
+									},
 								},
 							},
 						},
@@ -533,26 +545,28 @@ func TestNewQuery(t *testing.T) {
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.RegexpMatchOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t1",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.RegexpMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: `va/l1`,
+										},
 									},
-									Right: &expression.RegexpLiteralNode{
-										Value: `va/l1`,
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.RegexpNotMatchOperator,
-									Left: &expression.ReferenceNode{
-										Name: "t2",
-										Kind: "tag",
-									},
-									Right: &expression.RegexpLiteralNode{
-										Value: `val2`,
+									Right: &expression.BinaryNode{
+										Operator: expression.RegexpNotMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t2",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: `val2`,
+										},
 									},
 								},
 							},
@@ -631,15 +645,17 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							Keys: []string{"host"},
-							Expression: &expression.BinaryNode{
-								Operator: expression.AdditionOperator,
-								Left: &expression.ReferenceNode{
-									Name: "a",
-									Kind: "identifier",
-								},
-								Right: &expression.ReferenceNode{
-									Name: "b",
-									Kind: "identifier",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AdditionOperator,
+									Left: &expression.ReferenceNode{
+										Name: "a",
+										Kind: "identifier",
+									},
+									Right: &expression.ReferenceNode{
+										Name: "b",
+										Kind: "identifier",
+									},
 								},
 							},
 						},
@@ -668,14 +684,16 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "_measurement",
-									Kind: "tag",
-								},
-								Right: &expression.StringLiteralNode{
-									Value: "a",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "a",
+									},
 								},
 							},
 						},
@@ -697,14 +715,16 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where4",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "_measurement",
-									Kind: "tag",
-								},
-								Right: &expression.StringLiteralNode{
-									Value: "b",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "b",
+									},
 								},
 							},
 						},
@@ -721,15 +741,17 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
 							Keys: []string{"t1"},
-							Expression: &expression.BinaryNode{
-								Operator: expression.DivisionOperator,
-								Left: &expression.ReferenceNode{
-									Name: "a",
-									Kind: "identifier",
-								},
-								Right: &expression.ReferenceNode{
-									Name: "$",
-									Kind: "field",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.DivisionOperator,
+									Left: &expression.ReferenceNode{
+										Name: "a",
+										Kind: "identifier",
+									},
+									Right: &expression.ReferenceNode{
+										Name: "$",
+										Kind: "field",
+									},
 								},
 							},
 						},
@@ -760,14 +782,16 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where1",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "_measurement",
-									Kind: "tag",
-								},
-								Right: &expression.StringLiteralNode{
-									Value: "a",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "a",
+									},
 								},
 							},
 						},
@@ -789,14 +813,16 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "where4",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "_measurement",
-									Kind: "tag",
-								},
-								Right: &expression.StringLiteralNode{
-									Value: "b",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "b",
+									},
 								},
 							},
 						},
@@ -813,22 +839,24 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
 							Keys: []string{"t1"},
-							Expression: &expression.BinaryNode{
-								Operator: expression.DivisionOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.SubtractionOperator,
-									Left: &expression.ReferenceNode{
-										Name: "a",
-										Kind: "identifier",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.DivisionOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.SubtractionOperator,
+										Left: &expression.ReferenceNode{
+											Name: "a",
+											Kind: "identifier",
+										},
+										Right: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
 									},
 									Right: &expression.ReferenceNode{
 										Name: "$",
 										Kind: "field",
 									},
-								},
-								Right: &expression.ReferenceNode{
-									Name: "$",
-									Kind: "field",
 								},
 							},
 						},

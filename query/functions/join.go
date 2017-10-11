@@ -19,8 +19,8 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	Keys       []string        `json:"keys"`
-	Expression expression.Node `json:"expression"`
+	Keys       []string              `json:"keys"`
+	Expression expression.Expression `json:"expression"`
 }
 
 func init() {
@@ -39,9 +39,11 @@ func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Opera
 	if expValue.Type != ifql.TExpression {
 		return nil, fmt.Errorf(`join function argument "exp" must be an expression, got %v`, expValue.Type)
 	}
-	expr := expValue.Value.(expression.Node)
+	node := expValue.Value.(expression.Node)
 	spec := &JoinOpSpec{
-		Expression: expr,
+		Expression: expression.Expression{
+			Root: node,
+		},
 	}
 
 	if keysValue, ok := args["keys"]; ok {
@@ -56,7 +58,7 @@ func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Opera
 	}
 
 	// Find identifier of parent nodes
-	err := expression.Walk(expr, func(n expression.Node) error {
+	err := expression.Walk(node, func(n expression.Node) error {
 		if r, ok := n.(*expression.ReferenceNode); ok && r.Kind == "identifier" {
 			id, err := ctx.LookupIDFromIdentifier(r.Name)
 			if err != nil {
@@ -82,8 +84,8 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	Keys       []string        `json:"keys"`
-	Expression expression.Node `json:"expression"`
+	Keys       []string              `json:"keys"`
+	Expression expression.Expression `json:"expression"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -109,7 +111,7 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinExpr, err := newExpressionSpec(s.Expression)
+	joinExpr, err := newExpressionSpec(s.Expression.Root)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}

@@ -14,7 +14,7 @@ type Dataset interface {
 	UpdateWatermark(mark Time)
 	Finish()
 
-	setTriggerSpec(t query.TriggerSpec)
+	SetTriggerSpec(t query.TriggerSpec)
 }
 
 // DataCache holds all working data for a transformation.
@@ -71,11 +71,11 @@ func NewDataset(id DatasetID, accMode AccumulationMode, cache DataCache) *datase
 	}
 }
 
-func (d *dataset) addTransformation(t Transformation) {
+func (d *dataset) AddTransformation(t Transformation) {
 	d.ts = append(d.ts, t)
 }
 
-func (d *dataset) setTriggerSpec(spec query.TriggerSpec) {
+func (d *dataset) SetTriggerSpec(spec query.TriggerSpec) {
 	d.cache.SetTriggerSpec(spec)
 }
 

@@ -53,7 +53,7 @@ type StddevAgg struct {
 }
 
 func createStddevTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformation(id, mode, ctx.Bounds(), new(StddevAgg))
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(StddevAgg))
 	return t, d, nil
 }
 

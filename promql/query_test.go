@@ -370,39 +370,41 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
 									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_metric",
-											Kind: "tag",
+										Operator: expression.AndOperator,
+										Left: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "_metric",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "node_cpu",
+											},
 										},
-										Right: &expression.StringLiteralNode{
-											Value: "node_cpu",
+										Right: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "mode",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "user",
+											},
 										},
 									},
 									Right: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
 										Left: &expression.ReferenceNode{
-											Name: "mode",
+											Name: "cpu",
 											Kind: "tag",
 										},
 										Right: &expression.StringLiteralNode{
-											Value: "user",
+											Value: "cpu2",
 										},
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "cpu",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "cpu2",
 									},
 								},
 							},
@@ -442,26 +444,28 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "_metric",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "_metric",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "node_cpu",
+										},
 									},
-									Right: &expression.StringLiteralNode{
-										Value: "node_cpu",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "mode",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "user",
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "mode",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "user",
+										},
 									},
 								},
 							},
@@ -499,26 +503,28 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.WhereOpSpec{
-							Exp: &expression.BinaryNode{
-								Operator: expression.AndOperator,
-								Left: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "_metric",
-										Kind: "tag",
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "_metric",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "node_cpu",
+										},
 									},
-									Right: &expression.StringLiteralNode{
-										Value: "node_cpu",
-									},
-								},
-								Right: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "_measurement",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "m0",
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "_measurement",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "m0",
+										},
 									},
 								},
 							},
