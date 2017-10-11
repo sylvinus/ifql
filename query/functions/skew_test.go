@@ -10,17 +10,17 @@ import (
 	"github.com/influxdata/ifql/query/querytest"
 )
 
-func TestStddevOperation_Marshaling(t *testing.T) {
-	data := []byte(`{"id":"stddev","kind":"stddev"}`)
+func TestSkewOperation_Marshaling(t *testing.T) {
+	data := []byte(`{"id":"skew","kind":"skew"}`)
 	op := &query.Operation{
-		ID:   "stddev",
-		Spec: &functions.StddevOpSpec{},
+		ID:   "skew",
+		Spec: &functions.SkewOpSpec{},
 	}
 
 	querytest.OperationMarshalingTestHelper(t, data, op)
 }
 
-func TestStddev_Process(t *testing.T) {
+func TestSkew_Process(t *testing.T) {
 	testCases := []struct {
 		name string
 		data []float64
@@ -28,17 +28,27 @@ func TestStddev_Process(t *testing.T) {
 	}{
 		{
 			name: "zero",
-			data: []float64{1, 1, 1},
+			data: []float64{1, 2, 3},
 			want: 0.0,
 		},
 		{
 			name: "nonzero",
-			data: []float64{1, 2, 3},
-			want: 1.0,
+			data: []float64{2, 2, 3},
+			want: 0.7071067811865475,
 		},
 		{
-			name: "NaN",
+			name: "nonzero",
+			data: []float64{2, 2, 3, 4},
+			want: 0.49338220021815854,
+		},
+		{
+			name: "NaN short",
 			data: []float64{1},
+			want: math.NaN(),
+		},
+		{
+			name: "NaN divide by zero",
+			data: []float64{1, 1, 1},
 			want: math.NaN(),
 		},
 	}
@@ -47,7 +57,7 @@ func TestStddev_Process(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			executetest.AggregateProcessTestHelper(
 				t,
-				new(functions.StddevAgg),
+				new(functions.SkewAgg),
 				tc.data,
 				tc.want,
 			)
