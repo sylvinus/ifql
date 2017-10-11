@@ -500,11 +500,8 @@ func TestFixedWindow_Process(t *testing.T) {
 				})
 			}
 
-			blocks := []*executetest.Block{block0}
 			parentID := executetest.RandomDatasetID()
-			for _, b := range blocks {
-				fw.Process(parentID, b)
-			}
+			fw.Process(parentID, block0)
 
 			got := executetest.BlocksFromCache(c)
 

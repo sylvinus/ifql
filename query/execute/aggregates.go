@@ -9,15 +9,19 @@ type aggregateTransformation struct {
 	parents []DatasetID
 }
 
-func NewAggregateTransformation(id DatasetID, mode AccumulationMode, bounds Bounds, aggF AggFunc) (*aggregateTransformation, Dataset) {
-	cache := NewBlockBuilderCache()
-	d := NewDataset(id, mode, cache)
+func NewAggregateTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, aggF AggFunc) *aggregateTransformation {
 	return &aggregateTransformation{
 		d:      d,
-		cache:  cache,
+		cache:  c,
 		bounds: bounds,
 		aggF:   aggF,
-	}, d
+	}
+}
+
+func NewAggregateTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, aggF AggFunc) (*aggregateTransformation, Dataset) {
+	cache := NewBlockBuilderCache()
+	d := NewDataset(id, mode, cache)
+	return NewAggregateTransformation(d, cache, bounds, aggF), d
 }
 
 func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
