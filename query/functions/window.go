@@ -173,12 +173,10 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 				if new {
 					builder.AddCol(execute.TimeCol)
 					builder.AddCol(execute.ValueCol)
+					execute.AddTags(b.Tags(), builder)
 				}
-
-				timeIdx := execute.TimeIdx(builder.Cols())
-				valueIdx := execute.ValueIdx(builder.Cols())
-				builder.AppendTime(timeIdx, time)
-				builder.AppendFloat(valueIdx, value)
+				builder.AppendTime(0, time)
+				builder.AppendFloat(1, value)
 			}
 		}
 	})

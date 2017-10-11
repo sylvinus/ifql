@@ -38,6 +38,7 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	if new {
 		builder.AddCol(TimeCol)
 		builder.AddCol(ValueCol)
+		AddTags(b.Tags(), builder)
 	}
 
 	values := b.Values()
@@ -45,11 +46,8 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 		t.aggF.Do(vs)
 	})
 
-	timeIdx := TimeIdx(builder.Cols())
-	valueIdx := ValueIdx(builder.Cols())
-
-	builder.AppendTime(timeIdx, b.Bounds().Stop)
-	builder.AppendFloat(valueIdx, t.aggF.Value())
+	builder.AppendTime(0, b.Bounds().Stop)
+	builder.AppendFloat(1, t.aggF.Value())
 	t.aggF.Reset()
 }
 
