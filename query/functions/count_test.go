@@ -20,5 +20,10 @@ func TestCountOperation_Marshaling(t *testing.T) {
 }
 
 func TestCount_Process(t *testing.T) {
-	executetest.AggregateProcessTestHelper(t, new(functions.CountAgg), 10, 10)
+	executetest.AggregateProcessTestHelper(
+		t,
+		new(functions.CountAgg),
+		[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		10,
+	)
 }

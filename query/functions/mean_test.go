@@ -20,5 +20,9 @@ func TestMeanOperation_Marshaling(t *testing.T) {
 }
 
 func TestMean_Process(t *testing.T) {
-	executetest.AggregateProcessTestHelper(t, new(functions.MeanAgg), 10, 4.5)
+	executetest.AggregateProcessTestHelper(t,
+		new(functions.MeanAgg),
+		[]float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		4.5,
+	)
 }

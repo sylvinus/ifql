@@ -20,5 +20,9 @@ func TestStddevOperation_Marshaling(t *testing.T) {
 }
 
 func TestStddev_Process(t *testing.T) {
-	executetest.AggregateProcessTestHelper(t, new(functions.StddevAgg), 10, 3.0276503540974917)
+	executetest.AggregateProcessTestHelper(t,
+		new(functions.StddevAgg),
+		[]float64{1, 2, 3},
+		1,
+	)
 }

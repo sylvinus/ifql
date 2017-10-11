@@ -9,7 +9,7 @@ import (
 	"github.com/influxdata/ifql/query/execute"
 )
 
-func AggregateProcessTestHelper(t *testing.T, aggF execute.AggFunc, num int, wantValue float64) {
+func AggregateProcessTestHelper(t *testing.T, aggF execute.AggFunc, data []float64, wantValue float64) {
 	t.Helper()
 
 	start := execute.Time(time.Date(2017, 10, 10, 10, 10, 10, 10, time.UTC).UnixNano())
@@ -37,10 +37,10 @@ func AggregateProcessTestHelper(t *testing.T, aggF execute.AggFunc, num int, wan
 		},
 	}
 
-	for i := 0; i < num; i++ {
+	for i := range data {
 		block0.Data = append(block0.Data, []interface{}{
-			start + execute.Time(time.Duration(i)*10*time.Second),
-			float64(i),
+			start + execute.Time(time.Duration(i)*time.Second),
+			data[i],
 		})
 	}
 
