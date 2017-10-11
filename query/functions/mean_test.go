@@ -45,7 +45,7 @@ func TestMean_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.AggregateProcessTestHelper(
+			executetest.AggFuncTestHelper(
 				t,
 				new(functions.MeanAgg),
 				tc.data,
@@ -56,7 +56,7 @@ func TestMean_Process(t *testing.T) {
 }
 
 func BenchmarkMean(b *testing.B) {
-	executetest.AggregateProcessBnechmarkHelper(
+	executetest.AggFuncBenchmarkHelper(
 		b,
 		new(functions.MeanAgg),
 		NormalData,

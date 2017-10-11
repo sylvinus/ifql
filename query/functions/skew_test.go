@@ -55,7 +55,7 @@ func TestSkew_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.AggregateProcessTestHelper(
+			executetest.AggFuncTestHelper(
 				t,
 				new(functions.SkewAgg),
 				tc.data,
@@ -66,7 +66,7 @@ func TestSkew_Process(t *testing.T) {
 }
 
 func BenchmarkSkew(b *testing.B) {
-	executetest.AggregateProcessBnechmarkHelper(
+	executetest.AggFuncBenchmarkHelper(
 		b,
 		new(functions.SkewAgg),
 		NormalData,
