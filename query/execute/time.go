@@ -56,3 +56,7 @@ func (t Time) String() string {
 func (t Time) Time() time.Time {
 	return time.Unix(0, int64(t)).UTC()
 }
+
+func (d Duration) String() string {
+	return time.Duration(d).String()
+}

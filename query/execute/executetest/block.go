@@ -110,3 +110,20 @@ func ConvertBlock(b execute.Block) *Block {
 	})
 	return blk
 }
+
+type SortedBlocks []*Block
+
+func (b SortedBlocks) Len() int {
+	return len(b)
+}
+
+func (b SortedBlocks) Less(i int, j int) bool {
+	if b[i].Bnds.Stop == b[j].Bnds.Stop {
+		return b[i].Bnds.Start < b[j].Bnds.Start
+	}
+	return b[i].Bnds.Stop < b[j].Bnds.Stop
+}
+
+func (b SortedBlocks) Swap(i int, j int) {
+	b[i], b[j] = b[j], b[i]
+}

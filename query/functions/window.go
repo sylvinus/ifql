@@ -159,27 +159,16 @@ func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta exec
 }
 
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
-	tagKey := b.Tags().Key()
-
 	valueIdx := execute.ValueIdx(b.Cols())
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {
-			found := false
 			value := rr.AtFloat(i, valueIdx)
-			t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
-				if builder.Bounds().Contains(time) && tagKey == builder.Tags().Key() {
-					timeIdx := execute.TimeIdx(builder.Cols())
-					valueIdx := execute.ValueIdx(builder.Cols())
-					builder.AppendTime(timeIdx, time)
-					builder.AppendFloat(valueIdx, value)
-					found = true
-				}
-			})
-			if !found {
+			bounds := t.getWindowBounds(time)
+			for _, bnds := range bounds {
 				builder, new := t.cache.BlockBuilder(blockMetadata{
 					tags:   b.Tags(),
-					bounds: t.getWindowBounds(time),
+					bounds: bnds,
 				})
 				if new {
 					builder.AddCol(execute.TimeCol)
@@ -195,23 +184,41 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 	})
 }
 
-func (t *fixedWindowTransformation) getWindowBounds(now execute.Time) execute.Bounds {
+func (t *fixedWindowTransformation) getWindowBounds(now execute.Time) []execute.Bounds {
 	stop := now.Truncate(t.w.Every) + execute.Time(t.offset)
-	stop += execute.Time(t.w.Every)
+	if now >= stop {
+		stop += execute.Time(t.w.Every)
+	}
 	start := stop - execute.Time(t.w.Period)
 
-	if stop > t.bounds.Stop {
-		stop = t.bounds.Stop
+	var bounds []execute.Bounds
+
+	for now >= start {
+		bnds := execute.Bounds{
+			Start: start,
+			Stop:  stop,
+		}
+
+		// Check global bounds
+		if bnds.Stop > t.bounds.Stop {
+			bnds.Stop = t.bounds.Stop
+		}
+
+		if bnds.Start < t.bounds.Start {
+			bnds.Start = t.bounds.Start
+		}
+
+		// Check bounds again since we just clamped them.
+		if bnds.Contains(now) {
+			bounds = append(bounds, bnds)
+		}
+
+		// Shift up to next bounds
+		stop += execute.Time(t.w.Every)
+		start += execute.Time(t.w.Every)
 	}
 
-	if start < t.bounds.Start {
-		start = t.bounds.Start
-	}
-
-	return execute.Bounds{
-		Stop:  stop,
-		Start: start,
-	}
+	return bounds
 }
 
 func (t *fixedWindowTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
