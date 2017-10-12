@@ -141,8 +141,8 @@ func (t *sortTransformation) UpdateWatermark(id execute.DatasetID, mark execute.
 func (t *sortTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *sortTransformation) Finish(id execute.DatasetID) {
-	t.d.Finish()
+func (t *sortTransformation) Finish(id execute.DatasetID, err error) {
+	t.d.Finish(err)
 }
 func (t *sortTransformation) SetParents(ids []execute.DatasetID) {
 }

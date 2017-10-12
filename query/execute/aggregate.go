@@ -57,8 +57,8 @@ func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) {
 func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *aggregateTransformation) Finish(id DatasetID) {
-	t.d.Finish()
+func (t *aggregateTransformation) Finish(id DatasetID, err error) {
+	t.d.Finish(err)
 }
 func (t *aggregateTransformation) SetParents(ids []DatasetID) {
 	t.parents = ids

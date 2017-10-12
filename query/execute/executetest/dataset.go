@@ -19,6 +19,7 @@ type Dataset struct {
 	ProcessingTimeUpdates []execute.Time
 	WatermarkUpdates      []execute.Time
 	Finished              bool
+	FinishedErr           error
 }
 
 func NewDataset(id execute.DatasetID) *Dataset {
@@ -43,11 +44,12 @@ func (d *Dataset) UpdateWatermark(mark execute.Time) {
 	d.WatermarkUpdates = append(d.WatermarkUpdates, mark)
 }
 
-func (d *Dataset) Finish() {
+func (d *Dataset) Finish(err error) {
 	if d.Finished {
 		panic("finish has already been called")
 	}
 	d.Finished = true
+	d.FinishedErr = err
 }
 
 func (d *Dataset) SetTriggerSpec(t query.TriggerSpec) {
@@ -68,13 +70,14 @@ func TransformationPassThroughTestHelper(t *testing.T, newTr NewTransformation) 
 	tr := newTr(d, c)
 	tr.UpdateWatermark(parentID, now)
 	tr.UpdateProcessingTime(parentID, now)
-	tr.Finish(parentID)
+	tr.Finish(parentID, nil)
 
 	exp := &Dataset{
 		ID: d.ID,
 		ProcessingTimeUpdates: []execute.Time{now},
 		WatermarkUpdates:      []execute.Time{now},
 		Finished:              true,
+		FinishedErr:           nil,
 	}
 	if !cmp.Equal(d, exp) {
 		t.Errorf("unexpected dataset -want/+got\n%s", cmp.Diff(exp, d))
