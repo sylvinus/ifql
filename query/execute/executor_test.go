@@ -312,6 +312,9 @@ type valueIterator struct {
 	cols   []execute.ColMeta
 }
 
+func (itr *valueIterator) Cols() []execute.ColMeta {
+	return itr.cols
+}
 func (itr *valueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 	for _, p := range itr.points {
 		f([]float64{p.Value}, itr)
