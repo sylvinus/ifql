@@ -57,7 +57,7 @@ func Execute(ctx context.Context, qSpec *query.QuerySpec, os ...Option) ([]Resul
 		return nil, errors.Wrap(err, "failed to create storage reader")
 	}
 
-	e := NewExecutor(storage, opts)
+	e := NewExecutor(storage, &opts)
 	r, err := e.Execute(ctx, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute query")
@@ -74,11 +74,14 @@ type executor struct {
 	opts Options
 }
 
-func NewExecutor(sr StorageReader, opts Options) Executor {
-	return &executor{
-		sr:   sr,
-		opts: opts,
+func NewExecutor(sr StorageReader, opts *Options) Executor {
+	e := &executor{
+		sr: sr,
 	}
+	if opts != nil {
+		e.opts = *opts
+	}
+	return e
 }
 
 type executionState struct {
