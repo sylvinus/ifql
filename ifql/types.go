@@ -202,6 +202,13 @@ func stringLiteral(text []byte, pos position) (*ast.StringLiteral, error) {
 	}, nil
 }
 
+func booleanLiteral(b bool, text []byte, pos position) (*ast.BooleanLiteral, error) {
+	return &ast.BooleanLiteral{
+		BaseNode: base(text, pos),
+		Value:    b,
+	}, nil
+}
+
 func integerLiteral(text []byte, pos position) (*ast.IntegerLiteral, error) {
 	n, err := strconv.ParseInt(string(text), 10, 64)
 	if err != nil {

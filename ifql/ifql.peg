@@ -186,6 +186,7 @@ Primary
     }
   / Array
   / StringLiteral
+  / BooleanLiteral
   / RegularExpressionLiteral
   / Duration
   / DateTime
@@ -310,6 +311,14 @@ DoubleStringEscape
   = '"'
   / ( SourceChar / EOL / EOF ) {
       return nil, errors.New("invalid escape character")
+    }
+
+BooleanLiteral
+  = __ "true" __ {
+      return booleanLiteral(true, c.text, c.pos)
+    }
+  / __ "false" __ {
+      return booleanLiteral(false, c.text, c.pos)
     }
 
 Identifier

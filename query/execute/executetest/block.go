@@ -4,7 +4,6 @@ import "github.com/influxdata/ifql/query/execute"
 
 type Block struct {
 	Bnds    execute.Bounds
-	Tgs     execute.Tags
 	ColMeta []execute.ColMeta
 	// Data is a list of rows, i.e. Data[row][col]
 	// Each row must be a list with length equal to len(ColMeta)
@@ -16,7 +15,13 @@ func (b *Block) Bounds() execute.Bounds {
 }
 
 func (b *Block) Tags() execute.Tags {
-	return b.Tgs
+	tags := make(execute.Tags, len(b.ColMeta))
+	for j, c := range b.ColMeta {
+		if c.IsTag && c.IsCommon {
+			tags[c.Label] = b.Data[0][j].(string)
+		}
+	}
+	return tags
 }
 
 func (b *Block) Cols() []execute.ColMeta {
@@ -86,7 +91,6 @@ func BlocksFromCache(c execute.BlockBuilderCache) []*Block {
 func ConvertBlock(b execute.Block) *Block {
 	blk := &Block{
 		Bnds:    b.Bounds(),
-		Tgs:     b.Tags().Copy(),
 		ColMeta: b.Cols(),
 	}
 

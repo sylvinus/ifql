@@ -126,14 +126,18 @@ func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.Bl
 }
 
 func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
+	tags := b.Tags().Subset(t.keys)
 	builder, new := t.cache.BlockBuilder(blockMetadata{
-		tags:   b.Tags().Subset(t.keys),
+		tags:   tags,
 		bounds: b.Bounds(),
 	})
 	if new {
-		// Determine columns of new block
+		// Determine columns of new block.
 
-		// Add existing columns skipping tags
+		// Add tags.
+		execute.AddTags(tags, builder)
+
+		// Add other existing columns, skipping tags.
 		for _, c := range b.Cols() {
 			if !c.IsTag {
 				builder.AddCol(c)

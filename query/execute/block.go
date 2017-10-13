@@ -70,6 +70,17 @@ func CopyBlock(b Block) Block {
 	return builder.Block()
 }
 
+// AddBlockCols adds the columns of b onto builder.
+func AddBlockCols(b Block, builder BlockBuilder) {
+	cols := b.Cols()
+	for j, c := range cols {
+		builder.AddCol(c)
+		if c.IsTag && c.IsCommon {
+			builder.SetCommonString(j, b.Tags()[c.Label])
+		}
+	}
+}
+
 // AppendBlock append data from block b onto builder.
 // The colMap is a map of builder columnm index to block column index.
 // AppendBlock is OneTimeBlock safe.
@@ -98,6 +109,21 @@ func AppendBlock(b Block, builder BlockBuilder, colMap []int) {
 	})
 }
 
+// AddTags add columns to the builder for the given tags.
+// It is assumed that all tags are common to all rows of this block.
+func AddTags(t Tags, b BlockBuilder) {
+	keys := t.Keys()
+	for _, k := range keys {
+		j := b.AddCol(ColMeta{
+			Label:    k,
+			Type:     TString,
+			IsTag:    true,
+			IsCommon: true,
+		})
+		b.SetCommonString(j, t[k])
+	}
+}
+
 func ValueIdx(cols []ColMeta) int {
 	for j, c := range cols {
 		if c.Label == valueColLabel {
@@ -113,21 +139,6 @@ func TimeIdx(cols []ColMeta) int {
 		}
 	}
 	return -1
-}
-
-// AddTags add columns to the builder for the given tags.
-// It is assumed that all tags are common to all rows of this block.
-func AddTags(t Tags, b BlockBuilder) {
-	keys := t.Keys()
-	for _, k := range keys {
-		j := b.AddCol(ColMeta{
-			Label:    k,
-			Type:     TString,
-			IsTag:    true,
-			IsCommon: true,
-		})
-		b.SetCommonString(j, t[k])
-	}
 }
 
 // BlockBuilder builds blocks that can be used multiple times
@@ -160,6 +171,9 @@ type BlockBuilder interface {
 	AppendFloats(j int, values []float64)
 	AppendStrings(j int, values []string)
 	AppendTimes(j int, values []Time)
+
+	// Sort the rows of the by the values of the columns in the order listed.
+	Sort(cols []string, desc bool)
 
 	// Clear removes all rows, while preserving the column meta data.
 	ClearData()
@@ -478,6 +492,20 @@ func (b colListBlockBuilder) ClearData() {
 	b.blk.nrows = 0
 }
 
+func (b colListBlockBuilder) Sort(cols []string, desc bool) {
+	colIdxs := make([]int, len(cols))
+	for i, label := range cols {
+		for j, c := range b.blk.colMeta {
+			if c.Label == label {
+				colIdxs[i] = j
+				break
+			}
+		}
+	}
+	s := colListBlockSorter{cols: colIdxs, desc: desc, b: b.blk}
+	sort.Sort(s)
+}
+
 // Block implements Block using list of columns.
 type colListBlock struct {
 	bounds Bounds
@@ -582,10 +610,42 @@ func (itr colListValueIterator) AtTime(i, j int) Time {
 	return itr.cols[j].(*timeColumn).data[i]
 }
 
+type colListBlockSorter struct {
+	cols []int
+	desc bool
+	b    *colListBlock
+}
+
+func (c colListBlockSorter) Len() int {
+	return c.b.nrows
+}
+
+func (c colListBlockSorter) Less(x int, y int) (less bool) {
+	for _, j := range c.cols {
+		if !c.b.cols[j].Equal(x, y) {
+			less = c.b.cols[j].Less(x, y)
+			break
+		}
+	}
+	if c.desc {
+		less = !less
+	}
+	return
+}
+
+func (c colListBlockSorter) Swap(x int, y int) {
+	for _, col := range c.b.cols {
+		col.Swap(x, y)
+	}
+}
+
 type column interface {
 	Meta() ColMeta
 	Clear()
 	Copy() column
+	Equal(i, j int) bool
+	Less(i, j int) bool
+	Swap(i, j int)
 }
 
 type floatColumn struct {
@@ -608,6 +668,15 @@ func (c *floatColumn) Copy() column {
 	copy(cpy.data, c.data)
 	return cpy
 }
+func (c *floatColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *floatColumn) Less(i, j int) bool {
+	return c.data[i] < c.data[j]
+}
+func (c *floatColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
+}
 
 type stringColumn struct {
 	ColMeta
@@ -628,6 +697,15 @@ func (c *stringColumn) Copy() column {
 	cpy.data = make([]string, len(c.data))
 	copy(cpy.data, c.data)
 	return cpy
+}
+func (c *stringColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *stringColumn) Less(i, j int) bool {
+	return c.data[i] < c.data[j]
+}
+func (c *stringColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
 }
 
 type timeColumn struct {
@@ -650,6 +728,15 @@ func (c *timeColumn) Copy() column {
 	copy(cpy.data, c.data)
 	return cpy
 }
+func (c *timeColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *timeColumn) Less(i, j int) bool {
+	return c.data[i] < c.data[j]
+}
+func (c *timeColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
+}
 
 //commonStrColumn has the same string value for all rows
 type commonStrColumn struct {
@@ -667,6 +754,13 @@ func (c *commonStrColumn) Copy() column {
 	*cpy = *c
 	return cpy
 }
+func (c *commonStrColumn) Equal(i, j int) bool {
+	return true
+}
+func (c *commonStrColumn) Less(i, j int) bool {
+	return false
+}
+func (c *commonStrColumn) Swap(i, j int) {}
 
 type BlockBuilderCache interface {
 	// BlockBuilder returns an existing or new BlockBuilder for the given meta data.
@@ -711,7 +805,6 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) (BlockBuilder, bool
 	if !ok {
 		builder := NewColListBlockBuilder()
 		builder.SetBounds(meta.Bounds())
-		AddTags(meta.Tags(), builder)
 		t := NewTriggerFromSpec(d.triggerSpec)
 		b = blockState{
 			builder: builder,
