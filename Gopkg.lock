@@ -9,6 +9,48 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/gonum/blas"
+  packages = [".","blas64","native","native/internal/math32"]
+  revision = "37e82626499e1df7c54aeaba0959fd6e7e8dc1e4"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/floats"
+  packages = ["."]
+  revision = "f74b330d45c56584a6ea7a27f5c64ea2900631e9"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/internal"
+  packages = ["asm/f32","asm/f64"]
+  revision = "e57e4534cf9b3b00ef6c0175f59d8d2d34f60914"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/lapack"
+  packages = [".","lapack64","native"]
+  revision = "5ed4b826becd1807e09377508f51756586d1a98c"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/mathext"
+  packages = [".","internal/amos","internal/cephes","internal/gonum"]
+  revision = "0b9a913d27c42216782103ce3773136730e1535f"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/matrix"
+  packages = [".","mat64"]
+  revision = "dd6034299e4242c9f0ea36735e6d4264dfcb3f9f"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/stat"
+  packages = [".","distuv"]
+  revision = "40602ac931a7ab7f72cb1eff5ce1753a2d28d345"
+
+[[projects]]
+  branch = "master"
   name = "github.com/google/go-cmp"
   packages = ["cmp","cmp/cmpopts","cmp/internal/diff","cmp/internal/function","cmp/internal/value"]
   revision = "d5735f74713c51f7450a43d0a98d41ce2c1db3cb"
@@ -52,6 +94,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "aedf63752992d4b9260831355f8e1a0381d71e0b4eab01dc9b4571f48f48abf6"
+  inputs-digest = "0cd8e69d3f775e09154b1b7e25edb7c08c701850d757d9815a390ca9ffa9f72f"
   solver-name = "gps-cdcl"
   solver-version = 1

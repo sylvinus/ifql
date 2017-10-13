@@ -20,10 +20,18 @@ func TestCountOperation_Marshaling(t *testing.T) {
 }
 
 func TestCount_Process(t *testing.T) {
-	executetest.AggregateProcessTestHelper(
+	executetest.AggFuncTestHelper(
 		t,
 		new(functions.CountAgg),
 		[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		10,
+	)
+}
+func BenchmarkCount(b *testing.B) {
+	executetest.AggFuncBenchmarkHelper(
+		b,
+		new(functions.CountAgg),
+		NormalData,
+		float64(len(NormalData)),
 	)
 }

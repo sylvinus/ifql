@@ -45,7 +45,7 @@ func TestStddev_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.AggregateProcessTestHelper(
+			executetest.AggFuncTestHelper(
 				t,
 				new(functions.StddevAgg),
 				tc.data,
@@ -53,4 +53,13 @@ func TestStddev_Process(t *testing.T) {
 			)
 		})
 	}
+}
+
+func BenchmarkStddev(b *testing.B) {
+	executetest.AggFuncBenchmarkHelper(
+		b,
+		new(functions.StddevAgg),
+		NormalData,
+		2.998926,
+	)
 }
