@@ -232,10 +232,11 @@ type storageBlockIterator struct {
 	s storageReader
 }
 
-func (bi *storageBlockIterator) Do(f func(execute.Block)) {
+func (bi *storageBlockIterator) Do(f func(execute.Block)) error {
 	for _, b := range bi.s.blocks {
 		f(b)
 	}
+	return nil
 }
 
 type blockList struct {
@@ -264,10 +265,11 @@ type blockIterator struct {
 	blocks []block
 }
 
-func (bi *blockIterator) Do(f func(execute.Block)) {
+func (bi *blockIterator) Do(f func(execute.Block)) error {
 	for _, b := range bi.blocks {
 		f(b)
 	}
+	return nil
 }
 
 type block struct {
@@ -314,7 +316,8 @@ func (itr *valueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 		f([]float64{p.Value}, itr)
 	}
 }
-func (itr *valueIterator) DoString(f func([]string, execute.RowReader)) {}
+func (itr *valueIterator) DoString(f func([]string, execute.RowReader)) {
+}
 func (itr *valueIterator) DoTime(f func([]execute.Time, execute.RowReader)) {
 	for _, p := range itr.points {
 		f([]execute.Time{p.Time}, itr)

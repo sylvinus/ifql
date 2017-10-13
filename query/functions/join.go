@@ -223,9 +223,12 @@ func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt 
 	t.d.UpdateProcessingTime(min)
 }
 
-func (t *mergeJoinTransformation) Finish(id execute.DatasetID) {
+func (t *mergeJoinTransformation) Finish(id execute.DatasetID, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if err != nil {
+		t.d.Finish(err)
+	}
 
 	t.parentState[id].finished = true
 	finished := true
@@ -234,7 +237,7 @@ func (t *mergeJoinTransformation) Finish(id execute.DatasetID) {
 	}
 
 	if finished {
-		t.d.Finish()
+		t.d.Finish(nil)
 	}
 }
 

@@ -12,7 +12,7 @@ type Transformation interface {
 	Process(id DatasetID, b Block)
 	UpdateWatermark(id DatasetID, t Time)
 	UpdateProcessingTime(id DatasetID, t Time)
-	Finish(id DatasetID)
+	Finish(id DatasetID, err error)
 	SetParents(ids []DatasetID)
 }
 

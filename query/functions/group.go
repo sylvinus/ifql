@@ -176,8 +176,8 @@ func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute
 func (t *groupTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *groupTransformation) Finish(id execute.DatasetID) {
-	t.d.Finish()
+func (t *groupTransformation) Finish(id execute.DatasetID, err error) {
+	t.d.Finish(err)
 }
 func (t *groupTransformation) SetParents(ids []execute.DatasetID) {
 }

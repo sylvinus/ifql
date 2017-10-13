@@ -11,7 +11,7 @@ type FormatOption func(*formatter)
 
 func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
 	f := formatter{
-		b: CacheOneTimeBlock(b),
+		b: b,
 	}
 	for _, o := range opts {
 		o(&f)
@@ -33,6 +33,7 @@ type formatter struct {
 }
 
 func (f formatter) Format(fs fmt.State, c rune) {
+	f.b = CacheOneTimeBlock(f.b)
 	if c == 'v' && fs.Flag('#') {
 		fmt.Fprintf(fs, "%#v", f.b)
 		return

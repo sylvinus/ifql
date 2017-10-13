@@ -225,8 +225,8 @@ func (t *fixedWindowTransformation) UpdateWatermark(id execute.DatasetID, mark e
 func (t *fixedWindowTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *fixedWindowTransformation) Finish(id execute.DatasetID) {
-	t.d.Finish()
+func (t *fixedWindowTransformation) Finish(id execute.DatasetID, err error) {
+	t.d.Finish(err)
 }
 func (t *fixedWindowTransformation) SetParents(ids []execute.DatasetID) {
 	t.parents = ids

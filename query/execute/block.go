@@ -235,7 +235,7 @@ var (
 )
 
 type BlockIterator interface {
-	Do(f func(Block))
+	Do(f func(Block)) error
 }
 
 type ValueIterator interface {

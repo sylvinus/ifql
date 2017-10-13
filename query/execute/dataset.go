@@ -12,7 +12,7 @@ type Dataset interface {
 	RetractBlock(key BlockKey)
 	UpdateProcessingTime(t Time)
 	UpdateWatermark(mark Time)
-	Finish()
+	Finish(error)
 
 	SetTriggerSpec(t query.TriggerSpec)
 }
@@ -143,12 +143,12 @@ func (d *dataset) RetractBlock(key BlockKey) {
 	}
 }
 
-func (d *dataset) Finish() {
+func (d *dataset) Finish(err error) {
 	d.cache.ForEach(func(bk BlockKey) {
 		d.triggerBlock(bk)
 		d.cache.ExpireBlock(bk)
 	})
 	for _, t := range d.ts {
-		t.Finish(d.id)
+		t.Finish(d.id, err)
 	}
 }

@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -13,7 +14,7 @@ type Node interface {
 
 type Source interface {
 	Node
-	Run()
+	Runner
 }
 
 type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, ctx Context) Source
@@ -55,7 +56,8 @@ func (s *storageSource) AddTransformation(t Transformation) {
 	s.ts = append(s.ts, t)
 }
 
-func (s *storageSource) Run() {
+func (s *storageSource) Run(ctx context.Context) {
+	//TODO(nathanielc): Pass through context to actual network I/O.
 	for blocks, mark, ok := s.Next(); ok; blocks, mark, ok = s.Next() {
 		blocks.Do(func(b Block) {
 			for _, t := range s.ts {
@@ -70,7 +72,7 @@ func (s *storageSource) Run() {
 		}
 	}
 	for _, t := range s.ts {
-		t.Finish(s.id)
+		t.Finish(s.id, nil)
 	}
 }
 

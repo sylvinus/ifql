@@ -6,6 +6,7 @@ import (
 
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/yarpc"
+	"github.com/pkg/errors"
 )
 
 type StorageReader interface {
@@ -122,11 +123,11 @@ func (s *readState) next() storage.ReadResponse_Frame {
 	return frame
 }
 
-func (bi *storageBlockIterator) Do(f func(Block)) {
+func (bi *storageBlockIterator) Do(f func(Block)) error {
 	for bi.data.more() {
 		if p := bi.data.peek(); p != seriesType {
 			//This means the consumer didn't read all the data off the block
-			continue
+			return errors.New("internal error: short read")
 		}
 		frame := bi.data.next()
 		s := frame.GetSeries()
@@ -139,6 +140,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) {
 		// Wait until the block has been read.
 		block.wait()
 	}
+	return nil
 }
 
 type storageBlock struct {

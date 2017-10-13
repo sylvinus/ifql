@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -11,21 +12,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Option func(*options)
-type options struct {
-	verbose bool
+type Option func(*Options)
+type Options struct {
+	Verbose bool
+	Trace   bool
 }
 
 func Verbose() Option {
-	return func(o *options) { o.verbose = true }
+	return func(o *Options) { o.Verbose = true }
+}
+func Trace() Option {
+	return func(o *Options) { o.Trace = true }
 }
 
-func Execute(qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
-	var opts options
+func Execute(ctx context.Context, qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
+	var opts Options
 	for _, o := range os {
 		o(&opts)
 	}
-	if opts.verbose {
+	if opts.Verbose {
 		log.Println("query", query.Formatted(qSpec))
 	}
 
@@ -34,7 +39,7 @@ func Execute(qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create logical plan")
 	}
-	if opts.verbose {
+	if opts.Verbose {
 		log.Println("logical plan", plan.Formatted(lp))
 	}
 
@@ -43,7 +48,7 @@ func Execute(qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create physical plan")
 	}
-	if opts.verbose {
+	if opts.Verbose {
 		log.Println("physical plan", plan.Formatted(p))
 	}
 
@@ -52,8 +57,8 @@ func Execute(qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
 		return nil, errors.Wrap(err, "failed to create storage reader")
 	}
 
-	e := NewExecutor(storage)
-	r, err := e.Execute(context.Background(), p)
+	e := NewExecutor(storage, opts)
+	r, err := e.Execute(ctx, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute query")
 	}
@@ -65,18 +70,21 @@ type Executor interface {
 }
 
 type executor struct {
-	sr StorageReader
+	sr   StorageReader
+	opts Options
 }
 
-func NewExecutor(sr StorageReader) Executor {
+func NewExecutor(sr StorageReader, opts Options) Executor {
 	return &executor{
-		sr: sr,
+		sr:   sr,
+		opts: opts,
 	}
 }
 
 type executionState struct {
-	p  *plan.PlanSpec
-	sr StorageReader
+	p    *plan.PlanSpec
+	sr   StorageReader
+	opts Options
 
 	bounds Bounds
 
@@ -85,7 +93,7 @@ type executionState struct {
 }
 
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
-	es, err := e.createExecutionState(p)
+	es, err := e.createExecutionState(ctx, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize execute state")
 	}
@@ -93,10 +101,11 @@ func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, err
 	return es.results, nil
 }
 
-func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, error) {
+func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (*executionState, error) {
 	es := &executionState{
 		p:       p,
 		sr:      e.sr,
+		opts:    e.opts,
 		results: make([]Result, len(p.Results)),
 		bounds: Bounds{
 			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
@@ -104,7 +113,7 @@ func (e *executor) createExecutionState(p *plan.PlanSpec) (*executionState, erro
 		},
 	}
 	for i, id := range p.Results {
-		ds, err := es.createNode(p.Procedures[id])
+		ds, err := es.createNode(ctx, p.Procedures[id])
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +132,7 @@ type triggeringSpec interface {
 	TriggerSpec() query.TriggerSpec
 }
 
-func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
+func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
 		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es)
 		es.runners = append(es.runners, s)
@@ -149,11 +158,11 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 
 	parentIDs := make([]DatasetID, len(pr.Parents))
 	for i, parentID := range pr.Parents {
-		parent, err := es.createNode(es.p.Procedures[parentID])
+		parent, err := es.createNode(ctx, es.p.Procedures[parentID])
 		if err != nil {
 			return nil, err
 		}
-		transport := newTransformationTransport(t, nil)
+		transport := newTransformationTransport(t)
 		parent.AddTransformation(transport)
 		es.runners = append(es.runners, transport)
 		parentIDs[i] = DatasetID(parentID)
@@ -163,11 +172,40 @@ func (es *executionState) createNode(pr *plan.Procedure) (Node, error) {
 	return ds, nil
 }
 
+func (es *executionState) abort(err error) {
+	for _, r := range es.results {
+		r.abort(err)
+	}
+}
+
+type Runner interface {
+	Run(ctx context.Context)
+}
+
 func (es *executionState) do(ctx context.Context) {
-	// TODO: plumb context.Context through the Runnables
 	for _, r := range es.runners {
-		r := r
-		go r.Run()
+		go func(r Runner) {
+			defer func() {
+				if e := recover(); e != nil {
+					// We had a panic, abort the entire execution.
+					//TODO(nathanielc): Only abort results that were effected by the panic?
+					// This requires tracing the Runner through the execution DAG.
+					var err error
+					switch e := e.(type) {
+					case error:
+						err = e
+					default:
+						err = fmt.Errorf("%v", e)
+					}
+					if es.opts.Trace {
+						es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
+					} else {
+						es.abort(errors.Wrap(err, "panic"))
+					}
+				}
+			}()
+			r.Run(ctx)
+		}(r)
 	}
 }
 
@@ -178,8 +216,4 @@ func (es *executionState) ResolveTime(qt query.Time) Time {
 }
 func (es *executionState) Bounds() Bounds {
 	return es.bounds
-}
-
-type Runner interface {
-	Run()
 }

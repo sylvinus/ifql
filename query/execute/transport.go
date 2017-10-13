@@ -1,5 +1,9 @@
 package execute
 
+import (
+	"context"
+)
+
 type Message interface {
 	Type() MessageType
 	SrcDatasetID() DatasetID
@@ -91,48 +95,56 @@ func (m *updateProcessingTimeMsg) ProcessingTime() Time {
 
 type FinishMsg interface {
 	Message
+	Error() error
 }
 
 type finishMsg struct {
 	srcMessage
+	err error
 }
 
 func (m *finishMsg) Type() MessageType {
 	return FinishType
+}
+func (m *finishMsg) Error() error {
+	return m.err
 }
 
 type TransformationTransport struct {
 	t Transformation
 
 	buf    chan Message
-	cancel <-chan struct{}
+	cancel chan struct{}
 }
 
-func newTransformationTransport(t Transformation, cancel <-chan struct{}) *TransformationTransport {
+func newTransformationTransport(t Transformation) *TransformationTransport {
 	return &TransformationTransport{
 		t:      t,
 		buf:    make(chan Message, 100),
-		cancel: cancel,
+		cancel: make(chan struct{}),
 	}
 }
 
-func (t *TransformationTransport) Run() {
+func (t *TransformationTransport) Run(ctx context.Context) {
+	defer close(t.cancel)
 	for {
 		select {
-		case <-t.cancel:
+		case <-ctx.Done():
+			// Immediately return, do not process any buffered messages
 			return
 		case m := <-t.buf:
-			switch msg := m.(type) {
+			switch m := m.(type) {
 			case RetractBlockMsg:
-				t.t.RetractBlock(msg.SrcDatasetID(), msg.BlockMetadata())
+				t.t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
 			case ProcessMsg:
-				t.t.Process(msg.SrcDatasetID(), msg.Block())
+				t.t.Process(m.SrcDatasetID(), m.Block())
 			case UpdateWatermarkMsg:
-				t.t.UpdateWatermark(msg.SrcDatasetID(), msg.WatermarkTime())
+				t.t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
 			case UpdateProcessingTimeMsg:
-				t.t.UpdateProcessingTime(msg.SrcDatasetID(), msg.ProcessingTime())
+				t.t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
 			case FinishMsg:
-				t.t.Finish(msg.SrcDatasetID())
+				t.t.Finish(m.SrcDatasetID(), m.Error())
+				// Stop processing messages
 				return
 			}
 		}
@@ -179,10 +191,11 @@ func (t *TransformationTransport) UpdateProcessingTime(id DatasetID, time Time) 
 	}
 }
 
-func (t *TransformationTransport) Finish(id DatasetID) {
+func (t *TransformationTransport) Finish(id DatasetID, err error) {
 	select {
 	case t.buf <- &finishMsg{
 		srcMessage: srcMessage(id),
+		err:        err,
 	}:
 	case <-t.cancel:
 	}
