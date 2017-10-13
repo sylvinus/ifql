@@ -29,7 +29,7 @@ func (b *Block) Cols() []execute.ColMeta {
 }
 
 func (b *Block) Col(c int) execute.ValueIterator {
-	return &ValueIterator{col: c, b: b}
+	return &ValueIterator{colMeta: b.ColMeta, col: c, b: b}
 }
 
 func (b *Block) Times() execute.ValueIterator {
@@ -43,12 +43,16 @@ func (b *Block) Values() execute.ValueIterator {
 }
 
 type ValueIterator struct {
-	col int
-	b   *Block
+	colMeta []execute.ColMeta
+	col     int
+	b       *Block
 
 	row int
 }
 
+func (v *ValueIterator) Cols() []execute.ColMeta {
+	return v.colMeta
+}
 func (v *ValueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 	for v.row = 0; v.row < len(v.b.Data); v.row++ {
 		f([]float64{v.b.Data[v.row][v.col].(float64)}, v)
@@ -123,6 +127,9 @@ func (b SortedBlocks) Len() int {
 
 func (b SortedBlocks) Less(i int, j int) bool {
 	if b[i].Bnds.Stop == b[j].Bnds.Stop {
+		if b[i].Bnds.Start == b[j].Bnds.Start {
+			return b[i].Tags().Key() < b[j].Tags().Key()
+		}
 		return b[i].Bnds.Start < b[j].Bnds.Start
 	}
 	return b[i].Bnds.Stop < b[j].Bnds.Stop

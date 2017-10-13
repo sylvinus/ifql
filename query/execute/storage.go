@@ -232,6 +232,9 @@ type storageBlockValueIterator struct {
 	intBuf    []int64
 }
 
+func (b *storageBlockValueIterator) Cols() []ColMeta {
+	return b.colMeta
+}
 func (b *storageBlockValueIterator) DoFloat(f func([]float64, RowReader)) {
 	checkColType(b.colMeta[b.col], TFloat)
 	for b.advance() {

@@ -81,6 +81,33 @@ func AddBlockCols(b Block, builder BlockBuilder) {
 	}
 }
 
+// AddNewCols adds the columns of b onto builder that did not already exist.
+// Returns the mapping of builder cols to block cols.
+func AddNewCols(b Block, builder BlockBuilder) []int {
+	cols := b.Cols()
+	existing := builder.Cols()
+	colMap := make([]int, len(existing))
+	for j, c := range cols {
+		found := false
+		for ej, ec := range existing {
+			if c.Label == ec.Label {
+				colMap[ej] = j
+				found = true
+				break
+			}
+		}
+		if !found {
+			builder.AddCol(c)
+			colMap = append(colMap, j)
+
+			if c.IsTag && c.IsCommon {
+				builder.SetCommonString(j, b.Tags()[c.Label])
+			}
+		}
+	}
+	return colMap
+}
+
 // AppendBlock append data from block b onto builder.
 // The colMap is a map of builder columnm index to block column index.
 // AppendBlock is OneTimeBlock safe.
@@ -245,6 +272,7 @@ type ValueIterator interface {
 }
 
 type RowReader interface {
+	Cols() []ColMeta
 	// AtFloat returns the float value of another column and given index.
 	AtFloat(i, j int) float64
 	// AtString returns the string value of another column and given index.
@@ -529,13 +557,23 @@ func (b *colListBlock) Cols() []ColMeta {
 }
 
 func (b *colListBlock) Col(c int) ValueIterator {
-	return colListValueIterator{col: c, cols: b.cols, nrows: b.nrows}
+	return colListValueIterator{
+		col:     c,
+		colMeta: b.colMeta,
+		cols:    b.cols,
+		nrows:   b.nrows,
+	}
 }
 
 func (b *colListBlock) Values() ValueIterator {
 	j := ValueIdx(b.colMeta)
 	if j >= 0 {
-		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
+		return colListValueIterator{
+			col:     j,
+			colMeta: b.colMeta,
+			cols:    b.cols,
+			nrows:   b.nrows,
+		}
 	}
 	return nil
 }
@@ -543,7 +581,12 @@ func (b *colListBlock) Values() ValueIterator {
 func (b *colListBlock) Times() ValueIterator {
 	j := TimeIdx(b.colMeta)
 	if j >= 0 {
-		return colListValueIterator{col: j, cols: b.cols, nrows: b.nrows}
+		return colListValueIterator{
+			col:     j,
+			colMeta: b.colMeta,
+			cols:    b.cols,
+			nrows:   b.nrows,
+		}
 	}
 	return nil
 }
@@ -566,17 +609,21 @@ func (b *colListBlock) Copy() *colListBlock {
 }
 
 type colListValueIterator struct {
-	col   int
-	cols  []column
-	nrows int
+	col     int
+	cols    []column
+	colMeta []ColMeta
+	nrows   int
 }
 
+func (itr colListValueIterator) Cols() []ColMeta {
+	return itr.colMeta
+}
 func (itr colListValueIterator) DoFloat(f func([]float64, RowReader)) {
-	checkColType(itr.cols[itr.col].Meta(), TFloat)
+	checkColType(itr.colMeta[itr.col], TFloat)
 	f(itr.cols[itr.col].(*floatColumn).data, itr)
 }
 func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
-	meta := itr.cols[itr.col].Meta()
+	meta := itr.colMeta[itr.col]
 	checkColType(meta, TString)
 	if meta.IsTag && meta.IsCommon {
 		value := itr.cols[itr.col].(*commonStrColumn).value
@@ -590,15 +637,15 @@ func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
 	f(itr.cols[itr.col].(*stringColumn).data, itr)
 }
 func (itr colListValueIterator) DoTime(f func([]Time, RowReader)) {
-	checkColType(itr.cols[itr.col].Meta(), TTime)
+	checkColType(itr.colMeta[itr.col], TTime)
 	f(itr.cols[itr.col].(*timeColumn).data, itr)
 }
 func (itr colListValueIterator) AtFloat(i, j int) float64 {
-	checkColType(itr.cols[j].Meta(), TFloat)
+	checkColType(itr.colMeta[j], TFloat)
 	return itr.cols[j].(*floatColumn).data[i]
 }
 func (itr colListValueIterator) AtString(i, j int) string {
-	meta := itr.cols[j].Meta()
+	meta := itr.colMeta[j]
 	checkColType(meta, TString)
 	if meta.IsTag && meta.IsCommon {
 		return itr.cols[j].(*commonStrColumn).value
@@ -606,7 +653,7 @@ func (itr colListValueIterator) AtString(i, j int) string {
 	return itr.cols[j].(*stringColumn).data[i]
 }
 func (itr colListValueIterator) AtTime(i, j int) Time {
-	checkColType(itr.cols[j].Meta(), TTime)
+	checkColType(itr.colMeta[j], TTime)
 	return itr.cols[j].(*timeColumn).data[i]
 }
 

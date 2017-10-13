@@ -174,6 +174,7 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 					builder.AddCol(execute.TimeCol)
 					builder.AddCol(execute.ValueCol)
 					execute.AddTags(b.Tags(), builder)
+					// TODO(nathanielc): Add columns for non common tags
 				}
 				builder.AppendTime(0, time)
 				builder.AppendFloat(1, value)
