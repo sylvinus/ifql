@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/functions"
 	"github.com/influxdata/ifql/query/querytest"
 )
 

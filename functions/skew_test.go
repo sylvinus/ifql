@@ -4,9 +4,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/executetest"
-	"github.com/influxdata/ifql/query/functions"
 	"github.com/influxdata/ifql/query/querytest"
 )
 
