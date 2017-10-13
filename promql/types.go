@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/functions"
 )
 
 type ArgKind int

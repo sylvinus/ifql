@@ -8,9 +8,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/functions"
 )
 
 func TestNewQuery(t *testing.T) {
