@@ -192,3 +192,39 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 		})
 	}
 }
+
+var benchmarkPhysicalPlan *plan.PlanSpec
+
+func BenchmarkPhysicalPlan(b *testing.B) {
+	var err error
+	lp, err := plan.NewLogicalPlanner().Plan(benchmarkQuery)
+	if err != nil {
+		b.Fatal(err)
+	}
+	planner := plan.NewPlanner()
+	now := time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC)
+	for n := 0; n < b.N; n++ {
+		benchmarkPhysicalPlan, err = planner.Plan(lp, nil, now)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+var benchmarkQueryToPhysicalPlan *plan.PlanSpec
+
+func BenchmarkQueryToPhysicalPlan(b *testing.B) {
+	lp := plan.NewLogicalPlanner()
+	pp := plan.NewPlanner()
+	now := time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC)
+	for n := 0; n < b.N; n++ {
+		lp, err := lp.Plan(benchmarkQuery)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkQueryToPhysicalPlan, err = pp.Plan(lp, nil, now)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
