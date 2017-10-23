@@ -17,10 +17,13 @@ bin/cmpgen: ./ast/asttest/cmpgen/main.go
 	go build -i -o bin/cmpgen ./ast/asttest/cmpgen
 
 Gopkg.lock: Gopkg.toml
-	dep ensure
+	dep ensure -v
+
+vendor/github.com/mna/pigeon/main.go: Gopkg.lock
+	dep ensure -v
 
 update:
-	dep ensure -update
+	dep ensure -v -update
 
 test: Gopkg.lock bin/ifql
 	go test ./...
