@@ -81,56 +81,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 			},
 		},
 		{
-			q: &query.QuerySpec{
-				Operations: []*query.Operation{
-					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
-							Database: "mydb",
-						},
-					},
-					{
-						ID: "range0",
-						Spec: &functions.RangeOpSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-							Stop:  query.Time{},
-						},
-					},
-					{
-						ID:   "count0",
-						Spec: &functions.CountOpSpec{},
-					},
-					{
-						ID: "select1",
-						Spec: &functions.SelectOpSpec{
-							Database: "mydb",
-						},
-					},
-					{
-						ID: "range1",
-						Spec: &functions.RangeOpSpec{
-							Start: query.Time{Relative: -1 * time.Hour},
-							Stop:  query.Time{},
-						},
-					},
-					{
-						ID:   "sum1",
-						Spec: &functions.SumOpSpec{},
-					},
-					{
-						ID:   "join",
-						Spec: &functions.JoinOpSpec{},
-					},
-				},
-				Edges: []query.Edge{
-					{Parent: "select0", Child: "range0"},
-					{Parent: "range0", Child: "count0"},
-					{Parent: "select1", Child: "range1"},
-					{Parent: "range1", Child: "sum1"},
-					{Parent: "count0", Child: "join"},
-					{Parent: "sum1", Child: "join"},
-				},
-			},
+			q: benchmarkQuery,
 			ap: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select0"): {
@@ -223,5 +174,70 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 				t.Errorf("unexpected logical plan -want/+got %s", cmp.Diff(tc.ap, got))
 			}
 		})
+	}
+}
+
+var benchmarkQuery = &query.QuerySpec{
+	Operations: []*query.Operation{
+		{
+			ID: "select0",
+			Spec: &functions.SelectOpSpec{
+				Database: "mydb",
+			},
+		},
+		{
+			ID: "range0",
+			Spec: &functions.RangeOpSpec{
+				Start: query.Time{Relative: -1 * time.Hour},
+				Stop:  query.Time{},
+			},
+		},
+		{
+			ID:   "count0",
+			Spec: &functions.CountOpSpec{},
+		},
+		{
+			ID: "select1",
+			Spec: &functions.SelectOpSpec{
+				Database: "mydb",
+			},
+		},
+		{
+			ID: "range1",
+			Spec: &functions.RangeOpSpec{
+				Start: query.Time{Relative: -1 * time.Hour},
+				Stop:  query.Time{},
+			},
+		},
+		{
+			ID:   "sum1",
+			Spec: &functions.SumOpSpec{},
+		},
+		{
+			ID:   "join",
+			Spec: &functions.JoinOpSpec{},
+		},
+	},
+	Edges: []query.Edge{
+		{Parent: "select0", Child: "range0"},
+		{Parent: "range0", Child: "count0"},
+		{Parent: "select1", Child: "range1"},
+		{Parent: "range1", Child: "sum1"},
+		{Parent: "count0", Child: "join"},
+		{Parent: "sum1", Child: "join"},
+	},
+}
+
+var benchLogicalPlan *plan.LogicalPlanSpec
+
+func BenchmarkLogicalPlan(b *testing.B) {
+	var err error
+	planner := plan.NewLogicalPlanner()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		benchLogicalPlan, err = planner.Plan(benchmarkQuery)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
