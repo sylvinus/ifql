@@ -172,7 +172,10 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 				})
 				if new {
 					builder.AddCol(execute.TimeCol)
-					builder.AddCol(execute.ValueCol)
+					builder.AddCol(execute.ColMeta{
+						Label: "value",
+						Type:  execute.TFloat,
+					})
 					execute.AddTags(b.Tags(), builder)
 					// TODO(nathanielc): Add columns for non common tags
 				}

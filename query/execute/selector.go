@@ -39,7 +39,10 @@ func (t *selectorTransformation) Process(id DatasetID, b Block) {
 	})
 	if new {
 		builder.AddCol(TimeCol)
-		builder.AddCol(ValueCol)
+		builder.AddCol(ColMeta{
+			Label: valueColLabel,
+			Type:  TFloat,
+		})
 		AddTags(b.Tags(), builder)
 	}
 

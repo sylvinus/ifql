@@ -60,6 +60,6 @@ func BenchmarkStddev(b *testing.B) {
 		b,
 		new(functions.StddevAgg),
 		NormalData,
-		2.998926,
+		2.998926113076968,
 	)
 }

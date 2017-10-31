@@ -381,7 +381,10 @@ func (t *joinTables) Join() execute.Block {
 	builder.SetBounds(t.bounds)
 	execute.AddTags(t.tags, builder)
 	builder.AddCol(execute.TimeCol)
-	builder.AddCol(execute.ValueCol)
+	builder.AddCol(execute.ColMeta{
+		Label: "value",
+		Type:  execute.TFloat,
+	})
 
 	var left, leftSet, right, rightSet []joinCell
 	var leftKey, rightKey joinKey

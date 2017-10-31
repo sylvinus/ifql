@@ -23,7 +23,7 @@ func TestSum_Process(t *testing.T) {
 	executetest.AggFuncTestHelper(t,
 		new(functions.SumAgg),
 		[]float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-		45,
+		float64(45),
 	)
 }
 
@@ -32,6 +32,6 @@ func BenchmarkSum(b *testing.B) {
 		b,
 		new(functions.SumAgg),
 		NormalData,
-		10000816.9673,
+		10000816.96729983,
 	)
 }

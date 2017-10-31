@@ -70,6 +70,6 @@ func BenchmarkSkew(b *testing.B) {
 		b,
 		new(functions.SkewAgg),
 		NormalData,
-		0.00322,
+		0.0032200673020400935,
 	)
 }

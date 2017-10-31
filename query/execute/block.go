@@ -184,6 +184,9 @@ type BlockBuilder interface {
 
 	// Set sets the value at the specified coordinates
 	// The rows and columns must exist before calling set, otherwise Set panics.
+	SetBool(i, j int, value bool)
+	SetInt(i, j int, value int64)
+	SetUInt(i, j int, value uint64)
 	SetFloat(i, j int, value float64)
 	SetString(i, j int, value string)
 	SetTime(i, j int, value Time)
@@ -191,6 +194,9 @@ type BlockBuilder interface {
 	// SetCommonString sets a single value for the entire column.
 	SetCommonString(j int, value string)
 
+	AppendBool(j int, value bool)
+	AppendInt(j int, value int64)
+	AppendUInt(j int, value uint64)
 	AppendFloat(j int, value float64)
 	AppendString(j int, value string)
 	AppendTime(j int, value Time)
@@ -215,9 +221,11 @@ type DataType int
 const (
 	TInvalid DataType = iota
 	TTime
-	TString
-	TFloat
+	TBool
 	TInt
+	TUInt
+	TFloat
+	TString
 )
 
 func (t DataType) String() string {
@@ -255,10 +263,6 @@ var (
 		Label: timeColLabel,
 		Type:  TTime,
 	}
-	ValueCol = ColMeta{
-		Label: valueColLabel,
-		Type:  TFloat,
-	}
 )
 
 type BlockIterator interface {
@@ -266,6 +270,9 @@ type BlockIterator interface {
 }
 
 type ValueIterator interface {
+	DoBool(f func([]bool, RowReader))
+	DoInt(f func([]int64, RowReader))
+	DoUInt(f func([]uint64, RowReader))
 	DoFloat(f func([]float64, RowReader))
 	DoString(f func([]string, RowReader))
 	DoTime(f func([]Time, RowReader))
@@ -422,6 +429,57 @@ func (b colListBlockBuilder) AddCol(c ColMeta) int {
 	b.blk.colMeta = append(b.blk.colMeta, c)
 	b.blk.cols = append(b.blk.cols, col)
 	return len(b.blk.cols) - 1
+}
+
+func (b colListBlockBuilder) SetBool(i int, j int, value bool) {
+	b.checkColType(j, TBool)
+	b.blk.cols[j].(*boolColumn).data[i] = value
+}
+func (b colListBlockBuilder) AppendBool(j int, value bool) {
+	b.checkColType(j, TBool)
+	col := b.blk.cols[j].(*boolColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) AppendBools(j int, values []bool) {
+	b.checkColType(j, TBool)
+	col := b.blk.cols[j].(*boolColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
+}
+
+func (b colListBlockBuilder) SetInt(i int, j int, value int64) {
+	b.checkColType(j, TInt)
+	b.blk.cols[j].(*intColumn).data[i] = value
+}
+func (b colListBlockBuilder) AppendInt(j int, value int64) {
+	b.checkColType(j, TInt)
+	col := b.blk.cols[j].(*intColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) AppendInts(j int, values []int64) {
+	b.checkColType(j, TInt)
+	col := b.blk.cols[j].(*intColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
+}
+
+func (b colListBlockBuilder) SetUInt(i int, j int, value uint64) {
+	b.checkColType(j, TUInt)
+	b.blk.cols[j].(*uintColumn).data[i] = value
+}
+func (b colListBlockBuilder) AppendUInt(j int, value uint64) {
+	b.checkColType(j, TUInt)
+	col := b.blk.cols[j].(*uintColumn)
+	col.data = append(col.data, value)
+	b.blk.nrows = len(col.data)
+}
+func (b colListBlockBuilder) AppendUInts(j int, values []uint64) {
+	b.checkColType(j, TUInt)
+	col := b.blk.cols[j].(*uintColumn)
+	col.data = append(col.data, values...)
+	b.blk.nrows = len(col.data)
 }
 
 func (b colListBlockBuilder) SetFloat(i int, j int, value float64) {
@@ -618,6 +676,18 @@ type colListValueIterator struct {
 func (itr colListValueIterator) Cols() []ColMeta {
 	return itr.colMeta
 }
+func (itr colListValueIterator) DoBool(f func([]bool, RowReader)) {
+	checkColType(itr.colMeta[itr.col], TBool)
+	f(itr.cols[itr.col].(*boolColumn).data, itr)
+}
+func (itr colListValueIterator) DoInt(f func([]int64, RowReader)) {
+	checkColType(itr.colMeta[itr.col], TInt)
+	f(itr.cols[itr.col].(*intColumn).data, itr)
+}
+func (itr colListValueIterator) DoUInt(f func([]uint64, RowReader)) {
+	checkColType(itr.colMeta[itr.col], TUInt)
+	f(itr.cols[itr.col].(*uintColumn).data, itr)
+}
 func (itr colListValueIterator) DoFloat(f func([]float64, RowReader)) {
 	checkColType(itr.colMeta[itr.col], TFloat)
 	f(itr.cols[itr.col].(*floatColumn).data, itr)
@@ -693,6 +763,99 @@ type column interface {
 	Equal(i, j int) bool
 	Less(i, j int) bool
 	Swap(i, j int)
+}
+
+type boolColumn struct {
+	ColMeta
+	data []bool
+}
+
+func (c *boolColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *boolColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *boolColumn) Copy() column {
+	cpy := &boolColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]bool, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+func (c *boolColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *boolColumn) Less(i, j int) bool {
+	if c.data[i] == c.data[j] {
+		return false
+	}
+	return c.data[i]
+}
+func (c *boolColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
+}
+
+type intColumn struct {
+	ColMeta
+	data []int64
+}
+
+func (c *intColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *intColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *intColumn) Copy() column {
+	cpy := &intColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]int64, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+func (c *intColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *intColumn) Less(i, j int) bool {
+	return c.data[i] < c.data[j]
+}
+func (c *intColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
+}
+
+type uintColumn struct {
+	ColMeta
+	data []uint64
+}
+
+func (c *uintColumn) Meta() ColMeta {
+	return c.ColMeta
+}
+
+func (c *uintColumn) Clear() {
+	c.data = c.data[0:0]
+}
+func (c *uintColumn) Copy() column {
+	cpy := &uintColumn{
+		ColMeta: c.ColMeta,
+	}
+	cpy.data = make([]uint64, len(c.data))
+	copy(cpy.data, c.data)
+	return cpy
+}
+func (c *uintColumn) Equal(i, j int) bool {
+	return c.data[i] == c.data[j]
+}
+func (c *uintColumn) Less(i, j int) bool {
+	return c.data[i] < c.data[j]
+}
+func (c *uintColumn) Swap(i, j int) {
+	c.data[i], c.data[j] = c.data[j], c.data[i]
 }
 
 type floatColumn struct {

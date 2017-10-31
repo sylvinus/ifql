@@ -58,19 +58,59 @@ func createMeanTransformation(id execute.DatasetID, mode execute.AccumulationMod
 	return t, d, nil
 }
 
-func (a *MeanAgg) Do(vs []float64) {
+func (a *MeanAgg) reset() {
+	a.count = 0
+	a.sum = 0
+}
+func (a *MeanAgg) NewBoolAgg() execute.DoBoolAgg {
+	return nil
+}
+
+func (a *MeanAgg) NewIntAgg() execute.DoIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *MeanAgg) NewUIntAgg() execute.DoUIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *MeanAgg) NewFloatAgg() execute.DoFloatAgg {
+	a.reset()
+	return a
+}
+
+func (a *MeanAgg) NewStringAgg() execute.DoStringAgg {
+	return nil
+}
+
+func (a *MeanAgg) DoInt(vs []int64) {
+	a.count += float64(len(vs))
+	for _, v := range vs {
+		//TODO handle overflow
+		a.sum += float64(v)
+	}
+}
+func (a *MeanAgg) DoUInt(vs []uint64) {
+	a.count += float64(len(vs))
+	for _, v := range vs {
+		//TODO handle overflow
+		a.sum += float64(v)
+	}
+}
+func (a *MeanAgg) DoFloat(vs []float64) {
 	a.count += float64(len(vs))
 	for _, v := range vs {
 		a.sum += v
 	}
 }
-func (a *MeanAgg) Value() float64 {
+func (a *MeanAgg) Type() execute.DataType {
+	return execute.TFloat
+}
+func (a *MeanAgg) ValueFloat() float64 {
 	if a.count < 1 {
 		return math.NaN()
 	}
 	return a.sum / a.count
-}
-func (a *MeanAgg) Reset() {
-	a.sum = 0
-	a.count = 0
 }

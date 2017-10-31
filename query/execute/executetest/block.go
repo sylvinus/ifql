@@ -53,6 +53,21 @@ type ValueIterator struct {
 func (v *ValueIterator) Cols() []execute.ColMeta {
 	return v.colMeta
 }
+func (v *ValueIterator) DoBool(f func([]bool, execute.RowReader)) {
+	for v.row = 0; v.row < len(v.b.Data); v.row++ {
+		f([]bool{v.b.Data[v.row][v.col].(bool)}, v)
+	}
+}
+func (v *ValueIterator) DoInt(f func([]int64, execute.RowReader)) {
+	for v.row = 0; v.row < len(v.b.Data); v.row++ {
+		f([]int64{v.b.Data[v.row][v.col].(int64)}, v)
+	}
+}
+func (v *ValueIterator) DoUInt(f func([]uint64, execute.RowReader)) {
+	for v.row = 0; v.row < len(v.b.Data); v.row++ {
+		f([]uint64{v.b.Data[v.row][v.col].(uint64)}, v)
+	}
+}
 func (v *ValueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 	for v.row = 0; v.row < len(v.b.Data); v.row++ {
 		f([]float64{v.b.Data[v.row][v.col].(float64)}, v)

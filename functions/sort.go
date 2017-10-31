@@ -38,7 +38,7 @@ func createSortOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Opera
 		spec.Cols = list.Elements.([]string)
 	} else {
 		//Default behavior to sort by value
-		spec.Cols = []string{execute.ValueCol.Label}
+		spec.Cols = []string{"value"}
 	}
 
 	if value, ok := args["desc"]; ok {

@@ -156,7 +156,10 @@ type storageBlock struct {
 func newStorageBlock(bounds Bounds, tags Tags, data *readState) *storageBlock {
 	colMeta := make([]ColMeta, 2+len(tags))
 	colMeta[0] = TimeCol
-	colMeta[1] = ValueCol
+	colMeta[1] = ColMeta{
+		Label: valueColLabel,
+		Type:  TFloat,
+	}
 
 	keys := tags.Keys()
 	for i, k := range keys {
@@ -234,6 +237,27 @@ type storageBlockValueIterator struct {
 
 func (b *storageBlockValueIterator) Cols() []ColMeta {
 	return b.colMeta
+}
+func (b *storageBlockValueIterator) DoBool(f func([]bool, RowReader)) {
+	checkColType(b.colMeta[b.col], TBool)
+	for b.advance() {
+		f(b.colBufs[b.col].([]bool), b)
+	}
+	close(b.done)
+}
+func (b *storageBlockValueIterator) DoInt(f func([]int64, RowReader)) {
+	checkColType(b.colMeta[b.col], TInt)
+	for b.advance() {
+		f(b.colBufs[b.col].([]int64), b)
+	}
+	close(b.done)
+}
+func (b *storageBlockValueIterator) DoUInt(f func([]uint64, RowReader)) {
+	checkColType(b.colMeta[b.col], TUInt)
+	for b.advance() {
+		f(b.colBufs[b.col].([]uint64), b)
+	}
+	close(b.done)
 }
 func (b *storageBlockValueIterator) DoFloat(f func([]float64, RowReader)) {
 	checkColType(b.colMeta[b.col], TFloat)
