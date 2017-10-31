@@ -65,6 +65,13 @@ type SelectProcedureSpec struct {
 	WindowSet bool
 	Window    plan.WindowSpec
 
+	GroupingSet bool
+	OrderByTime bool
+	MergeAll    bool
+	GroupKeys   []string
+	GroupIgnore []string
+	GroupKeep   []string
+
 	AggregateSet  bool
 	AggregateType string
 }
@@ -141,6 +148,11 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 			Predicate:     spec.Where,
 			Limit:         spec.Limit,
 			Descending:    spec.Descending,
+			OrderByTime:   spec.OrderByTime,
+			MergeAll:      spec.MergeAll,
+			GroupKeys:     spec.GroupKeys,
+			GroupIgnore:   spec.GroupIgnore,
+			GroupKeep:     spec.GroupKeep,
 			AggregateType: spec.AggregateType,
 		},
 		bounds,

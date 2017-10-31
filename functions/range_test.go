@@ -38,7 +38,7 @@ func TestRange_PushDown_Single(t *testing.T) {
 					Database: "mydb",
 				},
 				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("where")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
 			},
 			plan.ProcedureIDFromOperationID("range"): {
 				ID: plan.ProcedureIDFromOperationID("range"),

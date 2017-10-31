@@ -306,7 +306,7 @@ func (a *Aggregate) QuerySpec() (*query.Operation, error) {
 	return &query.Operation{
 		ID: "merge",
 		Spec: &functions.GroupOpSpec{
-			Keys: keys,
+			By:   keys,
 			Keep: keep,
 		},
 	}, nil

@@ -13,8 +13,9 @@ import (
 const GroupKind = "group"
 
 type GroupOpSpec struct {
-	Keys []string `json:"keys"`
-	Keep []string `json:"keep"`
+	By     []string `json:"by"`
+	Keep   []string `json:"keep"`
+	Ignore []string `json:"ignore"`
 }
 
 func init() {
@@ -30,15 +31,15 @@ func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 		return spec, nil
 	}
 
-	if value, ok := args["keys"]; ok {
+	if value, ok := args["by"]; ok {
 		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("keys argument must be a list of strings got %v", value.Type)
+			return nil, fmt.Errorf("'by' argument must be a list of strings got %v", value.Type)
 		}
 		list := value.Value.(ifql.Array)
 		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("keys argument must be a list of strings, got list of %v", list.Type)
+			return nil, fmt.Errorf("'by' argument must be a list of strings, got list of %v", list.Type)
 		}
-		spec.Keys = list.Elements.([]string)
+		spec.By = list.Elements.([]string)
 	}
 
 	if value, ok := args["keep"]; ok {
@@ -50,6 +51,16 @@ func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 			return nil, fmt.Errorf("keep argument must be a list of strings, got list of %v", list.Type)
 		}
 		spec.Keep = list.Elements.([]string)
+	}
+	if value, ok := args["ignore"]; ok {
+		if value.Type != ifql.TArray {
+			return nil, fmt.Errorf("ignore argument must be a list of strings got %v", value.Type)
+		}
+		list := value.Value.(ifql.Array)
+		if list.Type != ifql.TString {
+			return nil, fmt.Errorf("ignore argument must be a list of strings, got list of %v", list.Type)
+		}
+		spec.Ignore = list.Elements.([]string)
 	}
 	return spec, nil
 }
@@ -63,8 +74,9 @@ func (s *GroupOpSpec) Kind() query.OperationKind {
 }
 
 type GroupProcedureSpec struct {
-	Keys []string
-	Keep []string
+	By     []string
+	Ignore []string
+	Keep   []string
 }
 
 func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -74,8 +86,9 @@ func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	p := &GroupProcedureSpec{
-		Keys: spec.Keys,
-		Keep: spec.Keep,
+		By:     spec.By,
+		Ignore: spec.Ignore,
+		Keep:   spec.Keep,
 	}
 	return p, nil
 }
@@ -86,13 +99,47 @@ func (s *GroupProcedureSpec) Kind() plan.ProcedureKind {
 func (s *GroupProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(GroupProcedureSpec)
 
-	ns.Keys = make([]string, len(s.Keys))
-	copy(ns.Keys, s.Keys)
+	ns.By = make([]string, len(s.By))
+	copy(ns.By, s.By)
+
+	ns.Ignore = make([]string, len(s.Ignore))
+	copy(ns.Ignore, s.Ignore)
 
 	ns.Keep = make([]string, len(s.Keep))
 	copy(ns.Keep, s.Keep)
 
 	return ns
+}
+
+func (s *GroupProcedureSpec) PushDownRule() plan.PushDownRule {
+	return plan.PushDownRule{
+		Root:    SelectKind,
+		Through: []plan.ProcedureKind{LimitKind, RangeKind, WhereKind},
+	}
+}
+
+func (s *GroupProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
+	selectSpec := root.Spec.(*SelectProcedureSpec)
+	if selectSpec.GroupingSet {
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.OrderByTime = false
+		selectSpec.GroupingSet = false
+		selectSpec.MergeAll = false
+		selectSpec.GroupKeys = nil
+		selectSpec.GroupIgnore = nil
+		selectSpec.GroupKeep = nil
+		return
+	}
+	selectSpec.GroupingSet = true
+	// TODO implement OrderByTime
+	//selectSpec.OrderByTime = true
+
+	// Merge all series into a single group if we have no specific grouping dimensions.
+	selectSpec.MergeAll = len(s.By) == 0 && len(s.Ignore) == 0
+	selectSpec.GroupKeys = s.By
+	selectSpec.GroupIgnore = s.Ignore
+	selectSpec.GroupKeep = s.Keep
 }
 
 func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -115,11 +162,11 @@ type groupTransformation struct {
 }
 
 func newGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *GroupProcedureSpec) *groupTransformation {
-	sort.Strings(spec.Keys)
+	sort.Strings(spec.By)
 	t := &groupTransformation{
 		d:     d,
 		cache: cache,
-		keys:  spec.Keys,
+		keys:  spec.By,
 		keep:  spec.Keep,
 	}
 	sort.Strings(t.keys)
