@@ -8,6 +8,16 @@ import (
 	"github.com/influxdata/ifql/query"
 )
 
+// MockOperationSpec is a mock of the OperationSpec interface
+type MockOperationSpec struct {
+	Op query.OperationKind
+}
+
+// Kind returns the mocked Op
+func (m *MockOperationSpec) Kind() query.OperationKind {
+	return m.Op
+}
+
 func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Operation) {
 	t.Helper()
 

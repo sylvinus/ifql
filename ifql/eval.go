@@ -622,6 +622,7 @@ type Value struct {
 	Value interface{}
 }
 
+// Type represents the supported types within IFQL
 type Type int
 
 const (
@@ -638,6 +639,7 @@ const (
 	TExpression             // Go type expression.Node
 )
 
+// String converts Type into a string representation of the type's nameß
 func (t Type) String() string {
 	switch t {
 	case TString:
@@ -665,12 +667,15 @@ func (t Type) String() string {
 	}
 }
 
+// Array represents an IFQL sequence of elements
 type Array struct {
 	Type Type
 	// Elements will be a typed slice of any other type
 	// []string, []float64, or possibly even []Array and []Map
 	Elements interface{}
 }
+
+// Map represents an IFQL association of keys to values of Type
 type Map struct {
 	Type Type
 	// Elements will be a typed map of any other type, keys are always strings
