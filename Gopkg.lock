@@ -57,6 +57,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/influxdata/influxql"
+  packages = [".","internal"]
+  revision = "f3172ed4a6ecad1144bd21bce6706fde1efe7289"
+
+[[projects]]
+  branch = "master"
   name = "github.com/influxdata/yamux"
   packages = ["."]
   revision = "e7f91523e648eeb91537e420aebbd96aa64ab6ae"
@@ -94,6 +100,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0cd8e69d3f775e09154b1b7e25edb7c08c701850d757d9815a390ca9ffa9f72f"
+  inputs-digest = "f5af9e25b4e9ed6b0c885eb30a52e563e4b22735e335044f4b057879aa48a9bf"
   solver-name = "gps-cdcl"
   solver-version = 1

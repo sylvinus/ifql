@@ -37,4 +37,7 @@ bench: Gopkg.lock bin/ifql
 clean: $(SUBDIRS)
 	rm -rf bin
 
+fmt:
+	@goimports -w $$(find . -maxdepth 1 -path ./vendor -prune -o -type d -not -name ".*" -print)
+
 .PHONY: all clean $(SUBDIRS) update

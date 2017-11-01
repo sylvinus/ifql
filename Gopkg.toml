@@ -7,3 +7,7 @@ required = ["github.com/mna/pigeon"]
 [[override]]
   branch = "master"
   name = "github.com/mna/pigeon"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/influxdata/influxql"
