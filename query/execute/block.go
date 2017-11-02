@@ -182,6 +182,14 @@ func AddTags(t Tags, b BlockBuilder) {
 	}
 }
 
+func ValueCol(cols []ColMeta) ColMeta {
+	for _, c := range cols {
+		if c.Label == ValueColLabel {
+			return c
+		}
+	}
+	return ColMeta{}
+}
 func ValueIdx(cols []ColMeta) int {
 	for j, c := range cols {
 		if c.Label == ValueColLabel {

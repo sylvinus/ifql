@@ -110,7 +110,7 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinExpr, err := NewExpressionSpec(s.Expression.Root)
+	joinExpr, err := NewExpressionSpec(s.Expression)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
@@ -361,7 +361,7 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 			left:     execute.NewColListBlockBuilder(),
 			right:    execute.NewColListBlockBuilder(),
 			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
-			joinExpr: c.joinExpr.copy(),
+			joinExpr: c.joinExpr.Copy(),
 		}
 		tables.left.AddCol(execute.TimeCol)
 		tables.right.AddCol(execute.TimeCol)
@@ -398,18 +398,25 @@ func (t *joinTables) ClearData() {
 
 // Join performs a sort-merge join
 func (t *joinTables) Join() execute.Block {
+	// First determine new value type
+	newType, err := t.joinExpr.Compile(
+		execute.ValueCol(t.left.Cols()).Type,
+		execute.ValueCol(t.right.Cols()).Type,
+	)
+	if err != nil {
+		//TODO add correct error handling here
+		panic(err)
+	}
 	// Create a builder to the result of the join
 	builder := execute.NewColListBlockBuilder()
 	builder.SetBounds(t.bounds)
 	builder.AddCol(execute.TimeCol)
 	builder.AddCol(execute.ColMeta{
 		Label: execute.ValueColLabel,
-		//TODO determine type based on expression
-		Type: execute.TFloat,
+		Type:  newType,
 	})
 	execute.AddTags(t.tags, builder)
 	// Add non common tags
-	// Left and Right tables have the same cols, so we will just use the left cols.
 	cols := t.left.Cols()
 	for _, c := range cols {
 		if c.IsTag {
@@ -461,8 +468,12 @@ func (t *joinTables) Join() execute.Block {
 					// Evaluate expression and add to block
 					lv := readValue(l, srcValueIdx, left)
 					rv := readValue(r, srcValueIdx, right)
-					v := t.eval(lv, rv)
-					switch v.Type {
+					v, err := t.eval(lv, rv)
+					if err != nil {
+						//TODO add correct error handling here
+						panic(err)
+					}
+					switch newType {
 					case execute.TBool:
 						builder.AppendBool(valueIdx, v.Bool())
 					case execute.TInt:
@@ -472,7 +483,7 @@ func (t *joinTables) Join() execute.Block {
 					case execute.TFloat:
 						builder.AppendFloat(valueIdx, v.Float())
 					case execute.TString:
-						builder.AppendString(valueIdx, v.String())
+						builder.AppendString(valueIdx, v.Str())
 					}
 
 					// Append noncommon tags
@@ -544,7 +555,7 @@ func equalRowKeys(x, y int, table *execute.ColListBlock) bool {
 	return true
 }
 
-func readValue(i, valueIdx int, table *execute.ColListBlock) value {
+func readValue(i, valueIdx int, table *execute.ColListBlock) execute.Value {
 	var v interface{}
 	cols := table.Cols()
 	switch cols[valueIdx].Type {
@@ -559,7 +570,7 @@ func readValue(i, valueIdx int, table *execute.ColListBlock) value {
 	case execute.TString:
 		v = table.AtString(i, valueIdx)
 	}
-	return value{
+	return execute.Value{
 		Type:  cols[valueIdx].Type,
 		Value: v,
 	}
@@ -592,57 +603,22 @@ func (k joinKey) Less(o joinKey) bool {
 	return k.Time < o.Time
 }
 
-func (t *joinTables) eval(l, r value) value {
-	return t.joinExpr.eval(l, r)
-}
-
-type value struct {
-	Type  execute.DataType
-	Value interface{}
-}
-
-func (v value) Bool() bool {
-	return v.Value.(bool)
-}
-func (v value) Int() int64 {
-	return v.Value.(int64)
-}
-func (v value) UInt() uint64 {
-	return v.Value.(uint64)
-}
-func (v value) Float() float64 {
-	return v.Value.(float64)
-}
-func (v value) String() string {
-	return v.Value.(string)
-}
-
-func (v value) ToFloat() float64 {
-	switch v.Type {
-	case execute.TBool:
-		if v.Bool() {
-			return 1
-		}
-		return 0
-	case execute.TInt:
-		return float64(v.Int())
-	case execute.TUInt:
-		return float64(v.UInt())
-	case execute.TFloat:
-		return v.Float()
-	default:
-		return math.NaN()
-	}
+func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
+	return t.joinExpr.Eval(l, r)
 }
 
 type expressionSpec struct {
-	expr                expression.Node
+	expr                expression.Expression
 	leftName, rightName string
-	scope               execute.Scope
+
+	scope execute.Scope
+
+	leftType, rightType execute.DataType
+	ce                  execute.CompiledExpression
 }
 
-func NewExpressionSpec(expr expression.Node) (*expressionSpec, error) {
-	names := execute.ExpressionNames(expr)
+func NewExpressionSpec(expr expression.Expression) (*expressionSpec, error) {
+	names := execute.ExpressionNames(expr.Root)
 	if len(names) != 2 {
 		return nil, fmt.Errorf("join expression can only have two tables, got names: %v", names)
 	}
@@ -653,26 +629,39 @@ func NewExpressionSpec(expr expression.Node) (*expressionSpec, error) {
 	return &expressionSpec{
 		leftName:  "$",
 		rightName: rightName,
-		scope:     make(execute.Scope, 2),
 		expr:      expr,
+		scope:     make(execute.Scope, 2),
 	}, nil
 }
 
-func (s *expressionSpec) eval(l, r value) value {
-	//TODO(nathanielc) Add type support to expressions
-	s.scope[s.leftName] = l.ToFloat()
-	s.scope[s.rightName] = r.ToFloat()
-	// Ignore the error since we validated the names already
-	v, _ := execute.EvalExpression(s.expr, s.scope)
-	return value{
-		Type:  execute.TFloat,
-		Value: v,
-	}
-}
-
-func (s *expressionSpec) copy() *expressionSpec {
+func (s *expressionSpec) Copy() *expressionSpec {
 	cpy := new(expressionSpec)
 	*cpy = *s
 	cpy.scope = make(execute.Scope, 2)
 	return cpy
+}
+
+func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error) {
+	if s.ce != nil && l == s.leftType && r == s.rightType {
+		// Nothing to do, we already have a compiled expression
+		return execute.TInvalid, nil
+	}
+	ce, err := execute.CompileExpression(s.expr, map[string]execute.DataType{s.leftName: l, s.rightName: r})
+	if err != nil {
+		s.ce = nil
+		return execute.TInvalid, err
+	}
+	s.ce = ce
+	s.leftType = l
+	s.rightType = r
+	return s.ce.Type(), nil
+}
+
+func (s *expressionSpec) Eval(l, r execute.Value) (execute.Value, error) {
+	if s.ce == nil {
+		return execute.Value{}, errors.New("expression has not been compiled")
+	}
+	s.scope[s.leftName] = l
+	s.scope[s.rightName] = r
+	return s.ce.Eval(s.scope)
 }

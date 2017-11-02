@@ -185,12 +185,12 @@ func TestMergeJoin_Process(t *testing.T) {
 					},
 					ColMeta: []execute.ColMeta{
 						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "value", Type: execute.TInt},
 					},
 					Data: [][]interface{}{
-						{execute.Time(1), 11.0},
-						{execute.Time(2), 22.0},
-						{execute.Time(3), 33.0},
+						{execute.Time(1), int64(11)},
+						{execute.Time(2), int64(22)},
+						{execute.Time(3), int64(33)},
 					},
 				},
 			},
@@ -523,7 +523,7 @@ func TestMergeJoin_Process(t *testing.T) {
 				t.Skip()
 			}
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			joinExpr, err := functions.NewExpressionSpec(tc.spec.Expression.Root)
+			joinExpr, err := functions.NewExpressionSpec(tc.spec.Expression)
 			if err != nil {
 				t.Fatal(err)
 			}
