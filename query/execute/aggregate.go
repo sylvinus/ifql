@@ -32,8 +32,7 @@ func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata)
 
 func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	cols := b.Cols()
-	valueIdx := ValueIdx(cols)
-	valueCol := cols[valueIdx]
+	valueCol := ValueCol(cols)
 
 	values := b.Values()
 	var vf ValueFunc

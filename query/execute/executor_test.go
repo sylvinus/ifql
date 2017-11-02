@@ -19,8 +19,6 @@ var allowUnexported = cmp.AllowUnexported(blockList{}, block{})
 var epoch = time.Unix(0, 0)
 
 func TestExecutor_Execute(t *testing.T) {
-	// TODO fix with value changes
-	t.Skip()
 	testCases := []struct {
 		src  []block
 		plan *plan.PlanSpec
@@ -44,7 +42,7 @@ func TestExecutor_Execute(t *testing.T) {
 					cols: []execute.ColMeta{
 						execute.TimeCol,
 						execute.ColMeta{
-							Label: "value",
+							Label: execute.ValueColLabel,
 							Type:  execute.TFloat,
 						},
 					},
@@ -94,7 +92,7 @@ func TestExecutor_Execute(t *testing.T) {
 					cols: []execute.ColMeta{
 						execute.TimeCol,
 						execute.ColMeta{
-							Label: "value",
+							Label: execute.ValueColLabel,
 							Type:  execute.TFloat,
 						},
 					},
@@ -109,17 +107,17 @@ func TestExecutor_Execute(t *testing.T) {
 				},
 				tags: execute.Tags{},
 				points: []point{
-					{Value: 1.0, Time: 0},
-					{Value: 2.0, Time: 1},
-					{Value: 3.0, Time: 2},
-					{Value: 4.0, Time: 3},
-					{Value: 5.0, Time: 4},
+					{Value: int64(1), Time: 0},
+					{Value: int64(2), Time: 1},
+					{Value: int64(3), Time: 2},
+					{Value: int64(4), Time: 3},
+					{Value: int64(5), Time: 4},
 				},
 				cols: []execute.ColMeta{
 					execute.TimeCol,
 					execute.ColMeta{
-						Label: "value",
-						Type:  execute.TFloat,
+						Label: execute.ValueColLabel,
+						Type:  execute.TInt,
 					},
 				},
 			}},
@@ -194,13 +192,13 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					tags: execute.Tags{},
 					points: []point{
-						{Value: 3.0, Time: 5},
+						{Value: int64(3), Time: 5},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
 						execute.ColMeta{
-							Label: "value",
-							Type:  execute.TFloat,
+							Label: execute.ValueColLabel,
+							Type:  execute.TInt,
 						},
 					},
 				}},
@@ -375,16 +373,30 @@ func (itr *valueIterator) AtTime(i, j int) execute.Time {
 }
 
 func convertToTestBlock(b execute.Block) block {
+	cols := b.Cols()
 	blk := block{
 		bounds: b.Bounds(),
 		tags:   b.Tags(),
-		cols:   b.Cols(),
+		cols:   cols,
 	}
-	valueIdx := execute.ValueIdx(b.Cols())
+	valueIdx := execute.ValueIdx(cols)
+	valueType := cols[valueIdx].Type
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {
-			v := rr.AtFloat(i, valueIdx)
+			var v interface{}
+			switch valueType {
+			case execute.TBool:
+				v = rr.AtBool(i, valueIdx)
+			case execute.TInt:
+				v = rr.AtInt(i, valueIdx)
+			case execute.TUInt:
+				v = rr.AtUInt(i, valueIdx)
+			case execute.TFloat:
+				v = rr.AtFloat(i, valueIdx)
+			case execute.TString:
+				v = rr.AtString(i, valueIdx)
+			}
 			tags := execute.TagsForRow(blk.cols, rr, i)
 			blk.points = append(blk.points, point{
 				Time:  time,
