@@ -69,18 +69,60 @@ func createLastTransformation(id execute.DatasetID, mode execute.AccumulationMod
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(LastSelector), ps.UseRowTime)
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(LastSelector), ps.UseRowTime)
 	return t, d, nil
 }
 
-func (s *LastSelector) Do(vs []float64, rr execute.RowReader) {
-	if l := len(vs); l > 0 {
-		s.rows = []execute.Row{execute.ReadRow(l-1, rr)}
-	}
+func (s *LastSelector) reset() {
+	s.rows = nil
 }
+func (s *LastSelector) NewBoolSelector() execute.DoBoolRowSelector {
+	s.reset()
+	return s
+}
+
+func (s *LastSelector) NewIntSelector() execute.DoIntRowSelector {
+	s.reset()
+	return s
+}
+
+func (s *LastSelector) NewUIntSelector() execute.DoUIntRowSelector {
+	s.reset()
+	return s
+}
+
+func (s *LastSelector) NewFloatSelector() execute.DoFloatRowSelector {
+	s.reset()
+	return s
+}
+
+func (s *LastSelector) NewStringSelector() execute.DoStringRowSelector {
+	s.reset()
+	return s
+}
+
 func (s *LastSelector) Rows() []execute.Row {
 	return s.rows
 }
-func (s *LastSelector) Reset() {
-	s.rows = nil
+
+func (s *LastSelector) selectLast(l int, rr execute.RowReader) {
+	if l > 0 {
+		s.rows = []execute.Row{execute.ReadRow(l-1, rr)}
+	}
+}
+
+func (s *LastSelector) DoBool(vs []bool, rr execute.RowReader) {
+	s.selectLast(len(vs), rr)
+}
+func (s *LastSelector) DoInt(vs []int64, rr execute.RowReader) {
+	s.selectLast(len(vs), rr)
+}
+func (s *LastSelector) DoUInt(vs []uint64, rr execute.RowReader) {
+	s.selectLast(len(vs), rr)
+}
+func (s *LastSelector) DoFloat(vs []float64, rr execute.RowReader) {
+	s.selectLast(len(vs), rr)
+}
+func (s *LastSelector) DoString(vs []string, rr execute.RowReader) {
+	s.selectLast(len(vs), rr)
 }

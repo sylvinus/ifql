@@ -62,7 +62,6 @@ func (s *MaxProcedureSpec) Kind() plan.ProcedureKind {
 
 type MaxSelector struct {
 	set  bool
-	max  float64
 	rows []execute.Row
 }
 
@@ -71,11 +70,58 @@ func createMaxTransformation(id execute.DatasetID, mode execute.AccumulationMode
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(MaxSelector), ps.UseRowTime)
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(MaxSelector), ps.UseRowTime)
 	return t, d, nil
 }
 
-func (s *MaxSelector) Do(vs []float64, rr execute.RowReader) {
+type MaxIntSelector struct {
+	MaxSelector
+	max int64
+}
+type MaxUIntSelector struct {
+	MaxSelector
+	max uint64
+}
+type MaxFloatSelector struct {
+	MaxSelector
+	max float64
+}
+
+func (s *MaxSelector) NewBoolSelector() execute.DoBoolRowSelector {
+	return nil
+}
+
+func (s *MaxSelector) NewIntSelector() execute.DoIntRowSelector {
+	return new(MaxIntSelector)
+}
+
+func (s *MaxSelector) NewUIntSelector() execute.DoUIntRowSelector {
+	return new(MaxUIntSelector)
+}
+
+func (s *MaxSelector) NewFloatSelector() execute.DoFloatRowSelector {
+	return new(MaxFloatSelector)
+}
+
+func (s *MaxSelector) NewStringSelector() execute.DoStringRowSelector {
+	return nil
+}
+
+func (s *MaxSelector) Rows() []execute.Row {
+	if !s.set {
+		return nil
+	}
+	return s.rows
+}
+
+func (s *MaxSelector) selectRow(idx int, rr execute.RowReader) {
+	// Capture row
+	if idx >= 0 {
+		s.rows = []execute.Row{execute.ReadRow(idx, rr)}
+	}
+}
+
+func (s *MaxIntSelector) DoInt(vs []int64, rr execute.RowReader) {
 	maxIdx := -1
 	for i, v := range vs {
 		if !s.set || v > s.max {
@@ -84,18 +130,27 @@ func (s *MaxSelector) Do(vs []float64, rr execute.RowReader) {
 			maxIdx = i
 		}
 	}
-	// Capture maximum row
-	if maxIdx >= 0 {
-		s.rows = []execute.Row{execute.ReadRow(maxIdx, rr)}
-	}
+	s.selectRow(maxIdx, rr)
 }
-func (s *MaxSelector) Rows() []execute.Row {
-	if !s.set {
-		return nil
+func (s *MaxUIntSelector) DoUInt(vs []uint64, rr execute.RowReader) {
+	maxIdx := -1
+	for i, v := range vs {
+		if !s.set || v > s.max {
+			s.set = true
+			s.max = v
+			maxIdx = i
+		}
 	}
-	return s.rows
+	s.selectRow(maxIdx, rr)
 }
-func (s *MaxSelector) Reset() {
-	s.set = false
-	s.rows = nil
+func (s *MaxFloatSelector) DoFloat(vs []float64, rr execute.RowReader) {
+	maxIdx := -1
+	for i, v := range vs {
+		if !s.set || v > s.max {
+			s.set = true
+			s.max = v
+			maxIdx = i
+		}
+	}
+	s.selectRow(maxIdx, rr)
 }

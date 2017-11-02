@@ -7,13 +7,13 @@ import (
 	"github.com/influxdata/ifql/query/execute"
 )
 
-func SelectorFuncTestHelper(t *testing.T, selectorF execute.SelectorFunc, data execute.Block, want []execute.Row) {
+func RowSelectorFuncTestHelper(t *testing.T, selector execute.RowSelector, data execute.Block, want []execute.Row) {
 	t.Helper()
 
-	data.Values().DoFloat(selectorF.Do)
+	s := selector.NewFloatSelector()
+	data.Values().DoFloat(s.DoFloat)
 
-	got := selectorF.Rows()
-	selectorF.Reset()
+	got := s.Rows()
 
 	if !cmp.Equal(want, got) {
 		t.Errorf("unexpected value -want/+got\n%s", cmp.Diff(want, got))
@@ -22,12 +22,38 @@ func SelectorFuncTestHelper(t *testing.T, selectorF execute.SelectorFunc, data e
 
 var rows []execute.Row
 
-func SelectorFuncBenchmarkHelper(b *testing.B, selectorF execute.SelectorFunc, data execute.Block) {
+func RowSelectorFuncBenchmarkHelper(b *testing.B, selector execute.RowSelector, data execute.Block) {
 	b.Helper()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		selectorF.Reset()
-		data.Values().DoFloat(selectorF.Do)
-		rows = selectorF.Rows()
+		s := selector.NewFloatSelector()
+		data.Values().DoFloat(s.DoFloat)
+		rows = s.Rows()
+	}
+}
+
+func IndexSelectorFuncTestHelper(t *testing.T, selector execute.IndexSelector, data execute.Block, want [][]int) {
+	t.Helper()
+
+	var got [][]int
+	s := selector.NewFloatSelector()
+	data.Values().DoFloat(func(vs []float64, rr execute.RowReader) {
+		got = append(got, s.DoFloat(vs))
+	})
+
+	if !cmp.Equal(want, got) {
+		t.Errorf("unexpected value -want/+got\n%s", cmp.Diff(want, got))
+	}
+}
+
+func IndexSelectorFuncBenchmarkHelper(b *testing.B, selector execute.IndexSelector, data execute.Block) {
+	b.Helper()
+	b.ResetTimer()
+	var got [][]int
+	for n := 0; n < b.N; n++ {
+		s := selector.NewFloatSelector()
+		data.Values().DoFloat(func(vs []float64, rr execute.RowReader) {
+			got = append(got, s.DoFloat(vs))
+		})
 	}
 }

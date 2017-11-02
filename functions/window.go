@@ -159,11 +159,12 @@ func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta exec
 }
 
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
-	valueIdx := execute.ValueIdx(b.Cols())
+	cols := b.Cols()
+	valueIdx := execute.ValueIdx(cols)
+	valueCol := cols[valueIdx]
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {
-			value := rr.AtFloat(i, valueIdx)
 			bounds := t.getWindowBounds(time)
 			for _, bnds := range bounds {
 				builder, new := t.cache.BlockBuilder(blockMetadata{
@@ -172,15 +173,12 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 				})
 				if new {
 					builder.AddCol(execute.TimeCol)
-					builder.AddCol(execute.ColMeta{
-						Label: "value",
-						Type:  execute.TFloat,
-					})
+					builder.AddCol(valueCol)
 					execute.AddTags(b.Tags(), builder)
-					// TODO(nathanielc): Add columns for non common tags
 				}
-				builder.AppendTime(0, time)
-				builder.AppendFloat(1, value)
+				colMap := execute.AddNewCols(b, builder)
+
+				execute.AppendRow(i, rr, builder, colMap)
 			}
 		}
 	})

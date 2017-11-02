@@ -41,7 +41,10 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: "value",
+							Type:  execute.TFloat,
+						},
 					},
 				},
 			},
@@ -66,8 +69,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
-						Spec: &functions.SumProcedureSpec{},
-						Parents: []plan.ProcedureID{
+						Spec: &functions.SumProcedureSpec{}, Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("select"),
 						},
 						Children: nil,
@@ -89,7 +91,10 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: "value",
+							Type:  execute.TFloat,
+						},
 					},
 				}},
 			}},
@@ -110,7 +115,10 @@ func TestExecutor_Execute(t *testing.T) {
 				},
 				cols: []execute.ColMeta{
 					execute.TimeCol,
-					execute.ValueCol,
+					execute.ColMeta{
+						Label: "value",
+						Type:  execute.TFloat,
+					},
 				},
 			}},
 			plan: &plan.PlanSpec{
@@ -188,7 +196,10 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: "value",
+							Type:  execute.TFloat,
+						},
 					},
 				}},
 			}},
@@ -281,7 +292,7 @@ type block struct {
 }
 
 type point struct {
-	Value float64
+	Value interface{}
 	Time  execute.Time
 	Tags  execute.Tags
 }
@@ -315,9 +326,24 @@ type valueIterator struct {
 func (itr *valueIterator) Cols() []execute.ColMeta {
 	return itr.cols
 }
+func (itr *valueIterator) DoBool(f func([]bool, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]bool{p.Value.(bool)}, itr)
+	}
+}
+func (itr *valueIterator) DoInt(f func([]int64, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]int64{p.Value.(int64)}, itr)
+	}
+}
+func (itr *valueIterator) DoUInt(f func([]uint64, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]uint64{p.Value.(uint64)}, itr)
+	}
+}
 func (itr *valueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 	for _, p := range itr.points {
-		f([]float64{p.Value}, itr)
+		f([]float64{p.Value.(float64)}, itr)
 	}
 }
 func (itr *valueIterator) DoString(f func([]string, execute.RowReader)) {
@@ -327,8 +353,17 @@ func (itr *valueIterator) DoTime(f func([]execute.Time, execute.RowReader)) {
 		f([]execute.Time{p.Time}, itr)
 	}
 }
+func (itr *valueIterator) AtBool(i, j int) bool {
+	return itr.points[i].Value.(bool)
+}
+func (itr *valueIterator) AtInt(i, j int) int64 {
+	return itr.points[i].Value.(int64)
+}
+func (itr *valueIterator) AtUInt(i, j int) uint64 {
+	return itr.points[i].Value.(uint64)
+}
 func (itr *valueIterator) AtFloat(i, j int) float64 {
-	return itr.points[i].Value
+	return itr.points[i].Value.(float64)
 }
 func (itr *valueIterator) AtString(i, j int) string {
 	return itr.points[i].Tags[itr.cols[j].Label]

@@ -77,7 +77,7 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 	if new {
 		builder.AddCol(TimeCol)
 		builder.AddCol(ColMeta{
-			Label: valueColLabel,
+			Label: ValueColLabel,
 			Type:  vf.Type(),
 		})
 		AddTags(b.Tags(), builder)

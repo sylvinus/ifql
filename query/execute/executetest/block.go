@@ -1,6 +1,10 @@
 package executetest
 
-import "github.com/influxdata/ifql/query/execute"
+import (
+	"fmt"
+
+	"github.com/influxdata/ifql/query/execute"
+)
 
 type Block struct {
 	Bnds    execute.Bounds
@@ -86,6 +90,15 @@ func (v *ValueIterator) DoTime(f func([]execute.Time, execute.RowReader)) {
 	}
 }
 
+func (v *ValueIterator) AtBool(i int, j int) bool {
+	return v.b.Data[v.row][j].(bool)
+}
+func (v *ValueIterator) AtInt(i int, j int) int64 {
+	return v.b.Data[v.row][j].(int64)
+}
+func (v *ValueIterator) AtUInt(i int, j int) uint64 {
+	return v.b.Data[v.row][j].(uint64)
+}
 func (v *ValueIterator) AtFloat(i int, j int) float64 {
 	return v.b.Data[v.row][j].(float64)
 }
@@ -98,10 +111,10 @@ func (v *ValueIterator) AtTime(i int, j int) execute.Time {
 	return v.b.Data[v.row][j].(execute.Time)
 }
 
-func BlocksFromCache(c execute.BlockBuilderCache) []*Block {
+func BlocksFromCache(c execute.DataCache) []*Block {
 	var blocks []*Block
-	c.ForEachBuilder(func(_ execute.BlockKey, builder execute.BlockBuilder) {
-		b := builder.Block()
+	c.ForEach(func(key execute.BlockKey) {
+		b := c.Block(key)
 		blocks = append(blocks, ConvertBlock(b))
 	})
 	return blocks
@@ -119,12 +132,20 @@ func ConvertBlock(b execute.Block) *Block {
 			for j, c := range blk.ColMeta {
 				var v interface{}
 				switch c.Type {
-				case execute.TTime:
-					v = rr.AtTime(i, j)
-				case execute.TString:
-					v = rr.AtString(i, j)
+				case execute.TBool:
+					v = rr.AtBool(i, j)
+				case execute.TInt:
+					v = rr.AtInt(i, j)
+				case execute.TUInt:
+					v = rr.AtUInt(i, j)
 				case execute.TFloat:
 					v = rr.AtFloat(i, j)
+				case execute.TString:
+					v = rr.AtString(i, j)
+				case execute.TTime:
+					v = rr.AtTime(i, j)
+				default:
+					panic(fmt.Errorf("unknown column type %s", c.Type))
 				}
 				row[j] = v
 			}

@@ -110,7 +110,7 @@ func TestMin_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.SelectorFuncTestHelper(
+			executetest.RowSelectorFuncTestHelper(
 				t,
 				new(functions.MinSelector),
 				tc.data,
@@ -121,5 +121,5 @@ func TestMin_Process(t *testing.T) {
 }
 
 func BenchmarkMin(b *testing.B) {
-	executetest.SelectorFuncBenchmarkHelper(b, new(functions.MinSelector), NormalBlock)
+	executetest.RowSelectorFuncBenchmarkHelper(b, new(functions.MinSelector), NormalBlock)
 }

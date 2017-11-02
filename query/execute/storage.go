@@ -84,8 +84,11 @@ type responseType int
 
 const (
 	seriesType responseType = iota
-	integerPointsType
+	boolPointsType
+	intPointsType
+	uintPointsType
 	floatPointsType
+	stringPointsType
 )
 
 func (s *readState) peek() responseType {
@@ -93,10 +96,16 @@ func (s *readState) peek() responseType {
 	switch {
 	case frame.GetSeries() != nil:
 		return seriesType
+	case frame.GetBooleanPoints() != nil:
+		return boolPointsType
 	case frame.GetIntegerPoints() != nil:
-		return integerPointsType
+		return intPointsType
+	case frame.GetUnsignedPoints() != nil:
+		return uintPointsType
 	case frame.GetFloatPoints() != nil:
 		return floatPointsType
+	case frame.GetStringPoints() != nil:
+		return stringPointsType
 	default:
 		panic("read response frame should have one of series, integerPoints, or floatPoints")
 	}
@@ -157,7 +166,7 @@ func newStorageBlock(bounds Bounds, tags Tags, data *readState) *storageBlock {
 	colMeta := make([]ColMeta, 2+len(tags))
 	colMeta[0] = TimeCol
 	colMeta[1] = ColMeta{
-		Label: valueColLabel,
+		Label: ValueColLabel,
 		Type:  TFloat,
 	}
 
@@ -230,9 +239,11 @@ type storageBlockValueIterator struct {
 	timeBuf []Time
 
 	// resuable buffers for the different types of values
+	boolBuf   []bool
+	intBuf    []int64
+	uintBuf   []uint64
 	floatBuf  []float64
 	stringBuf []string
-	intBuf    []int64
 }
 
 func (b *storageBlockValueIterator) Cols() []ColMeta {
@@ -309,6 +320,18 @@ func (b *storageBlockValueIterator) DoTime(f func([]Time, RowReader)) {
 	close(b.done)
 }
 
+func (b *storageBlockValueIterator) AtBool(i, j int) bool {
+	checkColType(b.colMeta[j], TBool)
+	return b.colBufs[j].([]bool)[i]
+}
+func (b *storageBlockValueIterator) AtInt(i, j int) int64 {
+	checkColType(b.colMeta[j], TInt)
+	return b.colBufs[j].([]int64)[i]
+}
+func (b *storageBlockValueIterator) AtUInt(i, j int) uint64 {
+	checkColType(b.colMeta[j], TUInt)
+	return b.colBufs[j].([]uint64)[i]
+}
 func (b *storageBlockValueIterator) AtFloat(i, j int) float64 {
 	checkColType(b.colMeta[j], TFloat)
 	return b.colBufs[j].([]float64)[i]
@@ -321,10 +344,6 @@ func (b *storageBlockValueIterator) AtString(i, j int) string {
 	}
 	return b.colBufs[j].([]string)[i]
 }
-func (b *storageBlockValueIterator) AtInt(i, j int) int64 {
-	checkColType(b.colMeta[j], TInt)
-	return b.colBufs[j].([]int64)[i]
-}
 func (b *storageBlockValueIterator) AtTime(i, j int) Time {
 	checkColType(b.colMeta[j], TTime)
 	return b.colBufs[j].([]Time)[i]
@@ -332,17 +351,41 @@ func (b *storageBlockValueIterator) AtTime(i, j int) Time {
 
 func (b *storageBlockValueIterator) advance() bool {
 	for b.data.more() {
-
 		//reset buffers
 		b.timeBuf = b.timeBuf[0:0]
-		b.floatBuf = b.floatBuf[0:0]
-		b.stringBuf = b.stringBuf[0:0]
+		b.boolBuf = b.boolBuf[0:0]
 		b.intBuf = b.intBuf[0:0]
+		b.uintBuf = b.uintBuf[0:0]
+		b.stringBuf = b.stringBuf[0:0]
+		b.floatBuf = b.floatBuf[0:0]
 
 		switch b.data.peek() {
 		case seriesType:
 			return false
-		case integerPointsType:
+		case boolPointsType:
+			// read next frame
+			frame := b.data.next()
+			p := frame.GetBooleanPoints()
+			l := len(p.Timestamps)
+			if l > cap(b.timeBuf) {
+				b.timeBuf = make([]Time, l)
+			} else {
+				b.timeBuf = b.timeBuf[:l]
+			}
+			if l > cap(b.boolBuf) {
+				b.boolBuf = make([]bool, l)
+			} else {
+				b.boolBuf = b.boolBuf[:l]
+			}
+
+			for i, c := range p.Timestamps {
+				b.timeBuf[i] = Time(c)
+				b.boolBuf[i] = p.Values[i]
+			}
+			b.colBufs[0] = b.timeBuf
+			b.colBufs[1] = b.boolBuf
+			return true
+		case intPointsType:
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetIntegerPoints()
@@ -352,7 +395,7 @@ func (b *storageBlockValueIterator) advance() bool {
 			} else {
 				b.timeBuf = b.timeBuf[:l]
 			}
-			if l > cap(b.intBuf) {
+			if l > cap(b.uintBuf) {
 				b.intBuf = make([]int64, l)
 			} else {
 				b.intBuf = b.intBuf[:l]
@@ -364,6 +407,29 @@ func (b *storageBlockValueIterator) advance() bool {
 			}
 			b.colBufs[0] = b.timeBuf
 			b.colBufs[1] = b.intBuf
+			return true
+		case uintPointsType:
+			// read next frame
+			frame := b.data.next()
+			p := frame.GetUnsignedPoints()
+			l := len(p.Timestamps)
+			if l > cap(b.timeBuf) {
+				b.timeBuf = make([]Time, l)
+			} else {
+				b.timeBuf = b.timeBuf[:l]
+			}
+			if l > cap(b.intBuf) {
+				b.uintBuf = make([]uint64, l)
+			} else {
+				b.uintBuf = b.uintBuf[:l]
+			}
+
+			for i, c := range p.Timestamps {
+				b.timeBuf[i] = Time(c)
+				b.uintBuf[i] = p.Values[i]
+			}
+			b.colBufs[0] = b.timeBuf
+			b.colBufs[1] = b.uintBuf
 			return true
 		case floatPointsType:
 			// read next frame
@@ -388,6 +454,30 @@ func (b *storageBlockValueIterator) advance() bool {
 			}
 			b.colBufs[0] = b.timeBuf
 			b.colBufs[1] = b.floatBuf
+			return true
+		case stringPointsType:
+			// read next frame
+			frame := b.data.next()
+			p := frame.GetStringPoints()
+
+			l := len(p.Timestamps)
+			if l > cap(b.timeBuf) {
+				b.timeBuf = make([]Time, l)
+			} else {
+				b.timeBuf = b.timeBuf[:l]
+			}
+			if l > cap(b.stringBuf) {
+				b.stringBuf = make([]string, l)
+			} else {
+				b.stringBuf = b.stringBuf[:l]
+			}
+
+			for i, c := range p.Timestamps {
+				b.timeBuf[i] = Time(c)
+				b.stringBuf[i] = p.Values[i]
+			}
+			b.colBufs[0] = b.timeBuf
+			b.colBufs[1] = b.stringBuf
 			return true
 		}
 	}

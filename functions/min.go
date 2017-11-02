@@ -62,7 +62,6 @@ func (s *MinProcedureSpec) Kind() plan.ProcedureKind {
 
 type MinSelector struct {
 	set  bool
-	min  float64
 	rows []execute.Row
 }
 
@@ -71,11 +70,58 @@ func createMinTransformation(id execute.DatasetID, mode execute.AccumulationMode
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(MinSelector), ps.UseRowTime)
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(MinSelector), ps.UseRowTime)
 	return t, d, nil
 }
 
-func (s *MinSelector) Do(vs []float64, rr execute.RowReader) {
+type MinIntSelector struct {
+	MinSelector
+	min int64
+}
+type MinUIntSelector struct {
+	MinSelector
+	min uint64
+}
+type MinFloatSelector struct {
+	MinSelector
+	min float64
+}
+
+func (s *MinSelector) NewBoolSelector() execute.DoBoolRowSelector {
+	return nil
+}
+
+func (s *MinSelector) NewIntSelector() execute.DoIntRowSelector {
+	return new(MinIntSelector)
+}
+
+func (s *MinSelector) NewUIntSelector() execute.DoUIntRowSelector {
+	return new(MinUIntSelector)
+}
+
+func (s *MinSelector) NewFloatSelector() execute.DoFloatRowSelector {
+	return new(MinFloatSelector)
+}
+
+func (s *MinSelector) NewStringSelector() execute.DoStringRowSelector {
+	return nil
+}
+
+func (s *MinSelector) Rows() []execute.Row {
+	if !s.set {
+		return nil
+	}
+	return s.rows
+}
+
+func (s *MinSelector) selectRow(idx int, rr execute.RowReader) {
+	// Capture row
+	if idx >= 0 {
+		s.rows = []execute.Row{execute.ReadRow(idx, rr)}
+	}
+}
+
+func (s *MinIntSelector) DoInt(vs []int64, rr execute.RowReader) {
 	minIdx := -1
 	for i, v := range vs {
 		if !s.set || v < s.min {
@@ -84,18 +130,27 @@ func (s *MinSelector) Do(vs []float64, rr execute.RowReader) {
 			minIdx = i
 		}
 	}
-	// Capture minimum row
-	if minIdx >= 0 {
-		s.rows = []execute.Row{execute.ReadRow(minIdx, rr)}
-	}
+	s.selectRow(minIdx, rr)
 }
-func (s *MinSelector) Rows() []execute.Row {
-	if !s.set {
-		return nil
+func (s *MinUIntSelector) DoUInt(vs []uint64, rr execute.RowReader) {
+	minIdx := -1
+	for i, v := range vs {
+		if !s.set || v < s.min {
+			s.set = true
+			s.min = v
+			minIdx = i
+		}
 	}
-	return s.rows
+	s.selectRow(minIdx, rr)
 }
-func (s *MinSelector) Reset() {
-	s.set = false
-	s.rows = nil
+func (s *MinFloatSelector) DoFloat(vs []float64, rr execute.RowReader) {
+	minIdx := -1
+	for i, v := range vs {
+		if !s.set || v < s.min {
+			s.set = true
+			s.min = v
+			minIdx = i
+		}
+	}
+	s.selectRow(minIdx, rr)
 }
