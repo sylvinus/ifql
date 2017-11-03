@@ -48,7 +48,7 @@ func main() {
 	for _, r := range results {
 		blocks := r.Blocks()
 		err := blocks.Do(func(b execute.Block) {
-			fmt.Printf("%v\n", execute.Formatted(b, execute.Squeeze()))
+			execute.NewFormatter(b, nil).WriteTo(os.Stdout)
 		})
 		if err != nil {
 			fmt.Println("Error:", err)
