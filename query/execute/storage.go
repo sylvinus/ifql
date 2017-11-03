@@ -93,18 +93,18 @@ const (
 
 func (s *readState) peek() responseType {
 	frame := s.rep.Frames[0]
-	switch {
-	case frame.GetSeries() != nil:
+	switch frame.Data.(type) {
+	case *storage.ReadResponse_Frame_Series:
 		return seriesType
-	case frame.GetBooleanPoints() != nil:
+	case *storage.ReadResponse_Frame_BooleanPoints:
 		return boolPointsType
-	case frame.GetIntegerPoints() != nil:
+	case *storage.ReadResponse_Frame_IntegerPoints:
 		return intPointsType
-	case frame.GetUnsignedPoints() != nil:
+	case *storage.ReadResponse_Frame_UnsignedPoints:
 		return uintPointsType
-	case frame.GetFloatPoints() != nil:
+	case *storage.ReadResponse_Frame_FloatPoints:
 		return floatPointsType
-	case frame.GetStringPoints() != nil:
+	case *storage.ReadResponse_Frame_StringPoints:
 		return stringPointsType
 	default:
 		panic("read response frame should have one of series, integerPoints, or floatPoints")
@@ -167,7 +167,7 @@ func newStorageBlock(bounds Bounds, tags Tags, data *readState) *storageBlock {
 	colMeta[0] = TimeCol
 	colMeta[1] = ColMeta{
 		Label: ValueColLabel,
-		Type:  TFloat,
+		// We will update the Type later.
 	}
 
 	keys := tags.Keys()
@@ -363,6 +363,7 @@ func (b *storageBlockValueIterator) advance() bool {
 		case seriesType:
 			return false
 		case boolPointsType:
+			b.colMeta[1].Type = TBool
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetBooleanPoints()
@@ -386,6 +387,7 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.boolBuf
 			return true
 		case intPointsType:
+			b.colMeta[1].Type = TInt
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetIntegerPoints()
@@ -409,6 +411,7 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.intBuf
 			return true
 		case uintPointsType:
+			b.colMeta[1].Type = TUInt
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetUnsignedPoints()
@@ -432,6 +435,7 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.uintBuf
 			return true
 		case floatPointsType:
+			b.colMeta[1].Type = TFloat
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetFloatPoints()
@@ -456,6 +460,7 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.floatBuf
 			return true
 		case stringPointsType:
+			b.colMeta[1].Type = TString
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetStringPoints()
