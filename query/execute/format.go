@@ -1,240 +1,223 @@
 package execute
 
 import (
-	"fmt"
-	"math"
+	"io"
 	"sort"
 	"strconv"
+	"strings"
 )
 
-type FormatOption func(*formatter)
+// Formatter writes a block to a Writer.
+type Formatter struct {
+	b         Block
+	widths    []int
+	maxWidth  int
+	newWidths []int
+	pad       []byte
+	dash      []byte
+	// floatBuf is used to format float values
+	floatBuf [64]byte
 
-func Formatted(b Block, opts ...FormatOption) fmt.Formatter {
-	f := formatter{
-		b: b,
+	opts *FormatOptions
+
+	cols orderedCols
+}
+type FormatOptions struct {
+	// RepeatHeaderCount is the number of rows to print before printing the header again.
+	// If zero then the headers are not repeated.
+	RepeatHeaderCount int
+}
+
+func DefaultFormatOptions() *FormatOptions {
+	return &FormatOptions{
+		RepeatHeaderCount: 100,
 	}
-	for _, o := range opts {
-		o(&f)
+}
+
+var eol = []byte{'\n'}
+
+// NewFormatter creates a Formatter for a given block.
+// If opts is nil, the DefaultFormatOptions are used.
+func NewFormatter(b Block, opts *FormatOptions) *Formatter {
+	if opts == nil {
+		opts = DefaultFormatOptions()
 	}
-	return f
+	return &Formatter{
+		b:    b,
+		opts: opts,
+	}
 }
 
-func Head(m int) FormatOption {
-	return func(f *formatter) { f.head = m }
-}
-func Squeeze() FormatOption {
-	return func(f *formatter) { f.squeeze = true }
-}
-
-type formatter struct {
-	b       Block
-	head    int
-	squeeze bool
+type writeToHelper struct {
+	w   io.Writer
+	n   int64
+	err error
 }
 
-func (f formatter) Format(fs fmt.State, c rune) {
-	f.b = CacheOneTimeBlock(f.b)
-	if c == 'v' && fs.Flag('#') {
-		fmt.Fprintf(fs, "%#v", f.b)
+func (w *writeToHelper) write(data []byte) {
+	if w.err != nil {
 		return
 	}
-	// This is useful when debugging the formatter as fmt.Println will catch the panic and eat the trace.
-	//defer func() {
-	//	r := recover()
-	//	if r != nil {
-	//		panic(fmt.Sprintf("%v\n%s", r, debug.Stack()))
-	//	}
-	//}()
-	f.format(fs, c)
+	n, err := w.w.Write(data)
+	w.n += int64(n)
+	w.err = err
 }
 
-func (f formatter) format(fs fmt.State, c rune) {
-	tags := f.b.Tags()
-	keys := tags.Keys()
+// WriteTo writes the formatted block data to w.
+func (f *Formatter) WriteTo(out io.Writer) (int64, error) {
+	w := &writeToHelper{w: out}
+
+	// Sort cols
 	cols := f.b.Cols()
-	fmt.Fprintf(fs, "Block: keys: %v bounds: %v\n", keys, f.b.Bounds())
-	nCols := len(cols) + len(keys)
+	f.cols = newOrderedCols(cols)
+	sort.Sort(f.cols)
 
-	// Determine number of rows to print
-	nrows := math.MaxInt64
-	if f.head > 0 {
-		nrows = f.head
-	}
-
-	// Determine precision of floating point values
-	prec, pOk := fs.Precision()
-	if !pOk {
-		prec = -1
+	minWidth := 10
+	f.maxWidth = minWidth
+	f.widths = make([]int, len(cols))
+	for j := range f.widths {
+		f.widths[j] = minWidth
 	}
 
-	var widths widther
-	if f.squeeze {
-		widths = make(columnWidth, nCols)
-	} else {
-		widths = new(uniformWidth)
-	}
-
-	fmtC := byte(c)
-	if fmtC == 'v' {
-		fmtC = 'g'
-	}
-	floatBuf := make([]byte, 0, 64)
-	maxWidth := computeWidths(f.b, fmtC, nrows, prec, widths, floatBuf)
-
-	width, _ := fs.Width()
-	if width < maxWidth {
-		width = maxWidth
-	}
-	if width < 2 {
-		width = 2
-	}
-	pad := make([]byte, width)
-	for i := range pad {
-		pad[i] = ' '
-	}
-	dash := make([]byte, width)
-	for i := range dash {
-		dash[i] = '-'
-	}
-	eol := []byte{'\n'}
-
-	ordered := newOrderedCols(cols)
-	sort.Sort(ordered)
-
-	// Print column headers
-	for oj, c := range ordered.cols {
-		j := ordered.Idx(oj)
-		buf := []byte(c.Label)
-		// Check justification
-		if fs.Flag('-') {
-			fs.Write(buf)
-			fs.Write(pad[:widths.width(j)-len(buf)])
-		} else {
-			fs.Write(pad[:widths.width(j)-len(buf)])
-			fs.Write(buf)
+	// Compute header widths
+	for j, c := range cols {
+		l := len(c.Label)
+		if c.Label == timeColLabel {
+			l = len(fixedWidthTimeFmt)
 		}
-		fs.Write(pad[:2])
-	}
-	fs.Write(eol)
-	// Print header separator
-	for oj := range ordered.cols {
-		j := ordered.Idx(oj)
-		fs.Write(dash[:widths.width(j)])
-		fs.Write(pad[:2])
-	}
-	fs.Write(eol)
-
-	n := nrows
-	times := f.b.Times()
-	times.DoTime(func(ts []Time, rr RowReader) {
-		l := len(ts)
-		if n < l {
-			l = n
-			n = 0
-		} else {
-			n -= l
+		if l > f.widths[j] {
+			f.widths[j] = l
 		}
-		for i := range ts[:l] {
-			for oj, c := range ordered.cols {
-				j := ordered.Idx(oj)
-				var buf []byte
-				switch c.Type {
-				case TFloat:
-					buf = strconv.AppendFloat(floatBuf, rr.AtFloat(i, j), fmtC, prec, 64)
-				case TTime:
-					buf = []byte(rr.AtTime(i, j).String())
-				case TString:
-					buf = []byte(rr.AtString(i, j))
+		if l > f.maxWidth {
+			f.maxWidth = l
+		}
+	}
+
+	// Write Block header
+	w.write([]byte("Block: keys: ["))
+	w.write([]byte(strings.Join(f.b.Tags().Keys(), ",")))
+	w.write([]byte("] bounds: "))
+	w.write([]byte(f.b.Bounds().String()))
+	w.write(eol)
+
+	// Check err and return early
+	if w.err != nil {
+		return w.n, w.err
+	}
+
+	// Write rows
+	r := 0
+	f.b.Times().DoTime(func(ts []Time, rr RowReader) {
+		if r == 0 {
+			for i := range ts {
+				for oj, c := range f.cols.cols {
+					j := f.cols.Idx(oj)
+					buf := f.valueBuf(i, j, c.Type, rr)
+					l := len(buf)
+					if l > f.widths[j] {
+						f.widths[j] = l
+					}
+					if l > f.maxWidth {
+						f.maxWidth = l
+					}
 				}
-				// Check justification
-				if fs.Flag('-') {
-					fs.Write(buf)
-					fs.Write(pad[:widths.width(j)-len(buf)])
-				} else {
-					fs.Write(pad[:widths.width(j)-len(buf)])
-					fs.Write(buf)
-				}
-				fs.Write(pad[:2])
 			}
-			fs.Write(eol)
+			f.makePaddingBuffers()
+			f.writeHeader(w)
+			f.writeHeaderSeparator(w)
+			f.newWidths = make([]int, len(f.widths))
+			copy(f.newWidths, f.widths)
+		}
+		for i := range ts {
+			for oj, c := range f.cols.cols {
+				j := f.cols.Idx(oj)
+				buf := f.valueBuf(i, j, c.Type, rr)
+				l := len(buf)
+				padding := f.widths[j] - l
+				if padding >= 0 {
+					w.write(f.pad[:padding])
+					w.write(buf)
+				} else {
+					//TODO make unicode friendly
+					w.write(buf[:f.widths[j]-3])
+					w.write([]byte{'.', '.', '.'})
+				}
+				w.write(f.pad[:2])
+				if l > f.newWidths[j] {
+					f.newWidths[j] = l
+				}
+				if l > f.maxWidth {
+					f.maxWidth = l
+				}
+			}
+			w.write(eol)
+			r++
+			if f.opts.RepeatHeaderCount > 0 && r%f.opts.RepeatHeaderCount == 0 {
+				copy(f.widths, f.newWidths)
+				f.makePaddingBuffers()
+				f.writeHeaderSeparator(w)
+				f.writeHeader(w)
+				f.writeHeaderSeparator(w)
+			}
 		}
 	})
+	return w.n, w.err
 }
 
-func computeWidths(b Block, fmtC byte, rows, prec int, widths widther, buf []byte) int {
-	maxWidth := 0
-	for j, c := range b.Cols() {
-		n := rows
-		values := b.Col(j)
-		width := len(c.Label)
-		switch c.Type {
-		case TFloat:
-			values.DoFloat(func(vs []float64, _ RowReader) {
-				l := len(vs)
-				if n < l {
-					l = n
-					n = 0
-				} else {
-					n -= l
-				}
-				for _, v := range vs[:l] {
-					buf = strconv.AppendFloat(buf[0:0], v, fmtC, prec, 64)
-					if w := len(buf); w > width {
-						width = w
-					}
-				}
-			})
-		case TString:
-			values.DoString(func(vs []string, _ RowReader) {
-				l := len(vs)
-				if n < l {
-					l = n
-					n = 0
-				} else {
-					n -= l
-				}
-				for _, v := range vs[:l] {
-					if w := len(v); w > width {
-						width = w
-					}
-				}
-			})
-		case TTime:
-			width = len(fixedWidthTimeFmt)
-		}
-		widths.setWidth(j, width)
-		if width > maxWidth {
-			maxWidth = width
+func (f *Formatter) makePaddingBuffers() {
+	if len(f.pad) != f.maxWidth {
+		f.pad = make([]byte, f.maxWidth)
+		for i := range f.pad {
+			f.pad[i] = ' '
 		}
 	}
-	return maxWidth
-}
-
-type widther interface {
-	width(i int) int
-	setWidth(i, w int)
-}
-
-type uniformWidth int
-
-func (u *uniformWidth) width(_ int) int { return int(*u) }
-func (u *uniformWidth) setWidth(_, w int) {
-	if uniformWidth(w) > *u {
-		*u = uniformWidth(w)
+	if len(f.dash) != f.maxWidth {
+		f.dash = make([]byte, f.maxWidth)
+		for i := range f.dash {
+			f.dash[i] = '-'
+		}
 	}
 }
 
-type columnWidth []int
+func (f *Formatter) writeHeader(w *writeToHelper) {
+	for oj, c := range f.cols.cols {
+		j := f.cols.Idx(oj)
+		buf := []byte(c.Label)
+		w.write(f.pad[:f.widths[j]-len(buf)])
+		w.write(buf)
+		w.write(f.pad[:2])
+	}
+	w.write(eol)
+}
+func (f *Formatter) writeHeaderSeparator(w *writeToHelper) {
+	for oj := range f.cols.cols {
+		j := f.cols.Idx(oj)
+		w.write(f.dash[:f.widths[j]])
+		w.write(f.pad[:2])
+	}
+	w.write(eol)
+}
 
-func (c columnWidth) width(i int) int   { return c[i] }
-func (c columnWidth) setWidth(i, w int) { c[i] = w }
+func (f *Formatter) valueBuf(i, j int, typ DataType, rr RowReader) (buf []byte) {
+	switch typ {
+	case TFloat:
+		// TODO allow specifying format and precision
+		buf = strconv.AppendFloat(f.floatBuf[0:0], rr.AtFloat(i, j), 'f', -1, 64)
+	case TTime:
+		buf = []byte(rr.AtTime(i, j).String())
+	case TString:
+		buf = []byte(rr.AtString(i, j))
+	}
+	return
+}
 
-// orderedCols sorts a list of columns such that:
+// orderedCols sorts a list of columns:
 //
 // * time
 // * common tags sorted by label
 // * other tags sorted by label
 // * value
+//
 type orderedCols struct {
 	indexMap []int
 	cols     []ColMeta
