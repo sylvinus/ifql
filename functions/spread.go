@@ -60,14 +60,47 @@ func createSpreadTransformation(id execute.DatasetID, mode execute.AccumulationM
 
 // SpreadAgg finds the difference between the max and min values a block
 type SpreadAgg struct {
-	min    float64
 	minSet bool
-	max    float64
 	maxSet bool
 }
+type SpreadIntAgg struct {
+	SpreadAgg
+	min int64
+	max int64
+}
+type SpreadUIntAgg struct {
+	SpreadAgg
+	min uint64
+	max uint64
+}
+type SpreadFloatAgg struct {
+	SpreadAgg
+	min float64
+	max float64
+}
 
-// Do searches for the min and max value of the array and caches them in the aggregate
-func (a *SpreadAgg) Do(vs []float64) {
+func (a *SpreadAgg) NewBoolAgg() execute.DoBoolAgg {
+	return nil
+}
+
+func (a *SpreadAgg) NewIntAgg() execute.DoIntAgg {
+	return new(SpreadIntAgg)
+}
+
+func (a *SpreadAgg) NewUIntAgg() execute.DoUIntAgg {
+	return new(SpreadUIntAgg)
+}
+
+func (a *SpreadAgg) NewFloatAgg() execute.DoFloatAgg {
+	return new(SpreadFloatAgg)
+}
+
+func (a *SpreadAgg) NewStringAgg() execute.DoStringAgg {
+	return nil
+}
+
+// DoInt searches for the min and max value of the array and caches them in the aggregate
+func (a *SpreadIntAgg) DoInt(vs []int64) {
 	for _, v := range vs {
 		if !a.minSet || v < a.min {
 			a.minSet = true
@@ -80,15 +113,57 @@ func (a *SpreadAgg) Do(vs []float64) {
 	}
 }
 
+func (a *SpreadIntAgg) Type() execute.DataType {
+	return execute.TInt
+}
+
 // Value returns the difference between max and min
-func (a *SpreadAgg) Value() float64 {
+func (a *SpreadIntAgg) ValueInt() int64 {
 	return a.max - a.min
 }
 
-// Reset clears the values of min and max
-func (a *SpreadAgg) Reset() {
-	a.min = 0
-	a.minSet = false
-	a.max = 0
-	a.maxSet = false
+// Do searches for the min and max value of the array and caches them in the aggregate
+func (a *SpreadUIntAgg) DoUInt(vs []uint64) {
+	for _, v := range vs {
+		if !a.minSet || v < a.min {
+			a.minSet = true
+			a.min = v
+		}
+		if !a.maxSet || v > a.max {
+			a.maxSet = true
+			a.max = v
+		}
+	}
+}
+
+func (a *SpreadUIntAgg) Type() execute.DataType {
+	return execute.TUInt
+}
+
+// Value returns the difference between max and min
+func (a *SpreadUIntAgg) ValueUInt() uint64 {
+	return a.max - a.min
+}
+
+// Do searches for the min and max value of the array and caches them in the aggregate
+func (a *SpreadFloatAgg) DoFloat(vs []float64) {
+	for _, v := range vs {
+		if !a.minSet || v < a.min {
+			a.minSet = true
+			a.min = v
+		}
+		if !a.maxSet || v > a.max {
+			a.maxSet = true
+			a.max = v
+		}
+	}
+}
+
+func (a *SpreadFloatAgg) Type() execute.DataType {
+	return execute.TFloat
+}
+
+// Value returns the difference between max and min
+func (a *SpreadFloatAgg) ValueFloat() float64 {
+	return a.max - a.min
 }

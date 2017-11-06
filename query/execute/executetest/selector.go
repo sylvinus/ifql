@@ -38,7 +38,14 @@ func IndexSelectorFuncTestHelper(t *testing.T, selector execute.IndexSelector, d
 	var got [][]int
 	s := selector.NewFloatSelector()
 	data.Values().DoFloat(func(vs []float64, rr execute.RowReader) {
-		got = append(got, s.DoFloat(vs))
+		var cpy []int
+		selected := s.DoFloat(vs)
+		t.Log(selected)
+		if len(selected) > 0 {
+			cpy = make([]int, len(selected))
+			copy(cpy, selected)
+		}
+		got = append(got, cpy)
 	})
 
 	if !cmp.Equal(want, got) {
