@@ -10,6 +10,9 @@ $(SUBDIRS): bin/pigeon bin/cmpgen
 bin/ifql: $(SOURCES) bin/pigeon bin/cmpgen
 	go build -i -o bin/ifql ./cmd/ifql
 
+bin/ifqld: $(SOURCES) bin/pigeon bin/cmpgen
+	go build -i -o bin/ifqld ./cmd/ifqld
+
 bin/pigeon: ./vendor/github.com/mna/pigeon/main.go
 	go build -i -o bin/pigeon  ./vendor/github.com/mna/pigeon
 
