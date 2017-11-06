@@ -144,12 +144,30 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 		for _, t := range s.Tags {
 			tags[string(t.Key)] = string(t.Value)
 		}
-		block := newStorageBlock(bi.bounds, tags, bi.data)
+		typ := convertDataType(s.DataType)
+		block := newStorageBlock(bi.bounds, tags, bi.data, typ)
 		f(block)
 		// Wait until the block has been read.
 		block.wait()
 	}
 	return nil
+}
+
+func convertDataType(t storage.ReadResponse_DataType) DataType {
+	switch t {
+	case storage.DataTypeFloat:
+		return TFloat
+	case storage.DataTypeInteger:
+		return TInt
+	case storage.DataTypeUnsigned:
+		return TUInt
+	case storage.DataTypeBoolean:
+		return TBool
+	case storage.DataTypeString:
+		return TString
+	default:
+		return TInvalid
+	}
 }
 
 type storageBlock struct {
@@ -162,12 +180,12 @@ type storageBlock struct {
 	data *readState
 }
 
-func newStorageBlock(bounds Bounds, tags Tags, data *readState) *storageBlock {
+func newStorageBlock(bounds Bounds, tags Tags, data *readState, typ DataType) *storageBlock {
 	colMeta := make([]ColMeta, 2+len(tags))
 	colMeta[0] = TimeCol
 	colMeta[1] = ColMeta{
 		Label: ValueColLabel,
-		// We will update the Type later.
+		Type:  typ,
 	}
 
 	keys := tags.Keys()
@@ -363,7 +381,11 @@ func (b *storageBlockValueIterator) advance() bool {
 		case seriesType:
 			return false
 		case boolPointsType:
-			b.colMeta[1].Type = TBool
+			if b.colMeta[1].Type != TBool {
+				// TODO: Add error handling
+				// Type changed,
+				return false
+			}
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetBooleanPoints()
@@ -387,7 +409,11 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.boolBuf
 			return true
 		case intPointsType:
-			b.colMeta[1].Type = TInt
+			if b.colMeta[1].Type != TInt {
+				// TODO: Add error handling
+				// Type changed,
+				return false
+			}
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetIntegerPoints()
@@ -411,7 +437,11 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.intBuf
 			return true
 		case uintPointsType:
-			b.colMeta[1].Type = TUInt
+			if b.colMeta[1].Type != TUInt {
+				// TODO: Add error handling
+				// Type changed,
+				return false
+			}
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetUnsignedPoints()
@@ -435,7 +465,11 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.uintBuf
 			return true
 		case floatPointsType:
-			b.colMeta[1].Type = TFloat
+			if b.colMeta[1].Type != TFloat {
+				// TODO: Add error handling
+				// Type changed,
+				return false
+			}
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetFloatPoints()
@@ -460,7 +494,11 @@ func (b *storageBlockValueIterator) advance() bool {
 			b.colBufs[1] = b.floatBuf
 			return true
 		case stringPointsType:
-			b.colMeta[1].Type = TString
+			if b.colMeta[1].Type != TString {
+				// TODO: Add error handling
+				// Type changed,
+				return false
+			}
 			// read next frame
 			frame := b.data.next()
 			p := frame.GetStringPoints()
