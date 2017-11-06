@@ -14,7 +14,8 @@ const SampleKind = "sample"
 
 type SampleOpSpec struct {
 	UseRowTime bool `json:"useRowtime"`
-	Rate       int  `json:"Rate"`
+	N          int  `json:"n"`
+	Pos        int  `json:"pos"`
 }
 
 func init() {
@@ -33,13 +34,22 @@ func createSampleOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Ope
 		spec.UseRowTime = value.Value.(bool)
 	}
 
-	if value, ok := args["Rate"]; ok {
+	if value, ok := args["n"]; ok {
 		if value.Type != ifql.TInt {
-			return nil, fmt.Errorf(`sample Rate argument must be an integer`)
+			return nil, fmt.Errorf(`sample n argument must be an integer`)
 		}
-		spec.Rate = value.Value.(int)
+		spec.N = value.Value.(int)
 	} else {
-		return nil, fmt.Errorf(`Rate argument is required for sample function`)
+		return nil, fmt.Errorf(`n argument is required for sample function`)
+	}
+
+	if value, ok := args["pos"]; ok {
+		if value.Type != ifql.TInt {
+			return nil, fmt.Errorf(`sample pos argument must be an integer`)
+		}
+		spec.Pos = value.Value.(int)
+	} else {
+		spec.Pos = -1
 	}
 
 	return spec, nil
@@ -55,7 +65,8 @@ func (s *SampleOpSpec) Kind() query.OperationKind {
 
 type SampleProcedureSpec struct {
 	UseRowTime bool
-	Rate       int
+	N          int
+	Pos        int
 }
 
 func newSampleProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -65,7 +76,8 @@ func newSampleProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 	return &SampleProcedureSpec{
 		UseRowTime: spec.UseRowTime,
-		Rate:       spec.Rate,
+		N:          spec.N,
+		Pos:        spec.Pos,
 	}, nil
 }
 
@@ -74,7 +86,7 @@ func (s *SampleProcedureSpec) Kind() plan.ProcedureKind {
 }
 
 type SampleSelector struct {
-	Rate   int
+	N      int
 	offset int
 	rows   []execute.Row
 	Pos    int
@@ -86,9 +98,14 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
 
+	usePos := ps.Pos
+	if usePos < 0 {
+		usePos = rand.Intn(ps.N)
+	}
+
 	ss := SampleSelector{
-		Rate: ps.Rate,
-		Pos:  rand.Intn(ps.Rate),
+		N:   ps.N,
+		Pos: usePos,
 	}
 
 	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), &ss, ps.UseRowTime)
@@ -97,7 +114,7 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 
 func (s *SampleSelector) Do(vs []float64, rr execute.RowReader) {
 	var i int
-	for i = s.offset + s.Pos; i < len(vs); i += s.Rate {
+	for i = s.offset + s.Pos; i < len(vs); i += s.N {
 		s.rows = append(s.rows, execute.ReadRow(i, rr))
 	}
 
@@ -112,5 +129,7 @@ func (s *SampleSelector) Rows() []execute.Row {
 }
 
 func (s *SampleSelector) Reset() {
+	s.offset = 0
+	s.Pos = rand.Intn(s.N)
 	s.rows = nil
 }

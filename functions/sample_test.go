@@ -11,12 +11,13 @@ import (
 )
 
 func TestSampleOperation_Marshaling(t *testing.T) {
-	data := []byte(`{"id":"sample","kind":"sample","spec":{"useRowTime":true, "rate":5}}`)
+	data := []byte(`{"id":"sample","kind":"sample","spec":{"useRowTime":true, "n":5, "pos":0}}`)
 	op := &query.Operation{
 		ID: "sample",
 		Spec: &functions.SampleOpSpec{
 			UseRowTime: true,
-			Rate:       5,
+			N:          5,
+			Pos:        0,
 		},
 	}
 
@@ -32,8 +33,8 @@ func TestSample_Process(t *testing.T) {
 	}{
 		{
 			selector: &functions.SampleSelector{
-				Rate: 1,
-				Pos:  0,
+				N:   1,
+				Pos: 0,
 			},
 			name: "everything",
 			data: &executetest.Block{
@@ -71,8 +72,8 @@ func TestSample_Process(t *testing.T) {
 		},
 		{
 			selector: &functions.SampleSelector{
-				Rate: 2,
-				Pos:  0,
+				N:   2,
+				Pos: 0,
 			},
 			name: "every-other-even",
 			data: &executetest.Block{
@@ -105,8 +106,8 @@ func TestSample_Process(t *testing.T) {
 		},
 		{
 			selector: &functions.SampleSelector{
-				Rate: 2,
-				Pos:  1,
+				N:   2,
+				Pos: 1,
 			},
 			name: "every-other-odd",
 			data: &executetest.Block{
@@ -139,8 +140,8 @@ func TestSample_Process(t *testing.T) {
 		},
 		{
 			selector: &functions.SampleSelector{
-				Rate: 3,
-				Pos:  0,
+				N:   3,
+				Pos: 0,
 			},
 			name: "every-third-0",
 			data: &executetest.Block{
@@ -172,8 +173,8 @@ func TestSample_Process(t *testing.T) {
 		},
 		{
 			selector: &functions.SampleSelector{
-				Rate: 3,
-				Pos:  1,
+				N:   3,
+				Pos: 1,
 			},
 			name: "every-third-1",
 			data: &executetest.Block{
@@ -204,8 +205,8 @@ func TestSample_Process(t *testing.T) {
 		},
 		{
 			selector: &functions.SampleSelector{
-				Rate: 3,
-				Pos:  2,
+				N:   3,
+				Pos: 2,
 			},
 			name: "every-third-2",
 			data: &executetest.Block{
@@ -250,8 +251,8 @@ func TestSample_Process(t *testing.T) {
 
 func BenchmarkSample(b *testing.B) {
 	ss := &functions.SampleSelector{
-		Rate: 10,
-		Pos:  0,
+		N:   10,
+		Pos: 0,
 	}
 	executetest.SelectorFuncBenchmarkHelper(b, ss, NormalBlock)
 }
