@@ -59,6 +59,11 @@ func newFirstProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *FirstProcedureSpec) Kind() plan.ProcedureKind {
 	return FirstKind
 }
+func (s *FirstProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(FirstProcedureSpec)
+	*ns = *s
+	return ns
+}
 
 type FirstSelector struct {
 	selected bool

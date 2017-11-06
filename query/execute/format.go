@@ -30,7 +30,7 @@ type FormatOptions struct {
 
 func DefaultFormatOptions() *FormatOptions {
 	return &FormatOptions{
-		RepeatHeaderCount: 100,
+		RepeatHeaderCount: 0,
 	}
 }
 
@@ -63,6 +63,16 @@ func (w *writeToHelper) write(data []byte) {
 	w.err = err
 }
 
+var minWidthsByType = map[DataType]int{
+	TBool:    7,
+	TInt:     22,
+	TUInt:    22,
+	TFloat:   22,
+	TString:  10,
+	TTime:    len(fixedWidthTimeFmt),
+	TInvalid: 10,
+}
+
 // WriteTo writes the formatted block data to w.
 func (f *Formatter) WriteTo(out io.Writer) (int64, error) {
 	w := &writeToHelper{w: out}
@@ -72,18 +82,13 @@ func (f *Formatter) WriteTo(out io.Writer) (int64, error) {
 	f.cols = newOrderedCols(cols)
 	sort.Sort(f.cols)
 
-	minWidth := 10
-	f.maxWidth = minWidth
-	f.widths = make([]int, len(cols))
-	for j := range f.widths {
-		f.widths[j] = minWidth
-	}
-
 	// Compute header widths
+	f.widths = make([]int, len(cols))
 	for j, c := range cols {
 		l := len(c.Label)
-		if c.Label == TimeColLabel {
-			l = len(fixedWidthTimeFmt)
+		min := minWidthsByType[c.Type]
+		if min > l {
+			l = min
 		}
 		if l > f.widths[j] {
 			f.widths[j] = l
@@ -95,7 +100,7 @@ func (f *Formatter) WriteTo(out io.Writer) (int64, error) {
 
 	// Write Block header
 	w.write([]byte("Block: keys: ["))
-	w.write([]byte(strings.Join(f.b.Tags().Keys(), ",")))
+	w.write([]byte(strings.Join(f.b.Tags().Keys(), ", ")))
 	w.write([]byte("] bounds: "))
 	w.write([]byte(f.b.Bounds().String()))
 	w.write(eol)

@@ -47,6 +47,9 @@ func newSkewProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *SkewProcedureSpec) Kind() plan.ProcedureKind {
 	return SkewKind
 }
+func (s *SkewProcedureSpec) Copy() plan.ProcedureSpec {
+	return new(SkewProcedureSpec)
+}
 
 type SkewAgg struct {
 	n, m1, m2, m3 float64

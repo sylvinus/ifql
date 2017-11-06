@@ -2,8 +2,11 @@ package execute
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/yarpc"
 	"github.com/pkg/errors"
@@ -16,9 +19,11 @@ type StorageReader interface {
 
 type ReadSpec struct {
 	Database   string
-	Predicate  *storage.Predicate
+	Predicate  expression.Expression
 	Limit      int64
 	Descending bool
+
+	AggregateType string
 }
 
 func NewStorageReader() (StorageReader, error) {
@@ -41,14 +46,34 @@ func connect(addr string) (*yarpc.ClientConn, error) {
 	return yarpc.Dial(addr)
 }
 
+func determineAggregateType(agg string) (storage.Aggregate_AggregateType, error) {
+	if agg == "" {
+		return storage.AggregateTypeNone, nil
+	}
+
+	if t, ok := storage.Aggregate_AggregateType_value[strings.ToUpper(agg)]; ok {
+		return storage.Aggregate_AggregateType(t), nil
+	}
+	return 0, fmt.Errorf("unknown aggregate type %q", agg)
+}
+
 func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
+	predicate, err := ExpressionToStoragePredicate(readSpec.Predicate.Root)
+	if err != nil {
+		return nil, err
+	}
 	var req storage.ReadRequest
 	req.Database = readSpec.Database
-	req.Predicate = readSpec.Predicate
+	req.Predicate = predicate
 	//	req.Limit = limit
 	req.Descending = readSpec.Descending
 	req.TimestampRange.Start = int64(start)
 	req.TimestampRange.End = int64(stop)
+	if agg, err := determineAggregateType(readSpec.AggregateType); err != nil {
+		return nil, err
+	} else if agg != storage.AggregateTypeNone {
+		req.Aggregate = &storage.Aggregate{Type: agg}
+	}
 
 	stream, err := sr.c.Read(context.Background(), &req)
 	if err != nil {

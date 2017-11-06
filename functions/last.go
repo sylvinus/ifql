@@ -59,6 +59,11 @@ func newLastProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *LastProcedureSpec) Kind() plan.ProcedureKind {
 	return LastKind
 }
+func (s *LastProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(LastProcedureSpec)
+	ns.UseRowTime = s.UseRowTime
+	return ns
+}
 
 type LastSelector struct {
 	rows []execute.Row

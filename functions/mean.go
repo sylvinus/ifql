@@ -47,6 +47,9 @@ func newMeanProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *MeanProcedureSpec) Kind() plan.ProcedureKind {
 	return MeanKind
 }
+func (s *MeanProcedureSpec) Copy() plan.ProcedureSpec {
+	return new(MeanProcedureSpec)
+}
 
 type MeanAgg struct {
 	count float64

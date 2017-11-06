@@ -76,6 +76,11 @@ func newRangeProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *RangeProcedureSpec) Kind() plan.ProcedureKind {
 	return RangeKind
 }
+func (s *RangeProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(RangeProcedureSpec)
+	ns.Bounds = s.Bounds
+	return ns
+}
 
 func (s *RangeProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
@@ -83,15 +88,18 @@ func (s *RangeProcedureSpec) PushDownRule() plan.PushDownRule {
 		Through: []plan.ProcedureKind{LimitKind, WhereKind},
 	}
 }
-func (s *RangeProcedureSpec) PushDown(root *plan.Procedure) {
+func (s *RangeProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*SelectProcedureSpec)
 	if selectSpec.BoundsSet {
-		// TODO: create copy of select spec and set new bounds
-		//
 		// Example case where this matters
 		//    var data = select(database: "mydb")
 		//    var past = data.range(start:-2d,stop:-1d)
 		//    var current = data.range(start:-1d,stop:now)
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.BoundsSet = false
+		selectSpec.Bounds = plan.BoundsSpec{}
+		return
 	}
 	selectSpec.BoundsSet = true
 	selectSpec.Bounds = s.Bounds

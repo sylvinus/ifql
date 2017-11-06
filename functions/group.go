@@ -83,6 +83,17 @@ func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *GroupProcedureSpec) Kind() plan.ProcedureKind {
 	return GroupKind
 }
+func (s *GroupProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(GroupProcedureSpec)
+
+	ns.Keys = make([]string, len(s.Keys))
+	copy(ns.Keys, s.Keys)
+
+	ns.Keep = make([]string, len(s.Keep))
+	copy(ns.Keep, s.Keep)
+
+	return ns
+}
 
 func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*GroupProcedureSpec)

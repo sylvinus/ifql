@@ -40,10 +40,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -73,10 +75,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -106,10 +110,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -169,10 +175,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -257,10 +265,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -328,10 +338,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -399,10 +411,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -470,10 +484,12 @@ func TestNewQuery(t *testing.T) {
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Stop: query.Time{
-								Relative: -2 * time.Hour,
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -593,7 +609,8 @@ func TestNewQuery(t *testing.T) {
 						ID: "window1",
 						Spec: &functions.WindowOpSpec{
 							Start: query.Time{
-								Relative: -4 * time.Hour,
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
 							},
 							Every:  query.Duration(time.Hour),
 							Period: query.Duration(time.Hour),
@@ -623,7 +640,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -637,7 +655,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range3",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -702,7 +721,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -733,7 +753,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range5",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -800,7 +821,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range2",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},
@@ -831,7 +853,8 @@ a.join(keys:["host"], exp:{a + b})`,
 						ID: "range5",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
-								Relative: -1 * time.Hour,
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
 							},
 						},
 					},

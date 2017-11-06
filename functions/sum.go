@@ -48,6 +48,29 @@ func (s *SumProcedureSpec) Kind() plan.ProcedureKind {
 	return SumKind
 }
 
+func (s *SumProcedureSpec) Copy() plan.ProcedureSpec {
+	return new(SumProcedureSpec)
+}
+
+func (s *SumProcedureSpec) PushDownRule() plan.PushDownRule {
+	return plan.PushDownRule{
+		Root:    SelectKind,
+		Through: nil,
+	}
+}
+func (s *SumProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
+	selectSpec := root.Spec.(*SelectProcedureSpec)
+	if selectSpec.AggregateSet {
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.AggregateSet = false
+		selectSpec.AggregateType = ""
+		return
+	}
+	selectSpec.AggregateSet = true
+	selectSpec.AggregateType = SumKind
+}
+
 type SumAgg struct{}
 
 func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {

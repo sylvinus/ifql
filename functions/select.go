@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
-	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -53,7 +53,7 @@ type SelectProcedureSpec struct {
 	Bounds    plan.BoundsSpec
 
 	WhereSet bool
-	Where    *storage.Predicate
+	Where    expression.Expression
 
 	DescendingSet bool
 	Descending    bool
@@ -64,6 +64,9 @@ type SelectProcedureSpec struct {
 
 	WindowSet bool
 	Window    plan.WindowSpec
+
+	AggregateSet  bool
+	AggregateType string
 }
 
 func newSelectProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -78,6 +81,33 @@ func newSelectProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 
 func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
 	return SelectKind
+}
+func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(SelectProcedureSpec)
+
+	ns.Database = s.Database
+
+	ns.BoundsSet = s.BoundsSet
+	ns.Bounds = s.Bounds
+
+	ns.WhereSet = s.WhereSet
+	// TODO copy predicate
+	ns.Where = s.Where
+
+	ns.DescendingSet = s.DescendingSet
+	ns.Descending = s.Descending
+
+	ns.LimitSet = s.LimitSet
+	ns.Limit = s.Limit
+	ns.Offset = s.Offset
+
+	ns.WindowSet = s.WindowSet
+	ns.Window = s.Window
+
+	ns.AggregateSet = s.AggregateSet
+	ns.AggregateType = s.AggregateType
+
+	return ns
 }
 
 func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.Context) execute.Source {
@@ -107,10 +137,11 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 		id,
 		sr,
 		execute.ReadSpec{
-			Database:   spec.Database,
-			Predicate:  spec.Where,
-			Limit:      spec.Limit,
-			Descending: spec.Descending,
+			Database:      spec.Database,
+			Predicate:     spec.Where,
+			Limit:         spec.Limit,
+			Descending:    spec.Descending,
+			AggregateType: spec.AggregateType,
 		},
 		bounds,
 		w,

@@ -51,7 +51,12 @@ func (f formatter) format(fs fmt.State) {
 			if f.useIDs {
 				fmt.Fprintf(fs, "%s->%s;\n", pr.ID, child)
 			} else {
-				fmt.Fprintf(fs, "%s->%s;\n", pr.Spec.Kind(), f.p.lookup(child).Spec.Kind())
+				c := f.p.lookup(child)
+				if c != nil {
+					fmt.Fprintf(fs, "%s->%s;\n", pr.Spec.Kind(), c.Spec.Kind())
+				} else {
+					fmt.Fprintf(fs, "%s->%s;\n", pr.Spec.Kind(), child)
+				}
 			}
 		}
 	})
