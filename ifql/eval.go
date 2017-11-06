@@ -639,7 +639,7 @@ const (
 	TExpression             // Go type expression.Node
 )
 
-// String converts Type into a string representation of the type's nameß
+// String converts Type into a string representation of the type's name
 func (t Type) String() string {
 	switch t {
 	case TString:
