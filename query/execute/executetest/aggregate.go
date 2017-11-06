@@ -8,8 +8,8 @@ import (
 	"github.com/influxdata/ifql/query/execute"
 )
 
-// AggFuncTestHelper splits the data in half and compares want to the aggregate
-// of the second data split.
+// AggFuncTestHelper splits the data in half, runs Do over each split and compares
+// the Value to want.
 func AggFuncTestHelper(t *testing.T, aggF execute.AggFunc, data []float64, want float64) {
 	t.Helper()
 
