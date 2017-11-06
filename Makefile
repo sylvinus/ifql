@@ -34,7 +34,13 @@ test-race: Gopkg.lock bin/ifql
 bench: Gopkg.lock bin/ifql
 	go test -bench=. -run=^$$ ./...
 
-clean: $(SUBDIRS)
-	rm -rf bin
+bin/goreleaser:
+	go build -i -o bin/goreleaser ./vendor/github.com/goreleaser/goreleaser
 
-.PHONY: all clean $(SUBDIRS) update
+release: bin/goreleaser
+	goreleaser --skip-publish  --snapshot --rm-dist
+
+clean: $(SUBDIRS)
+	rm -rf bin dist
+
+.PHONY: all clean $(SUBDIRS) update test test-race bench release

@@ -1,4 +1,4 @@
-required = ["github.com/mna/pigeon"]
+required = ["github.com/mna/pigeon", "github.com/goreleaser/goreleaser"]
 
 [[constraint]]
   branch = "master"

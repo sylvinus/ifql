@@ -2,10 +2,22 @@
 
 
 [[projects]]
+  name = "github.com/apex/log"
+  packages = [".","handlers/cli"]
+  revision = "0296d6eb16bb28f8a0c55668affcf4876dc269be"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/gogo/protobuf"
   packages = ["codec","gogoproto","proto","protoc-gen-gogo/descriptor","sortkeys","types"]
   revision = "100ba4e885062801d56799d78530b73b178a78f3"
   version = "v0.4"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  revision = "1643683e1b54a9e88ad26d98f81400c8c9d9f4f9"
 
 [[projects]]
   branch = "master"
@@ -57,6 +69,30 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/google/go-github"
+  packages = ["github"]
+  revision = "79fc6c156e5a36bacaa65c9c08722d8ef843c686"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/google/go-querystring"
+  packages = ["query"]
+  revision = "53e6ce116135b80d037921a7fdd5138cf32d7a8a"
+
+[[projects]]
+  name = "github.com/goreleaser/archive"
+  packages = [".","tar","zip"]
+  revision = "caa5f3f5742eb0535631e94fa5e171c74c0144b7"
+  version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/goreleaser/goreleaser"
+  packages = [".","checksum","config","context","goreleaserlib","internal/archiveformat","internal/buildtarget","internal/client","internal/ext","internal/git","internal/linux","internal/name","pipeline","pipeline/archive","pipeline/brew","pipeline/build","pipeline/changelog","pipeline/checksums","pipeline/cleandist","pipeline/defaults","pipeline/docker","pipeline/env","pipeline/fpm","pipeline/git","pipeline/release","pipeline/snapcraft"]
+  revision = "11fee22a2edf211caec98f2bee97576d3160bdb7"
+  version = "v0.35.5"
+
+[[projects]]
+  branch = "master"
   name = "github.com/influxdata/yamux"
   packages = ["."]
   revision = "e7f91523e648eeb91537e420aebbd96aa64ab6ae"
@@ -66,6 +102,12 @@
   name = "github.com/influxdata/yarpc"
   packages = [".","codes","status","yarpcproto"]
   revision = "036268cdec22b7074cd6d50cc6d7315c667063c7"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/mattn/go-zglob"
+  packages = [".","fastwalk"]
+  revision = "4b74c24375b3b1ee226867156e01996f4e19a8d6"
 
 [[projects]]
   branch = "master"
@@ -86,14 +128,50 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/net"
+  packages = ["context","context/ctxhttp"]
+  revision = "01c190206fbdffa42f334f4b2bf2220f50e64920"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/oauth2"
+  packages = [".","internal"]
+  revision = "9ff8ebcc8e241d46f52ecc5bff0e5a2f2dbef402"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sync"
+  packages = ["errgroup"]
+  revision = "fd80eb99c8f653c847d294a001bdf2a3a6f768f5"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/tools"
   packages = ["go/ast/astutil","imports"]
   revision = "e531a2a1c15f94033f6fa87666caeb19a688175f"
 
+[[projects]]
+  name = "google.golang.org/appengine"
+  packages = ["internal","internal/base","internal/datastore","internal/log","internal/remote_api","internal/urlfetch","urlfetch"]
+  revision = "150dc57a1b433e64154302bdc40b6bb8aefa313a"
+  version = "v1.0.0"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "eb3733d160e74a9c7e442f435eb3bea458e1d19f"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0cd8e69d3f775e09154b1b7e25edb7c08c701850d757d9815a390ca9ffa9f72f"
+  inputs-digest = "4355b3a60f1a8863fdebf795bcc476f4c51f719e075498530468db9c75251890"
   solver-name = "gps-cdcl"
   solver-version = 1
