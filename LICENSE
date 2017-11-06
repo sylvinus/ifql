@@ -1,4 +1,4 @@
-TODO: ADD IFQL DESCRIPTION
+IFQLD is an HTTP server for processing IFQL queries to 1 or more InfluxDB servers.
 
 Copyright (C) 2017, InfluxData Inc.
 

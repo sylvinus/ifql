@@ -37,7 +37,7 @@ fpm:
   vendor: InfluxData
   homepage: https://influxdata.com
   maintainer: contact@influxdb.com
-  description: TODO IFQL DESCRIPTION
+  description: IFQLD is an HTTP server for processing IFQL queries to 1 or more InfluxDB servers.
   license: AGPL
   formats:
     - deb
