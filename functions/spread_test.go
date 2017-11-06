@@ -25,7 +25,7 @@ func TestSpread_Process(t *testing.T) {
 		agg,
 		[]float64{
 			0, 1, 2, 3, 4,
-			5, 6, 7, 8, 9, // Spread over this second batch of data
+			5, 6, 7, 8, 9,
 		},
 		9,
 	)
