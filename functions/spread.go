@@ -60,23 +60,21 @@ func createSpreadTransformation(id execute.DatasetID, mode execute.AccumulationM
 
 // SpreadAgg finds the difference between the max and min values a block
 type SpreadAgg struct {
-	min float64
-	max float64
+	min    float64
+	minSet bool
+	max    float64
+	maxSet bool
 }
 
 // Do searches for the min and max value of the array and caches them in the aggregate
 func (a *SpreadAgg) Do(vs []float64) {
-	var (
-		minSet bool
-		maxSet bool
-	)
 	for _, v := range vs {
-		if !minSet || v < a.min {
-			minSet = true
+		if !a.minSet || v < a.min {
+			a.minSet = true
 			a.min = v
 		}
-		if !maxSet || v > a.max {
-			maxSet = true
+		if !a.maxSet || v > a.max {
+			a.maxSet = true
 			a.max = v
 		}
 	}
@@ -90,5 +88,7 @@ func (a *SpreadAgg) Value() float64 {
 // Reset clears the values of min and max
 func (a *SpreadAgg) Reset() {
 	a.min = 0
+	a.minSet = false
 	a.max = 0
+	a.maxSet = false
 }

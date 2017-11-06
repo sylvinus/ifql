@@ -27,7 +27,7 @@ func TestSpread_Process(t *testing.T) {
 			0, 1, 2, 3, 4,
 			5, 6, 7, 8, 9, // Spread over this second batch of data
 		},
-		4,
+		9,
 	)
 	agg.Reset()
 	got := agg.Value()
