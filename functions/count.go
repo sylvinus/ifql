@@ -48,7 +48,7 @@ func (s *CountProcedureSpec) Kind() plan.ProcedureKind {
 }
 
 type CountAgg struct {
-	count float64
+	count int64
 }
 
 func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -56,12 +56,46 @@ func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMo
 	return t, d, nil
 }
 
-func (a *CountAgg) Do(vs []float64) {
-	a.count += float64(len(vs))
-}
-func (a *CountAgg) Value() float64 {
-	return a.count
-}
-func (a *CountAgg) Reset() {
+func (a *CountAgg) NewBoolAgg() execute.DoBoolAgg {
 	a.count = 0
+	return a
+}
+func (a *CountAgg) NewIntAgg() execute.DoIntAgg {
+	a.count = 0
+	return a
+}
+func (a *CountAgg) NewUIntAgg() execute.DoUIntAgg {
+	a.count = 0
+	return a
+}
+func (a *CountAgg) NewFloatAgg() execute.DoFloatAgg {
+	a.count = 0
+	return a
+}
+func (a *CountAgg) NewStringAgg() execute.DoStringAgg {
+	a.count = 0
+	return a
+}
+
+func (a *CountAgg) DoBool(vs []bool) {
+	a.count += int64(len(vs))
+}
+func (a *CountAgg) DoUInt(vs []uint64) {
+	a.count += int64(len(vs))
+}
+func (a *CountAgg) DoInt(vs []int64) {
+	a.count += int64(len(vs))
+}
+func (a *CountAgg) DoFloat(vs []float64) {
+	a.count += int64(len(vs))
+}
+func (a *CountAgg) DoString(vs []string) {
+	a.count += int64(len(vs))
+}
+
+func (a *CountAgg) Type() execute.DataType {
+	return execute.TInt
+}
+func (a *CountAgg) ValueInt() int64 {
+	return a.count
 }

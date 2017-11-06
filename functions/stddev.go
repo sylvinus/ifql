@@ -57,7 +57,56 @@ func createStddevTransformation(id execute.DatasetID, mode execute.AccumulationM
 	return t, d, nil
 }
 
-func (a *StddevAgg) Do(vs []float64) {
+func (a *StddevAgg) reset() {
+	a.n = 0
+	a.mean = 0
+	a.m2 = 0
+}
+func (a *StddevAgg) NewBoolAgg() execute.DoBoolAgg {
+	return nil
+}
+
+func (a *StddevAgg) NewIntAgg() execute.DoIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *StddevAgg) NewUIntAgg() execute.DoUIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *StddevAgg) NewFloatAgg() execute.DoFloatAgg {
+	a.reset()
+	return a
+}
+
+func (a *StddevAgg) NewStringAgg() execute.DoStringAgg {
+	return nil
+}
+func (a *StddevAgg) DoInt(vs []int64) {
+	var delta, delta2 float64
+	for _, v := range vs {
+		a.n++
+		// TODO handle overflow
+		delta = float64(v) - a.mean
+		a.mean += delta / a.n
+		delta2 = float64(v) - a.mean
+		a.m2 += delta * delta2
+	}
+}
+func (a *StddevAgg) DoUInt(vs []uint64) {
+	var delta, delta2 float64
+	for _, v := range vs {
+		a.n++
+		// TODO handle overflow
+		delta = float64(v) - a.mean
+		a.mean += delta / a.n
+		delta2 = float64(v) - a.mean
+		a.m2 += delta * delta2
+	}
+}
+func (a *StddevAgg) DoFloat(vs []float64) {
 	var delta, delta2 float64
 	for _, v := range vs {
 		a.n++
@@ -67,14 +116,12 @@ func (a *StddevAgg) Do(vs []float64) {
 		a.m2 += delta * delta2
 	}
 }
-func (a *StddevAgg) Value() float64 {
+func (a *StddevAgg) Type() execute.DataType {
+	return execute.TFloat
+}
+func (a *StddevAgg) ValueFloat() float64 {
 	if a.n < 2 {
 		return math.NaN()
 	}
 	return math.Sqrt(a.m2 / (a.n - 1))
-}
-func (a *StddevAgg) Reset() {
-	a.n = 0
-	a.mean = 0
-	a.m2 = 0
 }

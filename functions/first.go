@@ -61,7 +61,7 @@ func (s *FirstProcedureSpec) Kind() plan.ProcedureKind {
 }
 
 type FirstSelector struct {
-	rows []execute.Row
+	selected bool
 }
 
 func createFirstTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -69,18 +69,54 @@ func createFirstTransformation(id execute.DatasetID, mode execute.AccumulationMo
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(FirstSelector), ps.UseRowTime)
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(FirstSelector), ps.UseRowTime)
 	return t, d, nil
 }
 
-func (s *FirstSelector) Do(vs []float64, rr execute.RowReader) {
-	if s.rows == nil && len(vs) > 0 {
-		s.rows = []execute.Row{execute.ReadRow(0, rr)}
+func (s *FirstSelector) reset() {
+	s.selected = false
+}
+
+func (s *FirstSelector) NewBoolSelector() execute.DoBoolIndexSelector {
+	s.reset()
+	return s
+}
+func (s *FirstSelector) NewIntSelector() execute.DoIntIndexSelector {
+	s.reset()
+	return s
+}
+func (s *FirstSelector) NewUIntSelector() execute.DoUIntIndexSelector {
+	s.reset()
+	return s
+}
+func (s *FirstSelector) NewFloatSelector() execute.DoFloatIndexSelector {
+	s.reset()
+	return s
+}
+func (s *FirstSelector) NewStringSelector() execute.DoStringIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *FirstSelector) selectFirst(l int) []int {
+	if !s.selected && l > 0 {
+		s.selected = true
+		return []int{0}
 	}
+	return nil
 }
-func (s *FirstSelector) Rows() []execute.Row {
-	return s.rows
+func (s *FirstSelector) DoBool(vs []bool) []int {
+	return s.selectFirst(len(vs))
 }
-func (s *FirstSelector) Reset() {
-	s.rows = nil
+func (s *FirstSelector) DoInt(vs []int64) []int {
+	return s.selectFirst(len(vs))
+}
+func (s *FirstSelector) DoUInt(vs []uint64) []int {
+	return s.selectFirst(len(vs))
+}
+func (s *FirstSelector) DoFloat(vs []float64) []int {
+	return s.selectFirst(len(vs))
+}
+func (s *FirstSelector) DoString(vs []string) []int {
+	return s.selectFirst(len(vs))
 }

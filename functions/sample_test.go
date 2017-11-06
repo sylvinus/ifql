@@ -27,8 +27,8 @@ func TestSampleOperation_Marshaling(t *testing.T) {
 func TestSample_Process(t *testing.T) {
 	testCases := []struct {
 		name     string
-		data     *executetest.Block
-		want     []execute.Row
+		data     execute.Block
+		want     [][]int
 		selector *functions.SampleSelector
 	}{
 		{
@@ -36,7 +36,7 @@ func TestSample_Process(t *testing.T) {
 				N:   1,
 				Pos: 0,
 			},
-			name: "everything",
+			name: "everything in separate Do calls",
 			data: &executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
@@ -57,18 +57,57 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(90), 10.0, "a", "x"},
 				},
 			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(0), 7.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(10), 5.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(20), 9.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(30), 4.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(40), 6.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(50), 8.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(60), 1.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(70), 2.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(80), 3.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(90), 10.0, "a", "x"}},
+			want: [][]int{
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
+				{0},
 			},
+		},
+		{
+			selector: &functions.SampleSelector{
+				N:   1,
+				Pos: 0,
+			},
+			name: "everything in single Do call",
+			data: execute.CopyBlock(&executetest.Block{
+				ColMeta: []execute.ColMeta{
+					{Label: "time", Type: execute.TTime},
+					{Label: "value", Type: execute.TFloat},
+					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+				},
+				Data: [][]interface{}{
+					{execute.Time(0), 7.0, "a", "y"},
+					{execute.Time(10), 5.0, "a", "x"},
+					{execute.Time(20), 9.0, "a", "y"},
+					{execute.Time(30), 4.0, "a", "x"},
+					{execute.Time(40), 6.0, "a", "y"},
+					{execute.Time(50), 8.0, "a", "x"},
+					{execute.Time(60), 1.0, "a", "y"},
+					{execute.Time(70), 2.0, "a", "x"},
+					{execute.Time(80), 3.0, "a", "y"},
+					{execute.Time(90), 10.0, "a", "x"},
+				},
+			}),
+			want: [][]int{{
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7,
+				8,
+				9,
+			}},
 		},
 		{
 			selector: &functions.SampleSelector{
@@ -76,7 +115,7 @@ func TestSample_Process(t *testing.T) {
 				Pos: 0,
 			},
 			name: "every-other-even",
-			data: &executetest.Block{
+			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
 					{Label: "value", Type: execute.TFloat},
@@ -95,14 +134,14 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(0), 7.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(20), 9.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(40), 6.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(60), 1.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(80), 3.0, "a", "y"}},
-			},
+			}),
+			want: [][]int{{
+				0,
+				2,
+				4,
+				6,
+				8,
+			}},
 		},
 		{
 			selector: &functions.SampleSelector{
@@ -110,7 +149,7 @@ func TestSample_Process(t *testing.T) {
 				Pos: 1,
 			},
 			name: "every-other-odd",
-			data: &executetest.Block{
+			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
 					{Label: "value", Type: execute.TFloat},
@@ -129,14 +168,14 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(10), 5.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(30), 4.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(50), 8.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(70), 2.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(90), 10.0, "a", "x"}},
-			},
+			}),
+			want: [][]int{{
+				1,
+				3,
+				5,
+				7,
+				9,
+			}},
 		},
 		{
 			selector: &functions.SampleSelector{
@@ -144,7 +183,7 @@ func TestSample_Process(t *testing.T) {
 				Pos: 0,
 			},
 			name: "every-third-0",
-			data: &executetest.Block{
+			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
 					{Label: "value", Type: execute.TFloat},
@@ -163,13 +202,13 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(0), 7.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(30), 4.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(60), 1.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(90), 10.0, "a", "x"}},
-			},
+			}),
+			want: [][]int{{
+				0,
+				3,
+				6,
+				9,
+			}},
 		},
 		{
 			selector: &functions.SampleSelector{
@@ -177,7 +216,7 @@ func TestSample_Process(t *testing.T) {
 				Pos: 1,
 			},
 			name: "every-third-1",
-			data: &executetest.Block{
+			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
 					{Label: "value", Type: execute.TFloat},
@@ -196,12 +235,12 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(10), 5.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(40), 6.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(70), 2.0, "a", "x"}},
-			},
+			}),
+			want: [][]int{{
+				1,
+				4,
+				7,
+			}},
 		},
 		{
 			selector: &functions.SampleSelector{
@@ -209,6 +248,38 @@ func TestSample_Process(t *testing.T) {
 				Pos: 2,
 			},
 			name: "every-third-2",
+			data: execute.CopyBlock(&executetest.Block{
+				ColMeta: []execute.ColMeta{
+					{Label: "time", Type: execute.TTime},
+					{Label: "value", Type: execute.TFloat},
+					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+				},
+				Data: [][]interface{}{
+					{execute.Time(0), 7.0, "a", "y"},
+					{execute.Time(10), 5.0, "a", "x"},
+					{execute.Time(20), 9.0, "a", "y"},
+					{execute.Time(30), 4.0, "a", "x"},
+					{execute.Time(40), 6.0, "a", "y"},
+					{execute.Time(50), 8.0, "a", "x"},
+					{execute.Time(60), 1.0, "a", "y"},
+					{execute.Time(70), 2.0, "a", "x"},
+					{execute.Time(80), 3.0, "a", "y"},
+					{execute.Time(90), 10.0, "a", "x"},
+				},
+			}),
+			want: [][]int{{
+				2,
+				5,
+				8,
+			}},
+		},
+		{
+			selector: &functions.SampleSelector{
+				N:   3,
+				Pos: 2,
+			},
+			name: "every-third-2 in separate Do calls",
 			data: &executetest.Block{
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
@@ -229,17 +300,24 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(90), 10.0, "a", "x"},
 				},
 			},
-			want: []execute.Row{
-				{Values: []interface{}{execute.Time(20), 9.0, "a", "y"}},
-				{Values: []interface{}{execute.Time(50), 8.0, "a", "x"}},
-				{Values: []interface{}{execute.Time(80), 3.0, "a", "y"}},
+			want: [][]int{
+				nil,
+				nil,
+				{0},
+				nil,
+				nil,
+				{0},
+				nil,
+				nil,
+				{0},
+				nil,
 			},
 		},
 	}
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.SelectorFuncTestHelper(
+			executetest.IndexSelectorFuncTestHelper(
 				t,
 				tc.selector,
 				tc.data,
@@ -254,5 +332,5 @@ func BenchmarkSample(b *testing.B) {
 		N:   10,
 		Pos: 0,
 	}
-	executetest.SelectorFuncBenchmarkHelper(b, ss, NormalBlock)
+	executetest.IndexSelectorFuncBenchmarkHelper(b, ss, NormalBlock)
 }

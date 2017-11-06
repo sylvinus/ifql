@@ -58,7 +58,7 @@ func TestLast_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.SelectorFuncTestHelper(
+			executetest.RowSelectorFuncTestHelper(
 				t,
 				new(functions.LastSelector),
 				tc.data,
@@ -69,5 +69,5 @@ func TestLast_Process(t *testing.T) {
 }
 
 func BenchmarkLast(b *testing.B) {
-	executetest.SelectorFuncBenchmarkHelper(b, new(functions.LastSelector), NormalBlock)
+	executetest.RowSelectorFuncBenchmarkHelper(b, new(functions.LastSelector), NormalBlock)
 }

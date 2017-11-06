@@ -15,8 +15,8 @@ type Formatter struct {
 	newWidths []int
 	pad       []byte
 	dash      []byte
-	// floatBuf is used to format float values
-	floatBuf [64]byte
+	// fmtBuf is used to format values
+	fmtBuf [64]byte
 
 	opts *FormatOptions
 
@@ -82,7 +82,7 @@ func (f *Formatter) WriteTo(out io.Writer) (int64, error) {
 	// Compute header widths
 	for j, c := range cols {
 		l := len(c.Label)
-		if c.Label == timeColLabel {
+		if c.Label == TimeColLabel {
 			l = len(fixedWidthTimeFmt)
 		}
 		if l > f.widths[j] {
@@ -200,13 +200,19 @@ func (f *Formatter) writeHeaderSeparator(w *writeToHelper) {
 
 func (f *Formatter) valueBuf(i, j int, typ DataType, rr RowReader) (buf []byte) {
 	switch typ {
+	case TBool:
+		buf = strconv.AppendBool(f.fmtBuf[0:0], rr.AtBool(i, j))
+	case TInt:
+		buf = strconv.AppendInt(f.fmtBuf[0:0], rr.AtInt(i, j), 10)
+	case TUInt:
+		buf = strconv.AppendUint(f.fmtBuf[0:0], rr.AtUInt(i, j), 10)
 	case TFloat:
 		// TODO allow specifying format and precision
-		buf = strconv.AppendFloat(f.floatBuf[0:0], rr.AtFloat(i, j), 'f', -1, 64)
-	case TTime:
-		buf = []byte(rr.AtTime(i, j).String())
+		buf = strconv.AppendFloat(f.fmtBuf[0:0], rr.AtFloat(i, j), 'f', -1, 64)
 	case TString:
 		buf = []byte(rr.AtString(i, j))
+	case TTime:
+		buf = []byte(rr.AtTime(i, j).String())
 	}
 	return
 }
@@ -248,18 +254,18 @@ func (o orderedCols) Swap(i int, j int) {
 
 func (o orderedCols) Less(i int, j int) bool {
 	// Time column is always first
-	if o.cols[i].Label == timeColLabel {
+	if o.cols[i].Label == TimeColLabel {
 		return true
 	}
-	if o.cols[j].Label == timeColLabel {
+	if o.cols[j].Label == TimeColLabel {
 		return false
 	}
 
 	// Value column is always last
-	if o.cols[i].Label == valueColLabel {
+	if o.cols[i].Label == ValueColLabel {
 		return false
 	}
-	if o.cols[j].Label == valueColLabel {
+	if o.cols[j].Label == ValueColLabel {
 		return true
 	}
 

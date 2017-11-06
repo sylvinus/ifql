@@ -60,6 +60,6 @@ func BenchmarkMean(b *testing.B) {
 		b,
 		new(functions.MeanAgg),
 		NormalData,
-		10.000817,
+		10.00081696729983,
 	)
 }

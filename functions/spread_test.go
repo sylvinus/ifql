@@ -27,14 +27,8 @@ func TestSpread_Process(t *testing.T) {
 			0, 1, 2, 3, 4,
 			5, 6, 7, 8, 9,
 		},
-		9,
+		float64(9),
 	)
-	agg.Reset()
-	got := agg.Value()
-	want := 0.0
-	if want != got {
-		t.Errorf("unexpected value after reset: want %f got %f", want, got)
-	}
 }
 
 func BenchmarkSpread(b *testing.B) {

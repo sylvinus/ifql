@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"sort"
@@ -111,13 +110,13 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinExpr, err := newExpressionSpec(s.Expression.Root)
+	joinExpr, err := NewExpressionSpec(s.Expression)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := newMergeJoinCache(joinExpr)
+	cache := NewMergeJoinCache(joinExpr)
 	d := execute.NewDataset(id, mode, cache)
-	t := newMergeJoinTransformation(d, cache, s)
+	t := NewMergeJoinTransformation(d, cache, s)
 	return t, d, nil
 }
 
@@ -137,7 +136,7 @@ type mergeJoinTransformation struct {
 	keys []string
 }
 
-func newMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec) *mergeJoinTransformation {
+func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec) *mergeJoinTransformation {
 	return &mergeJoinTransformation{
 		d:           d,
 		cache:       cache,
@@ -157,7 +156,7 @@ func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execut
 	defer t.mu.Unlock()
 
 	bm := blockMetadata{
-		tags:   meta.Tags().Subset(t.keys),
+		tags:   meta.Tags().IntersectingSubset(t.keys),
 		bounds: meta.Bounds(),
 	}
 	t.d.RetractBlock(execute.ToBlockKey(bm))
@@ -168,12 +167,12 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 	defer t.mu.Unlock()
 
 	bm := blockMetadata{
-		tags:   b.Tags().Subset(t.keys),
+		tags:   b.Tags().IntersectingSubset(t.keys),
 		bounds: b.Bounds(),
 	}
 	tables := t.cache.Tables(bm)
 
-	var table *mergeTable
+	var table execute.BlockBuilder
 	switch id {
 	case t.leftID:
 		table = tables.left
@@ -181,16 +180,57 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 		table = tables.right
 	}
 
-	cols := b.Cols()
-	valueIdx := execute.ValueIdx(cols)
+	colMap := t.addNewCols(b, table)
+
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
-		for i, time := range ts {
-			v := rr.AtFloat(i, valueIdx)
-			tags := execute.TagsForRow(cols, rr, i).Subset(t.keys)
-			table.Insert(v, tags, time)
+		for i := range ts {
+			execute.AppendRow(i, rr, table, colMap)
 		}
 	})
+}
+
+// addNewCols adds column to builder that exist on b and are part of the join keys.
+// This method ensures that the left and right tables always have the same columns.
+// A colMap is returned mapping cols of builder to cols of b.
+func (t *mergeJoinTransformation) addNewCols(b execute.Block, builder execute.BlockBuilder) []int {
+	cols := b.Cols()
+	existing := builder.Cols()
+	colMap := make([]int, len(existing))
+	for j, c := range cols {
+		// Skip common tags or tags that are not one of the join keys.
+		if c.IsTag {
+			if c.IsCommon {
+				continue
+			}
+			found := false
+			for _, k := range t.keys {
+				if c.Label == k {
+					found = true
+					break
+				}
+			}
+			// Column is not one of the join keys
+			if !found {
+				continue
+			}
+		}
+		// Check if column already exists
+		found := false
+		for ej, ec := range existing {
+			if c.Label == ec.Label {
+				colMap[ej] = j
+				found = true
+				break
+			}
+		}
+		// Add new column
+		if !found {
+			builder.AddCol(c)
+			colMap = append(colMap, j)
+		}
+	}
+	return colMap
 }
 
 func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
@@ -256,25 +296,6 @@ func (t *mergeJoinTransformation) SetParents(ids []execute.DatasetID) {
 	}
 }
 
-type joinCell struct {
-	Key   joinKey
-	Tags  execute.Tags
-	Value float64
-}
-type joinKey struct {
-	Time    execute.Time
-	TagsKey execute.TagsKey
-}
-
-func (k joinKey) Less(o joinKey) bool {
-	if k.Time < o.Time {
-		return true
-	} else if k.Time == o.Time {
-		return k.TagsKey < o.TagsKey
-	}
-	return false
-}
-
 type MergeJoinCache interface {
 	Tables(execute.BlockMetadata) *joinTables
 }
@@ -287,7 +308,7 @@ type mergeJoinCache struct {
 	joinExpr *expressionSpec
 }
 
-func newMergeJoinCache(joinExpr *expressionSpec) *mergeJoinCache {
+func NewMergeJoinCache(joinExpr *expressionSpec) *mergeJoinCache {
 	return &mergeJoinCache{
 		data:     make(map[execute.BlockKey]*joinTables),
 		joinExpr: joinExpr,
@@ -337,11 +358,13 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 		tables = &joinTables{
 			tags:     bm.Tags(),
 			bounds:   bm.Bounds(),
-			left:     new(mergeTable),
-			right:    new(mergeTable),
+			left:     execute.NewColListBlockBuilder(),
+			right:    execute.NewColListBlockBuilder(),
 			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
-			joinExpr: c.joinExpr.copy(),
+			joinExpr: c.joinExpr.Copy(),
 		}
+		tables.left.AddCol(execute.TimeCol)
+		tables.right.AddCol(execute.TimeCol)
 		c.data[key] = tables
 	}
 	return tables
@@ -351,8 +374,7 @@ type joinTables struct {
 	tags   execute.Tags
 	bounds execute.Bounds
 
-	left  *mergeTable
-	right *mergeTable
+	left, right *execute.ColListBlockBuilder
 
 	trigger execute.Trigger
 
@@ -366,148 +388,237 @@ func (t *joinTables) Tags() execute.Tags {
 	return t.tags
 }
 func (t *joinTables) Size() int {
-	return len(t.left.cells) + len(t.right.cells)
+	return t.left.NRows() + t.right.NRows()
 }
 
 func (t *joinTables) ClearData() {
-	t.left = new(mergeTable)
-	t.right = new(mergeTable)
+	t.left = execute.NewColListBlockBuilder()
+	t.right = execute.NewColListBlockBuilder()
 }
 
+// Join performs a sort-merge join
 func (t *joinTables) Join() execute.Block {
-	// Perform sort-merge join
-
+	// First determine new value type
+	newType, err := t.joinExpr.Compile(
+		execute.ValueCol(t.left.Cols()).Type,
+		execute.ValueCol(t.right.Cols()).Type,
+	)
+	if err != nil {
+		//TODO add correct error handling here
+		panic(err)
+	}
+	// Create a builder to the result of the join
 	builder := execute.NewColListBlockBuilder()
 	builder.SetBounds(t.bounds)
-	execute.AddTags(t.tags, builder)
 	builder.AddCol(execute.TimeCol)
-	builder.AddCol(execute.ValueCol)
+	builder.AddCol(execute.ColMeta{
+		Label: execute.ValueColLabel,
+		Type:  newType,
+	})
+	execute.AddTags(t.tags, builder)
+	// Add non common tags
+	cols := t.left.Cols()
+	for _, c := range cols {
+		if c.IsTag {
+			builder.AddCol(c)
+		}
+	}
 
-	var left, leftSet, right, rightSet []joinCell
-	var leftKey, rightKey joinKey
-	left = t.left.Sorted()
-	right = t.right.Sorted()
-
-	//log.Println("tags", t.tags)
-	//log.Println("left", tabularFmt(left))
-	//log.Println("right", tabularFmt(right))
+	// Build colMap from t.left.Cols() to builder.Cols()
+	colMap := make([]int, len(cols))
+	for j, c := range cols {
+		for bj, bc := range builder.Cols() {
+			if bc == c {
+				colMap[j] = bj
+				break
+			}
+		}
+	}
 
 	timeIdx := execute.TimeIdx(builder.Cols())
 	valueIdx := execute.ValueIdx(builder.Cols())
+	srcValueIdx := execute.ValueIdx(cols)
 
-	left, leftSet, leftKey = t.advance(left)
-	right, rightSet, rightKey = t.advance(right)
-	for len(leftSet) > 0 && len(rightSet) > 0 {
-		if leftKey == rightKey {
+	// Determine sort order for the joining tables
+	sortOrder := make([]string, len(cols))
+	for i, c := range cols {
+		sortOrder[i] = c.Label
+	}
+	t.left.Sort(sortOrder, false)
+	t.right.Sort(sortOrder, false)
+
+	var (
+		left, right       *execute.ColListBlock
+		leftSet, rightSet subset
+		leftKey, rightKey joinKey
+	)
+	left = t.left.RawBlock()
+	right = t.right.RawBlock()
+
+	leftSet, leftKey = t.advance(leftSet.Stop, left)
+	rightSet, rightKey = t.advance(rightSet.Stop, right)
+	for !leftSet.Empty() && !rightSet.Empty() {
+		if leftKey.Equal(rightKey) {
 			// Inner join
-			for _, l := range leftSet {
-				for _, r := range rightSet {
-					v := t.eval(l.Value, r.Value)
-					builder.AppendTime(timeIdx, l.Key.Time)
-					builder.AppendFloat(valueIdx, v)
+			for l := leftSet.Start; l < leftSet.Stop; l++ {
+				for r := rightSet.Start; r < rightSet.Stop; r++ {
+					// Add time value
+					builder.AppendTime(timeIdx, leftKey.Time)
+
+					// Evaluate expression and add to block
+					lv := readValue(l, srcValueIdx, left)
+					rv := readValue(r, srcValueIdx, right)
+					v, err := t.eval(lv, rv)
+					if err != nil {
+						//TODO add correct error handling here
+						panic(err)
+					}
+					switch newType {
+					case execute.TBool:
+						builder.AppendBool(valueIdx, v.Bool())
+					case execute.TInt:
+						builder.AppendInt(valueIdx, v.Int())
+					case execute.TUInt:
+						builder.AppendUInt(valueIdx, v.UInt())
+					case execute.TFloat:
+						builder.AppendFloat(valueIdx, v.Float())
+					case execute.TString:
+						builder.AppendString(valueIdx, v.Str())
+					}
+
+					// Append noncommon tags
+					for j, c := range cols {
+						if c.IsTag && !c.IsCommon {
+							builder.AppendString(colMap[j], leftKey.Tags[j-2])
+						}
+					}
 				}
 			}
-
-			left, leftSet, leftKey = t.advance(left)
-			right, rightSet, rightKey = t.advance(right)
+			leftSet, leftKey = t.advance(leftSet.Stop, left)
+			rightSet, rightKey = t.advance(rightSet.Stop, right)
 		} else if leftKey.Less(rightKey) {
-			left, leftSet, leftKey = t.advance(left)
+			leftSet, leftKey = t.advance(leftSet.Stop, left)
 		} else {
-			right, rightSet, rightKey = t.advance(right)
+			rightSet, rightKey = t.advance(rightSet.Stop, right)
 		}
 	}
 	return builder.Block()
 }
 
-func (t *joinTables) advance(table []joinCell) ([]joinCell, []joinCell, joinKey) {
-	if len(table) == 0 {
-		return nil, nil, joinKey{}
+func (t *joinTables) advance(offset int, table *execute.ColListBlock) (subset, joinKey) {
+	if n := table.NRows(); n == offset {
+		return subset{Start: n, Stop: n}, joinKey{}
 	}
-	key := table[0].Key
-	var subset []joinCell
-	for len(table) > 0 && table[0].Key == key {
-		subset = append(subset, table[0])
-		table = table[1:]
+	start := offset
+	key := rowKey(start, table)
+	s := subset{Start: start}
+	offset++
+	for offset < table.NRows() && equalRowKeys(start, offset, table) {
+		offset++
 	}
-	return table, subset, key
+	s.Stop = offset
+	return s, key
 }
 
-func (t *joinTables) eval(l, r float64) float64 {
-	return t.joinExpr.eval(l, r)
+type subset struct {
+	Start int
+	Stop  int
 }
 
-type mergeTable struct {
-	cells []joinCell
+func (s subset) Empty() bool {
+	return s.Start == s.Stop
 }
 
-func (t *mergeTable) Insert(value float64, tags execute.Tags, time execute.Time) {
-	cell := joinCell{
-		Key: joinKey{
-			Time:    time,
-			TagsKey: tags.Key(),
-		},
-		Tags:  tags,
-		Value: value,
-	}
-	t.cells = append(t.cells, cell)
-}
-
-func (t *mergeTable) Sorted() []joinCell {
-	sort.Sort(cells(t.cells))
-	return t.cells
-}
-
-type cells []joinCell
-
-func (c cells) Len() int               { return len(c) }
-func (c cells) Less(i int, j int) bool { return c[i].Key.Less(c[j].Key) }
-func (c cells) Swap(i int, j int)      { c[i], c[j] = c[j], c[i] }
-
-type tabularFmt []joinCell
-
-func (t tabularFmt) String() string {
-	if len(t) == 0 {
-		return "<empty table>"
-	}
-	var buf bytes.Buffer
-	n := 0
-	fmt.Fprintf(&buf, "Table:\n%5s", "#")
-	n += 5
-	fmt.Fprintf(&buf, "%31s", "Time")
-	n += 31
-	keys := t[0].Tags.Keys()
-	for _, k := range keys {
-		fmt.Fprintf(&buf, "%20s", k)
-		n += 20
-	}
-	fmt.Fprintf(&buf, "%20s", "Value")
-	buf.WriteRune('\n')
-	n += 20
-	for i := 0; i < n; i++ {
-		buf.WriteRune('-')
-	}
-	buf.WriteRune('\n')
-
-	for i, c := range t {
-		fmt.Fprintf(&buf, "%5d", i)
-		fmt.Fprintf(&buf, "%31v", c.Key.Time)
-		for _, k := range keys {
-			fmt.Fprintf(&buf, "%20s", c.Tags[k])
+func rowKey(i int, table *execute.ColListBlock) (k joinKey) {
+	for j, c := range table.Cols() {
+		if c.Label == execute.TimeColLabel {
+			k.Time = table.AtTime(i, j)
+		} else if c.IsTag {
+			k.Tags = append(k.Tags, table.AtString(i, j))
 		}
-		fmt.Fprintf(&buf, "%20v", c.Value)
-		buf.WriteRune('\n')
 	}
-	return buf.String()
+	return
+}
+
+func equalRowKeys(x, y int, table *execute.ColListBlock) bool {
+	for j, c := range table.Cols() {
+		if c.Label == execute.TimeColLabel {
+			if table.AtTime(x, j) != table.AtTime(y, j) {
+				return false
+			}
+		} else if c.IsTag {
+			if table.AtString(x, j) != table.AtString(y, j) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func readValue(i, valueIdx int, table *execute.ColListBlock) execute.Value {
+	var v interface{}
+	cols := table.Cols()
+	switch cols[valueIdx].Type {
+	case execute.TBool:
+		v = table.AtBool(i, valueIdx)
+	case execute.TInt:
+		v = table.AtInt(i, valueIdx)
+	case execute.TUInt:
+		v = table.AtUInt(i, valueIdx)
+	case execute.TFloat:
+		v = table.AtFloat(i, valueIdx)
+	case execute.TString:
+		v = table.AtString(i, valueIdx)
+	}
+	return execute.Value{
+		Type:  cols[valueIdx].Type,
+		Value: v,
+	}
+}
+
+type joinKey struct {
+	Time execute.Time
+	Tags []string
+}
+
+func (k joinKey) Equal(o joinKey) bool {
+	if k.Time == o.Time {
+		for i := range k.Tags {
+			if k.Tags[i] != o.Tags[i] {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+func (k joinKey) Less(o joinKey) bool {
+	if k.Time == o.Time {
+		for i := range k.Tags {
+			if k.Tags[i] != o.Tags[i] {
+				return k.Tags[i] < o.Tags[i]
+			}
+		}
+	}
+	return k.Time < o.Time
+}
+
+func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
+	return t.joinExpr.Eval(l, r)
 }
 
 type expressionSpec struct {
-	expr                expression.Node
+	expr                expression.Expression
 	leftName, rightName string
-	scope               execute.Scope
+
+	scope execute.Scope
+
+	leftType, rightType execute.DataType
+	ce                  execute.CompiledExpression
 }
 
-func newExpressionSpec(expr expression.Node) (*expressionSpec, error) {
-	names := execute.ExpressionNames(expr)
+func NewExpressionSpec(expr expression.Expression) (*expressionSpec, error) {
+	names := execute.ExpressionNames(expr.Root)
 	if len(names) != 2 {
 		return nil, fmt.Errorf("join expression can only have two tables, got names: %v", names)
 	}
@@ -518,22 +629,39 @@ func newExpressionSpec(expr expression.Node) (*expressionSpec, error) {
 	return &expressionSpec{
 		leftName:  "$",
 		rightName: rightName,
-		scope:     make(execute.Scope, 2),
 		expr:      expr,
+		scope:     make(execute.Scope, 2),
 	}, nil
 }
 
-func (s *expressionSpec) eval(l, r float64) float64 {
-	s.scope[s.leftName] = l
-	s.scope[s.rightName] = r
-	// Ignore the error since we validated the names already
-	v, _ := execute.EvalExpression(s.expr, s.scope)
-	return v
-}
-
-func (s *expressionSpec) copy() *expressionSpec {
+func (s *expressionSpec) Copy() *expressionSpec {
 	cpy := new(expressionSpec)
 	*cpy = *s
 	cpy.scope = make(execute.Scope, 2)
 	return cpy
+}
+
+func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error) {
+	if s.ce != nil && l == s.leftType && r == s.rightType {
+		// Nothing to do, we already have a compiled expression
+		return execute.TInvalid, nil
+	}
+	ce, err := execute.CompileExpression(s.expr, map[string]execute.DataType{s.leftName: l, s.rightName: r})
+	if err != nil {
+		s.ce = nil
+		return execute.TInvalid, err
+	}
+	s.ce = ce
+	s.leftType = l
+	s.rightType = r
+	return s.ce.Type(), nil
+}
+
+func (s *expressionSpec) Eval(l, r execute.Value) (execute.Value, error) {
+	if s.ce == nil {
+		return execute.Value{}, errors.New("expression has not been compiled")
+	}
+	s.scope[s.leftName] = l
+	s.scope[s.rightName] = r
+	return s.ce.Eval(s.scope)
 }

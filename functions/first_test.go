@@ -26,7 +26,7 @@ func TestFirst_Process(t *testing.T) {
 	testCases := []struct {
 		name string
 		data *executetest.Block
-		want []execute.Row
+		want [][]int
 	}{
 		{
 			name: "first",
@@ -50,15 +50,13 @@ func TestFirst_Process(t *testing.T) {
 					{execute.Time(90), 7.0, "a", "x"},
 				},
 			},
-			want: []execute.Row{{
-				Values: []interface{}{execute.Time(0), 0.0, "a", "y"},
-			}},
+			want: [][]int{{0}, nil, nil, nil, nil, nil, nil, nil, nil, nil},
 		},
 	}
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.SelectorFuncTestHelper(
+			executetest.IndexSelectorFuncTestHelper(
 				t,
 				new(functions.FirstSelector),
 				tc.data,
@@ -69,5 +67,5 @@ func TestFirst_Process(t *testing.T) {
 }
 
 func BenchmarkFirst(b *testing.B) {
-	executetest.SelectorFuncBenchmarkHelper(b, new(functions.FirstSelector), NormalBlock)
+	executetest.IndexSelectorFuncBenchmarkHelper(b, new(functions.FirstSelector), NormalBlock)
 }

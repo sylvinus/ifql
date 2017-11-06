@@ -41,7 +41,10 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: execute.ValueColLabel,
+							Type:  execute.TFloat,
+						},
 					},
 				},
 			},
@@ -66,8 +69,7 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
-						Spec: &functions.SumProcedureSpec{},
-						Parents: []plan.ProcedureID{
+						Spec: &functions.SumProcedureSpec{}, Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("select"),
 						},
 						Children: nil,
@@ -89,7 +91,10 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: execute.ValueColLabel,
+							Type:  execute.TFloat,
+						},
 					},
 				}},
 			}},
@@ -102,15 +107,18 @@ func TestExecutor_Execute(t *testing.T) {
 				},
 				tags: execute.Tags{},
 				points: []point{
-					{Value: 1.0, Time: 0},
-					{Value: 2.0, Time: 1},
-					{Value: 3.0, Time: 2},
-					{Value: 4.0, Time: 3},
-					{Value: 5.0, Time: 4},
+					{Value: int64(1), Time: 0},
+					{Value: int64(2), Time: 1},
+					{Value: int64(3), Time: 2},
+					{Value: int64(4), Time: 3},
+					{Value: int64(5), Time: 4},
 				},
 				cols: []execute.ColMeta{
 					execute.TimeCol,
-					execute.ValueCol,
+					execute.ColMeta{
+						Label: execute.ValueColLabel,
+						Type:  execute.TInt,
+					},
 				},
 			}},
 			plan: &plan.PlanSpec{
@@ -184,11 +192,14 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					tags: execute.Tags{},
 					points: []point{
-						{Value: 3.0, Time: 5},
+						{Value: int64(3), Time: 5},
 					},
 					cols: []execute.ColMeta{
 						execute.TimeCol,
-						execute.ValueCol,
+						execute.ColMeta{
+							Label: execute.ValueColLabel,
+							Type:  execute.TInt,
+						},
 					},
 				}},
 			}},
@@ -281,7 +292,7 @@ type block struct {
 }
 
 type point struct {
-	Value float64
+	Value interface{}
 	Time  execute.Time
 	Tags  execute.Tags
 }
@@ -315,9 +326,24 @@ type valueIterator struct {
 func (itr *valueIterator) Cols() []execute.ColMeta {
 	return itr.cols
 }
+func (itr *valueIterator) DoBool(f func([]bool, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]bool{p.Value.(bool)}, itr)
+	}
+}
+func (itr *valueIterator) DoInt(f func([]int64, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]int64{p.Value.(int64)}, itr)
+	}
+}
+func (itr *valueIterator) DoUInt(f func([]uint64, execute.RowReader)) {
+	for _, p := range itr.points {
+		f([]uint64{p.Value.(uint64)}, itr)
+	}
+}
 func (itr *valueIterator) DoFloat(f func([]float64, execute.RowReader)) {
 	for _, p := range itr.points {
-		f([]float64{p.Value}, itr)
+		f([]float64{p.Value.(float64)}, itr)
 	}
 }
 func (itr *valueIterator) DoString(f func([]string, execute.RowReader)) {
@@ -327,8 +353,17 @@ func (itr *valueIterator) DoTime(f func([]execute.Time, execute.RowReader)) {
 		f([]execute.Time{p.Time}, itr)
 	}
 }
+func (itr *valueIterator) AtBool(i, j int) bool {
+	return itr.points[i].Value.(bool)
+}
+func (itr *valueIterator) AtInt(i, j int) int64 {
+	return itr.points[i].Value.(int64)
+}
+func (itr *valueIterator) AtUInt(i, j int) uint64 {
+	return itr.points[i].Value.(uint64)
+}
 func (itr *valueIterator) AtFloat(i, j int) float64 {
-	return itr.points[i].Value
+	return itr.points[i].Value.(float64)
 }
 func (itr *valueIterator) AtString(i, j int) string {
 	return itr.points[i].Tags[itr.cols[j].Label]
@@ -338,16 +373,30 @@ func (itr *valueIterator) AtTime(i, j int) execute.Time {
 }
 
 func convertToTestBlock(b execute.Block) block {
+	cols := b.Cols()
 	blk := block{
 		bounds: b.Bounds(),
 		tags:   b.Tags(),
-		cols:   b.Cols(),
+		cols:   cols,
 	}
-	valueIdx := execute.ValueIdx(b.Cols())
+	valueIdx := execute.ValueIdx(cols)
+	valueType := cols[valueIdx].Type
 	times := b.Times()
 	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i, time := range ts {
-			v := rr.AtFloat(i, valueIdx)
+			var v interface{}
+			switch valueType {
+			case execute.TBool:
+				v = rr.AtBool(i, valueIdx)
+			case execute.TInt:
+				v = rr.AtInt(i, valueIdx)
+			case execute.TUInt:
+				v = rr.AtUInt(i, valueIdx)
+			case execute.TFloat:
+				v = rr.AtFloat(i, valueIdx)
+			case execute.TString:
+				v = rr.AtString(i, valueIdx)
+			}
 			tags := execute.TagsForRow(blk.cols, rr, i)
 			blk.points = append(blk.points, point{
 				Time:  time,

@@ -24,7 +24,7 @@ func TestCount_Process(t *testing.T) {
 		t,
 		new(functions.CountAgg),
 		[]float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-		10,
+		int64(10),
 	)
 }
 func BenchmarkCount(b *testing.B) {
@@ -32,6 +32,6 @@ func BenchmarkCount(b *testing.B) {
 		b,
 		new(functions.CountAgg),
 		NormalData,
-		float64(len(NormalData)),
+		int64(len(NormalData)),
 	)
 }

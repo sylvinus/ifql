@@ -40,7 +40,7 @@ func init() {
 	})
 
 	normalBlockBuilder.AddCol(execute.TimeCol)
-	normalBlockBuilder.AddCol(execute.ValueCol)
+	normalBlockBuilder.AddCol(execute.ColMeta{Label: "value", Type: execute.TFloat})
 	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true})
 	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false})
 

@@ -10,35 +10,58 @@ import (
 
 // AggFuncTestHelper splits the data in half, runs Do over each split and compares
 // the Value to want.
-func AggFuncTestHelper(t *testing.T, aggF execute.AggFunc, data []float64, want float64) {
+func AggFuncTestHelper(t *testing.T, agg execute.Aggregate, data []float64, want interface{}) {
 	t.Helper()
 
 	// Call Do twice, since this is possible according to the interface.
 	h := len(data) / 2
-	aggF.Do(data[:h])
+	vf := agg.NewFloatAgg()
+	vf.DoFloat(data[:h])
 	if h < len(data) {
-		aggF.Do(data[h:])
+		vf.DoFloat(data[h:])
 	}
 
-	got := aggF.Value()
+	var got interface{}
+	switch vf.Type() {
+	case execute.TBool:
+		got = vf.(execute.BoolValueFunc).ValueBool()
+	case execute.TInt:
+		got = vf.(execute.IntValueFunc).ValueInt()
+	case execute.TUInt:
+		got = vf.(execute.UIntValueFunc).ValueUInt()
+	case execute.TFloat:
+		got = vf.(execute.FloatValueFunc).ValueFloat()
+	case execute.TString:
+		got = vf.(execute.StringValueFunc).ValueString()
+	}
 
 	if !cmp.Equal(want, got, cmpopts.EquateNaNs()) {
 		t.Errorf("unexpected value -want/+got\n%s", cmp.Diff(want, got))
 	}
 }
 
-const small = 1e-5
-
 // AggFuncBenchmarkHelper benchmarks the aggregate function over data and compares to wantValue
-func AggFuncBenchmarkHelper(b *testing.B, aggF execute.AggFunc, data []float64, wantValue float64) {
+func AggFuncBenchmarkHelper(b *testing.B, agg execute.Aggregate, data []float64, want interface{}) {
 	b.Helper()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		aggF.Reset()
-		aggF.Do(data)
-		v := aggF.Value()
-		if diff := v - wantValue; diff > small || diff < -small {
-			b.Fatalf("unexpected result: got: %f want: %f", v, wantValue)
+		vf := agg.NewFloatAgg()
+		vf.DoFloat(data)
+		var got interface{}
+		switch vf.Type() {
+		case execute.TBool:
+			got = vf.(execute.BoolValueFunc).ValueBool()
+		case execute.TInt:
+			got = vf.(execute.IntValueFunc).ValueInt()
+		case execute.TUInt:
+			got = vf.(execute.UIntValueFunc).ValueUInt()
+		case execute.TFloat:
+			got = vf.(execute.FloatValueFunc).ValueFloat()
+		case execute.TString:
+			got = vf.(execute.StringValueFunc).ValueString()
+		}
+		if !cmp.Equal(want, got) {
+			b.Errorf("unexpected value -want/+got\n%s", cmp.Diff(want, got))
 		}
 	}
 }

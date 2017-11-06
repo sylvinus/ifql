@@ -57,7 +57,62 @@ func createSkewTransformation(id execute.DatasetID, mode execute.AccumulationMod
 	return t, d, nil
 }
 
-func (a *SkewAgg) Do(vs []float64) {
+func (a *SkewAgg) reset() {
+	a.n = 0
+	a.m1 = 0
+	a.m2 = 0
+	a.m3 = 0
+}
+func (a *SkewAgg) NewBoolAgg() execute.DoBoolAgg {
+	return nil
+}
+
+func (a *SkewAgg) NewIntAgg() execute.DoIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *SkewAgg) NewUIntAgg() execute.DoUIntAgg {
+	a.reset()
+	return a
+}
+
+func (a *SkewAgg) NewFloatAgg() execute.DoFloatAgg {
+	a.reset()
+	return a
+}
+
+func (a *SkewAgg) NewStringAgg() execute.DoStringAgg {
+	return nil
+}
+
+func (a *SkewAgg) DoInt(vs []int64) {
+	for _, v := range vs {
+		n0 := a.n
+		a.n++
+		// TODO handle overflow
+		delta := float64(v) - a.m1
+		deltaN := delta / a.n
+		t := delta * deltaN * n0
+		a.m3 += t*deltaN*(a.n-2) - 3*deltaN*a.m2
+		a.m2 += t
+		a.m1 += deltaN
+	}
+}
+func (a *SkewAgg) DoUInt(vs []uint64) {
+	for _, v := range vs {
+		n0 := a.n
+		a.n++
+		// TODO handle overflow
+		delta := float64(v) - a.m1
+		deltaN := delta / a.n
+		t := delta * deltaN * n0
+		a.m3 += t*deltaN*(a.n-2) - 3*deltaN*a.m2
+		a.m2 += t
+		a.m1 += deltaN
+	}
+}
+func (a *SkewAgg) DoFloat(vs []float64) {
 	for _, v := range vs {
 		n0 := a.n
 		a.n++
@@ -69,15 +124,12 @@ func (a *SkewAgg) Do(vs []float64) {
 		a.m1 += deltaN
 	}
 }
-func (a *SkewAgg) Value() float64 {
+func (a *SkewAgg) Type() execute.DataType {
+	return execute.TFloat
+}
+func (a *SkewAgg) ValueFloat() float64 {
 	if a.n < 2 {
 		return math.NaN()
 	}
 	return math.Sqrt(a.n) * a.m3 / math.Pow(a.m2, 1.5)
-}
-func (a *SkewAgg) Reset() {
-	a.n = 0
-	a.m1 = 0
-	a.m2 = 0
-	a.m3 = 0
 }

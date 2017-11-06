@@ -4,26 +4,51 @@ type selectorTransformation struct {
 	d          Dataset
 	cache      BlockBuilderCache
 	bounds     Bounds
-	selectorF  SelectorFunc
 	useRowTime bool
 
 	parents []DatasetID
 }
 
-func NewSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selectorF SelectorFunc, useRowTime bool) *selectorTransformation {
-	return &selectorTransformation{
-		d:          d,
-		cache:      c,
-		bounds:     bounds,
-		selectorF:  selectorF,
-		useRowTime: useRowTime,
+type rowSelectorTransformation struct {
+	selectorTransformation
+	selector RowSelector
+}
+type indexSelectorTransformation struct {
+	selectorTransformation
+	selector IndexSelector
+}
+
+func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, useRowTime bool) (*rowSelectorTransformation, Dataset) {
+	cache := NewBlockBuilderCache()
+	d := NewDataset(id, mode, cache)
+	return NewRowSelectorTransformation(d, cache, bounds, selector, useRowTime), d
+}
+func NewRowSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector RowSelector, useRowTime bool) *rowSelectorTransformation {
+	return &rowSelectorTransformation{
+		selectorTransformation: newSelectorTransformation(d, c, bounds, useRowTime),
+		selector:               selector,
 	}
 }
 
-func NewSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selectorF SelectorFunc, useRowTime bool) (*selectorTransformation, Dataset) {
+func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, useRowTime bool) (*indexSelectorTransformation, Dataset) {
 	cache := NewBlockBuilderCache()
 	d := NewDataset(id, mode, cache)
-	return NewSelectorTransformation(d, cache, bounds, selectorF, useRowTime), d
+	return NewIndexSelectorTransformation(d, cache, bounds, selector, useRowTime), d
+}
+func NewIndexSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector IndexSelector, useRowTime bool) *indexSelectorTransformation {
+	return &indexSelectorTransformation{
+		selectorTransformation: newSelectorTransformation(d, c, bounds, useRowTime),
+		selector:               selector,
+	}
+}
+
+func newSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, useRowTime bool) selectorTransformation {
+	return selectorTransformation{
+		d:          d,
+		cache:      c,
+		bounds:     bounds,
+		useRowTime: useRowTime,
+	}
 }
 
 func (t *selectorTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
@@ -31,36 +56,6 @@ func (t *selectorTransformation) RetractBlock(id DatasetID, meta BlockMetadata) 
 	key := ToBlockKey(meta)
 	t.d.RetractBlock(key)
 }
-
-func (t *selectorTransformation) Process(id DatasetID, b Block) {
-	builder, new := t.cache.BlockBuilder(blockMetadata{
-		bounds: t.bounds,
-		tags:   b.Tags(),
-	})
-	if new {
-		builder.AddCol(TimeCol)
-		builder.AddCol(ValueCol)
-		AddTags(b.Tags(), builder)
-	}
-
-	colMap := AddNewCols(b, builder)
-
-	values := b.Values()
-	values.DoFloat(t.selectorF.Do)
-
-	offset := builder.NRows()
-
-	rows := t.selectorF.Rows()
-	AppendRows(builder, rows, colMap)
-	if !t.useRowTime {
-		for i := range rows {
-			builder.SetTime(offset+i, 0, b.Bounds().Stop)
-		}
-	}
-
-	t.selectorF.Reset()
-}
-
 func (t *selectorTransformation) UpdateWatermark(id DatasetID, mark Time) {
 	t.d.UpdateWatermark(mark)
 }
@@ -74,25 +69,215 @@ func (t *selectorTransformation) SetParents(ids []DatasetID) {
 	t.parents = ids
 }
 
-type Row struct {
-	Values []interface{}
+func (t *selectorTransformation) setupBuilder(b Block) (BlockBuilder, []int, ColMeta) {
+	cols := b.Cols()
+	valueIdx := ValueIdx(cols)
+	valueCol := cols[valueIdx]
+
+	builder, new := t.cache.BlockBuilder(blockMetadata{
+		bounds: t.bounds,
+		tags:   b.Tags(),
+	})
+	if new {
+		builder.AddCol(TimeCol)
+		builder.AddCol(valueCol)
+		AddTags(b.Tags(), builder)
+	}
+
+	colMap := AddNewCols(b, builder)
+
+	return builder, colMap, valueCol
 }
 
-func AppendRows(builder BlockBuilder, rows []Row, colMap []int) {
+func (t *indexSelectorTransformation) Process(id DatasetID, b Block) {
+	builder, colMap, valueCol := t.setupBuilder(b)
+
+	values := b.Values()
+	switch valueCol.Type {
+	case TBool:
+		s := t.selector.NewBoolSelector()
+		values.DoBool(func(vs []bool, rr RowReader) {
+			selected := s.DoBool(vs)
+			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+		})
+	case TInt:
+		s := t.selector.NewIntSelector()
+		values.DoInt(func(vs []int64, rr RowReader) {
+			selected := s.DoInt(vs)
+			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+		})
+	case TUInt:
+		s := t.selector.NewUIntSelector()
+		values.DoUInt(func(vs []uint64, rr RowReader) {
+			selected := s.DoUInt(vs)
+			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+		})
+	case TFloat:
+		s := t.selector.NewFloatSelector()
+		values.DoFloat(func(vs []float64, rr RowReader) {
+			selected := s.DoFloat(vs)
+			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+		})
+	case TString:
+		s := t.selector.NewStringSelector()
+		values.DoString(func(vs []string, rr RowReader) {
+			selected := s.DoString(vs)
+			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+		})
+	}
+}
+
+func (t *rowSelectorTransformation) Process(id DatasetID, b Block) {
+	builder, colMap, valueCol := t.setupBuilder(b)
+
+	values := b.Values()
+	var rower Rower
+	switch valueCol.Type {
+	case TBool:
+		s := t.selector.NewBoolSelector()
+		values.DoBool(s.DoBool)
+		rower = s
+	case TInt:
+		s := t.selector.NewIntSelector()
+		values.DoInt(s.DoInt)
+		rower = s
+	case TUInt:
+		s := t.selector.NewUIntSelector()
+		values.DoUInt(s.DoUInt)
+		rower = s
+	case TFloat:
+		s := t.selector.NewFloatSelector()
+		values.DoFloat(s.DoFloat)
+		rower = s
+	case TString:
+		s := t.selector.NewStringSelector()
+		values.DoString(s.DoString)
+		rower = s
+	}
+
+	rows := rower.Rows()
+	t.appendRows(builder, rows, colMap, b.Bounds().Stop)
+}
+
+func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, builder BlockBuilder, rr RowReader, stop Time) {
+	if len(selected) == 0 {
+		return
+	}
+	cols := builder.Cols()
+	for j, c := range cols {
+		for _, i := range selected {
+			switch c.Type {
+			case TBool:
+				builder.AppendBool(j, rr.AtBool(i, colMap[j]))
+			case TInt:
+				builder.AppendInt(j, rr.AtInt(i, colMap[j]))
+			case TUInt:
+				builder.AppendUInt(j, rr.AtUInt(i, colMap[j]))
+			case TFloat:
+				builder.AppendFloat(j, rr.AtFloat(i, colMap[j]))
+			case TString:
+				builder.AppendString(j, rr.AtString(i, colMap[j]))
+			case TTime:
+				time := stop
+				if t.useRowTime {
+					time = rr.AtTime(i, colMap[j])
+				}
+				builder.AppendTime(j, time)
+			default:
+				panicUnknownType(c.Type)
+			}
+		}
+	}
+}
+
+func (t *rowSelectorTransformation) appendRows(builder BlockBuilder, rows []Row, colMap []int, stop Time) {
 	cols := builder.Cols()
 	for j, c := range cols {
 		for _, row := range rows {
 			v := row.Values[colMap[j]]
 			switch c.Type {
-			case TString:
-				builder.AppendString(j, v.(string))
+			case TBool:
+				builder.AppendBool(j, v.(bool))
+			case TInt:
+				builder.AppendInt(j, v.(int64))
+			case TUInt:
+				builder.AppendUInt(j, v.(uint64))
 			case TFloat:
 				builder.AppendFloat(j, v.(float64))
+			case TString:
+				builder.AppendString(j, v.(string))
 			case TTime:
-				builder.AppendTime(j, v.(Time))
+				if t.useRowTime {
+					builder.AppendTime(j, v.(Time))
+				} else {
+					builder.AppendTime(j, stop)
+				}
+			default:
+				panicUnknownType(c.Type)
 			}
 		}
 	}
+}
+
+type IndexSelector interface {
+	NewBoolSelector() DoBoolIndexSelector
+	NewIntSelector() DoIntIndexSelector
+	NewUIntSelector() DoUIntIndexSelector
+	NewFloatSelector() DoFloatIndexSelector
+	NewStringSelector() DoStringIndexSelector
+}
+type DoBoolIndexSelector interface {
+	DoBool([]bool) []int
+}
+type DoIntIndexSelector interface {
+	DoInt([]int64) []int
+}
+type DoUIntIndexSelector interface {
+	DoUInt([]uint64) []int
+}
+type DoFloatIndexSelector interface {
+	DoFloat([]float64) []int
+}
+type DoStringIndexSelector interface {
+	DoString([]string) []int
+}
+
+type RowSelector interface {
+	NewBoolSelector() DoBoolRowSelector
+	NewIntSelector() DoIntRowSelector
+	NewUIntSelector() DoUIntRowSelector
+	NewFloatSelector() DoFloatRowSelector
+	NewStringSelector() DoStringRowSelector
+}
+
+type Rower interface {
+	Rows() []Row
+}
+
+type DoBoolRowSelector interface {
+	Rower
+	// What if the selector doesn't know yet and needs to wait all is finalized?
+	DoBool(vs []bool, rr RowReader)
+}
+type DoIntRowSelector interface {
+	Rower
+	DoInt(vs []int64, rr RowReader)
+}
+type DoUIntRowSelector interface {
+	Rower
+	DoUInt(vs []uint64, rr RowReader)
+}
+type DoFloatRowSelector interface {
+	Rower
+	DoFloat(vs []float64, rr RowReader)
+}
+type DoStringRowSelector interface {
+	Rower
+	DoString(vs []string, rr RowReader)
+}
+
+type Row struct {
+	Values []interface{}
 }
 
 func ReadRow(i int, rr RowReader) (row Row) {
@@ -109,10 +294,4 @@ func ReadRow(i int, rr RowReader) (row Row) {
 		}
 	}
 	return
-}
-
-type SelectorFunc interface {
-	Do([]float64, RowReader)
-	Rows() []Row
-	Reset()
 }

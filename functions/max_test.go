@@ -110,7 +110,7 @@ func TestMax_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			executetest.SelectorFuncTestHelper(
+			executetest.RowSelectorFuncTestHelper(
 				t,
 				new(functions.MaxSelector),
 				tc.data,
@@ -121,5 +121,5 @@ func TestMax_Process(t *testing.T) {
 }
 
 func BenchmarkMax(b *testing.B) {
-	executetest.SelectorFuncBenchmarkHelper(b, new(functions.MaxSelector), NormalBlock)
+	executetest.RowSelectorFuncBenchmarkHelper(b, new(functions.MaxSelector), NormalBlock)
 }

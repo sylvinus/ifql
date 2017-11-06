@@ -3,11 +3,12 @@ package functions
 import (
 	"fmt"
 
+	"math/rand"
+
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
-	"math/rand"
 )
 
 const SampleKind = "sample"
@@ -86,10 +87,11 @@ func (s *SampleProcedureSpec) Kind() plan.ProcedureKind {
 }
 
 type SampleSelector struct {
-	N      int
-	offset int
-	rows   []execute.Row
-	Pos    int
+	N   int
+	Pos int
+
+	offset   int
+	selected []int
 }
 
 func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -98,38 +100,69 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
 
-	usePos := ps.Pos
-	if usePos < 0 {
-		usePos = rand.Intn(ps.N)
-	}
-
-	ss := SampleSelector{
+	ss := &SampleSelector{
 		N:   ps.N,
-		Pos: usePos,
+		Pos: ps.Pos,
 	}
-
-	t, d := execute.NewSelectorTransformationAndDataset(id, mode, ctx.Bounds(), &ss, ps.UseRowTime)
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, ctx.Bounds(), ss, ps.UseRowTime)
 	return t, d, nil
 }
 
-func (s *SampleSelector) Do(vs []float64, rr execute.RowReader) {
+func (s *SampleSelector) reset() {
+	pos := s.Pos
+	if pos < 0 {
+		pos = rand.Intn(s.N)
+	}
+	s.offset = pos
+}
+
+func (s *SampleSelector) NewBoolSelector() execute.DoBoolIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *SampleSelector) NewIntSelector() execute.DoIntIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *SampleSelector) NewUIntSelector() execute.DoUIntIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *SampleSelector) NewFloatSelector() execute.DoFloatIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *SampleSelector) NewStringSelector() execute.DoStringIndexSelector {
+	s.reset()
+	return s
+}
+
+func (s *SampleSelector) selectSample(l int) []int {
 	var i int
-	for i = s.offset + s.Pos; i < len(vs); i += s.N {
-		s.rows = append(s.rows, execute.ReadRow(i, rr))
+	s.selected = s.selected[0:0]
+	for i = s.offset; i < l; i += s.N {
+		s.selected = append(s.selected, i)
 	}
-
-	if s.Pos > 0 {
-		s.Pos = 0
-	}
-	s.offset = i - len(vs)
+	s.offset = i - l
+	return s.selected
 }
 
-func (s *SampleSelector) Rows() []execute.Row {
-	return s.rows
+func (s *SampleSelector) DoBool(vs []bool) []int {
+	return s.selectSample(len(vs))
 }
-
-func (s *SampleSelector) Reset() {
-	s.offset = 0
-	s.Pos = rand.Intn(s.N)
-	s.rows = nil
+func (s *SampleSelector) DoInt(vs []int64) []int {
+	return s.selectSample(len(vs))
+}
+func (s *SampleSelector) DoUInt(vs []uint64) []int {
+	return s.selectSample(len(vs))
+}
+func (s *SampleSelector) DoFloat(vs []float64) []int {
+	return s.selectSample(len(vs))
+}
+func (s *SampleSelector) DoString(vs []string) []int {
+	return s.selectSample(len(vs))
 }

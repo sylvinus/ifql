@@ -2,6 +2,7 @@ package functions_test
 
 import (
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -49,13 +50,15 @@ func TestFixedWindow_PassThrough(t *testing.T) {
 func TestFixedWindow_Process(t *testing.T) {
 	testCases := []struct {
 		name          string
+		valueCol      execute.ColMeta
 		start         execute.Time
 		every, period execute.Duration
 		num           int
 		want          func(start execute.Time) []*executetest.Block
 	}{
 		{
-			name: "nonoverlapping_nonaligned",
+			name:     "nonoverlapping_nonaligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is *not* aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 10, 10, 10, time.UTC).UnixNano()),
 			every:  execute.Duration(time.Minute),
@@ -118,7 +121,8 @@ func TestFixedWindow_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "nonoverlapping_aligned",
+			name:     "nonoverlapping_aligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 0, 0, 0, time.UTC).UnixNano()),
 			every:  execute.Duration(time.Minute),
@@ -181,7 +185,8 @@ func TestFixedWindow_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "overlapping_nonaligned",
+			name:     "overlapping_nonaligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is *not* aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 10, 10, 10, time.UTC).UnixNano()),
 			every:  execute.Duration(time.Minute),
@@ -271,7 +276,8 @@ func TestFixedWindow_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "overlapping_aligned",
+			name:     "overlapping_aligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 0, 0, 0, time.UTC).UnixNano()),
 			every:  execute.Duration(time.Minute),
@@ -361,7 +367,8 @@ func TestFixedWindow_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "underlapping_nonaligned",
+			name:     "underlapping_nonaligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is *not* aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 10, 10, 10, time.UTC).UnixNano()),
 			every:  execute.Duration(2 * time.Minute),
@@ -409,7 +416,8 @@ func TestFixedWindow_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "underlapping_aligned",
+			name:     "underlapping_aligned",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TFloat},
 			// Use a time that is  aligned with the every/period durations of the window
 			start:  execute.Time(time.Date(2017, 10, 10, 10, 0, 0, 0, time.UTC).UnixNano()),
 			every:  execute.Duration(2 * time.Minute),
@@ -456,6 +464,70 @@ func TestFixedWindow_Process(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:     "nonoverlapping_aligned_int",
+			valueCol: execute.ColMeta{Label: "value", Type: execute.TInt},
+			// Use a time that is aligned with the every/period durations of the window
+			start:  execute.Time(time.Date(2017, 10, 10, 10, 0, 0, 0, time.UTC).UnixNano()),
+			every:  execute.Duration(time.Minute),
+			period: execute.Duration(time.Minute),
+			num:    15,
+			want: func(start execute.Time) []*executetest.Block {
+				return []*executetest.Block{
+					{
+						Bnds: execute.Bounds{
+							Start: start,
+							Stop:  start + execute.Time(time.Minute),
+						},
+						ColMeta: []execute.ColMeta{
+							{Label: "time", Type: execute.TTime},
+							{Label: "value", Type: execute.TInt},
+						},
+						Data: [][]interface{}{
+							{start, int64(0.0)},
+							{start + execute.Time(10*time.Second), int64(1)},
+							{start + execute.Time(20*time.Second), int64(2)},
+							{start + execute.Time(30*time.Second), int64(3)},
+							{start + execute.Time(40*time.Second), int64(4)},
+							{start + execute.Time(50*time.Second), int64(5)},
+						},
+					},
+					{
+						Bnds: execute.Bounds{
+							Start: start + execute.Time(1*time.Minute),
+							Stop:  start + execute.Time(2*time.Minute),
+						},
+						ColMeta: []execute.ColMeta{
+							{Label: "time", Type: execute.TTime},
+							{Label: "value", Type: execute.TInt},
+						},
+						Data: [][]interface{}{
+							{start + execute.Time(60*time.Second), int64(6)},
+							{start + execute.Time(70*time.Second), int64(7)},
+							{start + execute.Time(80*time.Second), int64(8)},
+							{start + execute.Time(90*time.Second), int64(9)},
+							{start + execute.Time(100*time.Second), int64(10)},
+							{start + execute.Time(110*time.Second), int64(11)},
+						},
+					},
+					{
+						Bnds: execute.Bounds{
+							Start: start + execute.Time(2*time.Minute),
+							Stop:  start + execute.Time(3*time.Minute),
+						},
+						ColMeta: []execute.ColMeta{
+							{Label: "time", Type: execute.TTime},
+							{Label: "value", Type: execute.TInt},
+						},
+						Data: [][]interface{}{
+							{start + execute.Time(120*time.Second), int64(12)},
+							{start + execute.Time(130*time.Second), int64(13)},
+							{start + execute.Time(140*time.Second), int64(14)},
+						},
+					},
+				}
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -489,14 +561,27 @@ func TestFixedWindow_Process(t *testing.T) {
 				},
 				ColMeta: []execute.ColMeta{
 					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					tc.valueCol,
 				},
 			}
 
 			for i := 0; i < tc.num; i++ {
+				var v interface{}
+				switch tc.valueCol.Type {
+				case execute.TBool:
+					v = bool(i%2 == 0)
+				case execute.TInt:
+					v = int64(i)
+				case execute.TUInt:
+					v = uint64(i)
+				case execute.TFloat:
+					v = float64(i)
+				case execute.TString:
+					v = strconv.Itoa(i)
+				}
 				block0.Data = append(block0.Data, []interface{}{
 					start + execute.Time(time.Duration(i)*10*time.Second),
-					float64(i),
+					v,
 				})
 			}
 
