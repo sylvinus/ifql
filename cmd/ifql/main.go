@@ -16,6 +16,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+var version string
+var commit string
+var date string
+
 var queryStr = flag.String("query", `select(database:"mydb").where(exp:{"_measurement" == "m0"}).range(start:-170h).sum()`, "Query to run")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
