@@ -1,5 +1,4 @@
 #!/bin/bash
-cd ifql
 
 # Get dir of script and make it is our working directory.
 DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
