@@ -75,7 +75,7 @@ func (s *WhereProcedureSpec) Copy() plan.ProcedureSpec {
 func (s *WhereProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
 		Root:    SelectKind,
-		Through: []plan.ProcedureKind{LimitKind, RangeKind},
+		Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
 	}
 }
 func (s *WhereProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
