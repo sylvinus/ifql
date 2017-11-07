@@ -38,7 +38,7 @@ bin/goreleaser:
 	go build -i -o bin/goreleaser ./vendor/github.com/goreleaser/goreleaser
 
 release: bin/goreleaser
-	goreleaser --skip-publish  --snapshot --rm-dist
+	PATH=./bin:${PATH} goreleaser --skip-publish  --snapshot --rm-dist
 
 clean: $(SUBDIRS)
 	rm -rf bin dist
