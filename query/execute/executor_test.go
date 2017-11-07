@@ -61,7 +61,10 @@ func TestExecutor_Execute(t *testing.T) {
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -5},
+								Start: query.Time{
+									Relative:   -5,
+									IsRelative: true,
+								},
 							},
 						},
 						Parents:  nil,
@@ -134,7 +137,10 @@ func TestExecutor_Execute(t *testing.T) {
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -5},
+								Start: query.Time{
+									Relative:   -5,
+									IsRelative: true,
+								},
 							},
 						},
 						Parents:  nil,

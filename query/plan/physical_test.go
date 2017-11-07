@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 )
 
 func TestPhysicalPlanner_Plan(t *testing.T) {
@@ -68,25 +68,18 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							Bounds: plan.BoundsSpec{
 								Start: query.Time{Relative: -1 * time.Hour},
 							},
+							AggregateSet:  true,
+							AggregateType: "count",
 						},
 						Parents:  nil,
-						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-					},
-					plan.ProcedureIDFromOperationID("count"): {
-						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &functions.CountProcedureSpec{},
-						Parents: []plan.ProcedureID{
-							(plan.ProcedureIDFromOperationID("select")),
-						},
-						Children: nil,
+						Children: []plan.ProcedureID{},
 					},
 				},
 				Results: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("count")),
+					plan.ProcedureIDFromOperationID("select"),
 				},
 				Order: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("select"),
-					plan.ProcedureIDFromOperationID("count"),
 				},
 			},
 		},
@@ -121,11 +114,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("range")),
 						},
-						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
 					},
-					plan.ProcedureIDFromOperationID("count"): {
-						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &functions.CountProcedureSpec{},
+					plan.ProcedureIDFromOperationID("mean"): {
+						ID:   plan.ProcedureIDFromOperationID("mean"),
+						Spec: &functions.MeanProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("limit")),
 						},
@@ -136,7 +129,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					plan.ProcedureIDFromOperationID("select"),
 					plan.ProcedureIDFromOperationID("range"),
 					plan.ProcedureIDFromOperationID("limit"),
-					plan.ProcedureIDFromOperationID("count"),
+					plan.ProcedureIDFromOperationID("mean"),
 				},
 			},
 			pp: &plan.PlanSpec{
@@ -157,11 +150,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							Limit:    10,
 						},
 						Parents:  nil,
-						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
 					},
-					plan.ProcedureIDFromOperationID("count"): {
-						ID:   plan.ProcedureIDFromOperationID("count"),
-						Spec: &functions.CountProcedureSpec{},
+					plan.ProcedureIDFromOperationID("mean"): {
+						ID:   plan.ProcedureIDFromOperationID("mean"),
+						Spec: &functions.MeanProcedureSpec{},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("select")),
 						},
@@ -169,11 +162,11 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Results: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("count")),
+					(plan.ProcedureIDFromOperationID("mean")),
 				},
 				Order: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("select"),
-					plan.ProcedureIDFromOperationID("count"),
+					plan.ProcedureIDFromOperationID("mean"),
 				},
 			},
 		},
@@ -181,14 +174,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 	for i, tc := range testCases {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			planner := plan.NewPlanner()
-			got, err := planner.Plan(tc.lp, nil, time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !cmp.Equal(got, tc.pp) {
-				t.Errorf("unexpected physical plan -want/+got %s", cmp.Diff(tc.pp, got))
-			}
+			plantest.PhysicalPlanTestHelper(t, tc.lp, tc.pp)
 		})
 	}
 }

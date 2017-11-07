@@ -23,7 +23,8 @@ func TestWindowOperation_Marshaling(t *testing.T) {
 			Every:  query.Duration(time.Minute),
 			Period: query.Duration(time.Hour),
 			Start: query.Time{
-				Relative: -4 * time.Hour,
+				Relative:   -4 * time.Hour,
+				IsRelative: true,
 			},
 			Round: query.Duration(time.Second),
 		},

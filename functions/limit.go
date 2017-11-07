@@ -74,6 +74,12 @@ func newLimitProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *LimitProcedureSpec) Kind() plan.ProcedureKind {
 	return LimitKind
 }
+func (s *LimitProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(LimitProcedureSpec)
+	ns.Limit = s.Limit
+	ns.Offset = s.Offset
+	return ns
+}
 
 func (s *LimitProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
@@ -81,10 +87,15 @@ func (s *LimitProcedureSpec) PushDownRule() plan.PushDownRule {
 		Through: []plan.ProcedureKind{RangeKind, WhereKind},
 	}
 }
-func (s *LimitProcedureSpec) PushDown(root *plan.Procedure) {
+func (s *LimitProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*SelectProcedureSpec)
 	if selectSpec.LimitSet {
-		// TODO: create copy of select spec and set new limit
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.LimitSet = false
+		selectSpec.Limit = 0
+		selectSpec.Offset = 0
+		return
 	}
 	selectSpec.LimitSet = true
 	selectSpec.Limit = s.Limit

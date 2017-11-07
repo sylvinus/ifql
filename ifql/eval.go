@@ -420,7 +420,8 @@ func ToQueryTime(value Value) (query.Time, error) {
 		}, nil
 	case time.Duration:
 		return query.Time{
-			Relative: v,
+			Relative:   v,
+			IsRelative: true,
 		}, nil
 	case int64:
 		return query.Time{

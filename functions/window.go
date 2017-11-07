@@ -102,6 +102,12 @@ func newWindowProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *WindowProcedureSpec) Kind() plan.ProcedureKind {
 	return WindowKind
 }
+func (s *WindowProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(WindowProcedureSpec)
+	ns.Window = s.Window
+	ns.Triggering = s.Triggering
+	return ns
+}
 
 func (s *WindowProcedureSpec) TriggerSpec() query.TriggerSpec {
 	return s.Triggering

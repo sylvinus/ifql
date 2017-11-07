@@ -7,7 +7,6 @@ import (
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
-	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -66,6 +65,12 @@ func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *WhereProcedureSpec) Kind() plan.ProcedureKind {
 	return WhereKind
 }
+func (s *WhereProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(WhereProcedureSpec)
+	//TODO copy expression
+	ns.Expression = s.Expression
+	return ns
+}
 
 func (s *WhereProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
@@ -73,16 +78,15 @@ func (s *WhereProcedureSpec) PushDownRule() plan.PushDownRule {
 		Through: []plan.ProcedureKind{LimitKind, RangeKind},
 	}
 }
-func (s *WhereProcedureSpec) PushDown(root *plan.Procedure) {
+func (s *WhereProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*SelectProcedureSpec)
 	if selectSpec.WhereSet {
-		// TODO: create copy of select spec and set new where expression
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.WhereSet = false
+		selectSpec.Where = expression.Expression{}
+		return
 	}
 	selectSpec.WhereSet = true
-	p, err := execute.ExpressionToStoragePredicate(s.Expression.Root)
-	if err != nil {
-		//TODO(nathanielc): Handle this error
-		panic(err)
-	}
-	selectSpec.Where = p
+	selectSpec.Where = s.Expression
 }

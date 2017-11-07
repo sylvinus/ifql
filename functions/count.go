@@ -47,6 +47,29 @@ func (s *CountProcedureSpec) Kind() plan.ProcedureKind {
 	return CountKind
 }
 
+func (s *CountProcedureSpec) Copy() plan.ProcedureSpec {
+	return new(CountProcedureSpec)
+}
+
+func (s *CountProcedureSpec) PushDownRule() plan.PushDownRule {
+	return plan.PushDownRule{
+		Root:    SelectKind,
+		Through: nil,
+	}
+}
+func (s *CountProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
+	selectSpec := root.Spec.(*SelectProcedureSpec)
+	if selectSpec.AggregateSet {
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.AggregateSet = false
+		selectSpec.AggregateType = ""
+		return
+	}
+	selectSpec.AggregateSet = true
+	selectSpec.AggregateType = CountKind
+}
+
 type CountAgg struct {
 	count int64
 }

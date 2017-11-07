@@ -104,6 +104,17 @@ func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
 	return MergeJoinKind
 }
+func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(MergeJoinProcedureSpec)
+
+	ns.Keys = make([]string, len(s.Keys))
+	copy(ns.Keys, s.Keys)
+
+	// TODO Copy Expression
+	ns.Expression = s.Expression
+
+	return ns
+}
 
 func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)

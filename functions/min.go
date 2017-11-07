@@ -59,6 +59,11 @@ func newMinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *MinProcedureSpec) Kind() plan.ProcedureKind {
 	return MinKind
 }
+func (s *MinProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(MinProcedureSpec)
+	ns.UseRowTime = s.UseRowTime
+	return ns
+}
 
 type MinSelector struct {
 	set  bool

@@ -79,6 +79,15 @@ func newSortProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *SortProcedureSpec) Kind() plan.ProcedureKind {
 	return SortKind
 }
+func (s *SortProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(SortProcedureSpec)
+
+	ns.Cols = make([]string, len(s.Cols))
+	copy(ns.Cols, s.Cols)
+
+	ns.Desc = s.Desc
+	return ns
+}
 
 func createSortTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*SortProcedureSpec)

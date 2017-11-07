@@ -59,6 +59,11 @@ func newMaxProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *MaxProcedureSpec) Kind() plan.ProcedureKind {
 	return MaxKind
 }
+func (s *MaxProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(MaxProcedureSpec)
+	ns.UseRowTime = s.UseRowTime
+	return ns
+}
 
 type MaxSelector struct {
 	set  bool

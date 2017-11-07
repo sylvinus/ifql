@@ -63,9 +63,12 @@ func TestQuery_JSON(t *testing.T) {
 				ID: "range",
 				Spec: &functions.RangeOpSpec{
 					Start: query.Time{
-						Relative: -4 * time.Hour,
+						Relative:   -4 * time.Hour,
+						IsRelative: true,
 					},
-					Stop: query.Time{},
+					Stop: query.Time{
+						IsRelative: true,
+					},
 				},
 			},
 			{
@@ -79,7 +82,7 @@ func TestQuery_JSON(t *testing.T) {
 		},
 	}
 	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {
-		t.Errorf("unexpected query:\n%s", cmp.Diff(gotQ, expQ))
+		t.Errorf("unexpected query:\n%s", cmp.Diff(gotQ, expQ, ignoreUnexportedQuerySpec))
 	}
 
 	// Ensure we can properly marshal a query
@@ -91,7 +94,7 @@ func TestQuery_JSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cmp.Equal(gotQ, expQ, ignoreUnexportedQuerySpec) {
-		t.Errorf("unexpected query after marshalling: -want/+got %s", cmp.Diff(expQ, gotQ))
+		t.Errorf("unexpected query after marshalling: -want/+got %s", cmp.Diff(expQ, gotQ, ignoreUnexportedQuerySpec))
 	}
 }
 

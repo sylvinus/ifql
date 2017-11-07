@@ -23,17 +23,33 @@ type Procedure struct {
 	Spec     ProcedureSpec
 }
 
+func (p *Procedure) Copy() *Procedure {
+	np := new(Procedure)
+	np.ID = p.ID
+
+	np.Parents = make([]ProcedureID, len(p.Parents))
+	copy(np.Parents, p.Parents)
+
+	np.Children = make([]ProcedureID, len(p.Children))
+	copy(np.Children, p.Children)
+
+	np.Spec = p.Spec.Copy()
+
+	return np
+}
+
 type CreateProcedureSpec func(query.OperationSpec) (ProcedureSpec, error)
 
 // ProcedureSpec specifies an operation as part of a query.
 type ProcedureSpec interface {
 	// Kind returns the kind of the procedure.
 	Kind() ProcedureKind
+	Copy() ProcedureSpec
 }
 
 type PushDownProcedureSpec interface {
 	PushDownRule() PushDownRule
-	PushDown(root *Procedure)
+	PushDown(root *Procedure, dup func() *Procedure)
 }
 
 type BoundedProcedureSpec interface {
@@ -56,11 +72,11 @@ type BoundsSpec struct {
 
 func (b BoundsSpec) Union(o BoundsSpec, now time.Time) (u BoundsSpec) {
 	u.Start = b.Start
-	if o.Start.Time(now).Before(b.Start.Time(now)) {
+	if u.Start.IsZero() || o.Start.Time(now).Before(b.Start.Time(now)) {
 		u.Start = o.Start
 	}
 	u.Stop = b.Stop
-	if o.Stop.Time(now).After(b.Stop.Time(now)) {
+	if u.Stop.IsZero() || o.Stop.Time(now).After(b.Stop.Time(now)) {
 		u.Stop = o.Stop
 	}
 	return

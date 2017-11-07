@@ -85,6 +85,13 @@ func newSampleProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *SampleProcedureSpec) Kind() plan.ProcedureKind {
 	return SampleKind
 }
+func (s *SampleProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(SampleProcedureSpec)
+	ns.UseRowTime = s.UseRowTime
+	ns.N = s.N
+	ns.Pos = s.Pos
+	return ns
+}
 
 type SampleSelector struct {
 	N   int

@@ -47,6 +47,9 @@ func newStddevProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *StddevProcedureSpec) Kind() plan.ProcedureKind {
 	return StddevKind
 }
+func (s *StddevProcedureSpec) Copy() plan.ProcedureSpec {
+	return new(StddevProcedureSpec)
+}
 
 type StddevAgg struct {
 	n, m2, mean float64
