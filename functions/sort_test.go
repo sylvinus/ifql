@@ -1,10 +1,8 @@
 package functions_test
 
 import (
-	"sort"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -42,7 +40,7 @@ func TestSort_Process(t *testing.T) {
 	testCases := []struct {
 		name string
 		spec *functions.SortProcedureSpec
-		data []*executetest.Block
+		data []execute.Block
 		want []*executetest.Block
 	}{
 		{
@@ -51,7 +49,7 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"value"},
 				Desc: false,
 			},
-			data: []*executetest.Block{{
+			data: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
 					Start: 1,
 					Stop:  3,
@@ -86,7 +84,7 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"value"},
 				Desc: true,
 			},
-			data: []*executetest.Block{{
+			data: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
 					Start: 1,
 					Stop:  3,
@@ -121,7 +119,7 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"value", "time"},
 				Desc: false,
 			},
-			data: []*executetest.Block{{
+			data: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
 					Start: 1,
 					Stop:  3,
@@ -158,7 +156,7 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"value", "time"},
 				Desc: true,
 			},
-			data: []*executetest.Block{{
+			data: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
 					Start: 1,
 					Stop:  3,
@@ -195,8 +193,8 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"value"},
 				Desc: false,
 			},
-			data: []*executetest.Block{
-				{
+			data: []execute.Block{
+				&executetest.Block{
 					Bnds: execute.Bounds{
 						Start: 1,
 						Stop:  3,
@@ -211,7 +209,7 @@ func TestSort_Process(t *testing.T) {
 						{execute.Time(2), 1.0},
 					},
 				},
-				{
+				&executetest.Block{
 					Bnds: execute.Bounds{
 						Start: 3,
 						Stop:  5,
@@ -266,8 +264,8 @@ func TestSort_Process(t *testing.T) {
 				Cols: []string{"_field", "value"},
 				Desc: false,
 			},
-			data: []*executetest.Block{
-				{
+			data: []execute.Block{
+				&executetest.Block{
 					Bnds: execute.Bounds{
 						Start: 1,
 						Stop:  3,
@@ -287,7 +285,7 @@ func TestSort_Process(t *testing.T) {
 						{execute.Time(2), 6.0, "hostA", "F3"},
 					},
 				},
-				{
+				&executetest.Block{
 					Bnds: execute.Bounds{
 						Start: 1,
 						Stop:  3,
@@ -355,29 +353,14 @@ func TestSort_Process(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			d := executetest.NewDataset(executetest.RandomDatasetID())
-			c := execute.NewBlockBuilderCache()
-			c.SetTriggerSpec(execute.DefaultTriggerSpec)
-
-			st := functions.NewSortTransformation(
-				d,
-				c,
-				tc.spec,
+			executetest.ProcessTestHelper(
+				t,
+				tc.data,
+				tc.want,
+				func(d execute.Dataset, c execute.BlockBuilderCache) execute.Transformation {
+					return functions.NewSortTransformation(d, c, tc.spec)
+				},
 			)
-
-			parentID := executetest.RandomDatasetID()
-			for _, b := range tc.data {
-				st.Process(parentID, b)
-			}
-
-			got := executetest.BlocksFromCache(c)
-
-			sort.Sort(executetest.SortedBlocks(got))
-			sort.Sort(executetest.SortedBlocks(tc.want))
-
-			if !cmp.Equal(tc.want, got) {
-				t.Errorf("unexpected blocks -want/+got\n%s", cmp.Diff(tc.want, got))
-			}
 		})
 	}
 }

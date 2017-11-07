@@ -1,6 +1,7 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -61,6 +62,9 @@ func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 			return nil, fmt.Errorf("ignore argument must be a list of strings, got list of %v", list.Type)
 		}
 		spec.Ignore = list.Elements.([]string)
+	}
+	if len(spec.By) > 0 && len(spec.Ignore) > 0 {
+		return nil, errors.New("cannot specify both by and ignore keys")
 	}
 	return spec, nil
 }
@@ -149,7 +153,7 @@ func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMo
 	}
 	cache := execute.NewBlockBuilderCache()
 	d := execute.NewDataset(id, mode, cache)
-	t := newGroupTransformation(d, cache, s)
+	t := NewGroupTransformation(d, cache, s)
 	return t, d, nil
 }
 
@@ -157,19 +161,25 @@ type groupTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
-	keys []string
-	keep []string
+	keys   []string
+	ignore []string
+	keep   []string
+
+	// Ignoring is true of len(keys) == 0 && len(ignore) > 0
+	ignoring bool
 }
 
-func newGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *GroupProcedureSpec) *groupTransformation {
-	sort.Strings(spec.By)
+func NewGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *GroupProcedureSpec) *groupTransformation {
 	t := &groupTransformation{
-		d:     d,
-		cache: cache,
-		keys:  spec.By,
-		keep:  spec.Keep,
+		d:        d,
+		cache:    cache,
+		keys:     spec.By,
+		ignore:   spec.Ignore,
+		keep:     spec.Keep,
+		ignoring: len(spec.By) == 0 && len(spec.Ignore) > 0,
 	}
 	sort.Strings(t.keys)
+	sort.Strings(t.ignore)
 	sort.Strings(t.keep)
 	return t
 }
@@ -184,7 +194,44 @@ func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.Bl
 }
 
 func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
-	tags := b.Tags().Subset(t.keys)
+	isFanIn := false
+	var tags execute.Tags
+	if t.ignoring {
+		// Assume we can fan in, we check for the false condition below
+		isFanIn = true
+		blockTags := b.Tags()
+		tags = make(execute.Tags, len(blockTags))
+		cols := b.Cols()
+		for _, c := range cols {
+			if c.IsTag {
+				found := false
+				for _, tag := range t.ignore {
+					if tag == c.Label {
+						found = true
+						break
+					}
+				}
+				if !found {
+					if !c.IsCommon {
+						isFanIn = false
+						break
+					}
+					tags[c.Label] = blockTags[c.Label]
+				}
+			}
+		}
+	} else {
+		tags, isFanIn = b.Tags().Subset(t.keys)
+	}
+	if isFanIn {
+		t.processFanIn(b, tags)
+	} else {
+		t.processFanOut(b)
+	}
+}
+
+// processFanIn assumes that all rows of b will be placed in the same builder.
+func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) {
 	builder, new := t.cache.BlockBuilder(blockMetadata{
 		tags:   tags,
 		bounds: b.Bounds(),
@@ -192,15 +239,15 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 	if new {
 		// Determine columns of new block.
 
-		// Add tags.
-		execute.AddTags(tags, builder)
-
-		// Add other existing columns, skipping tags.
+		// Add existing columns, skipping tags.
 		for _, c := range b.Cols() {
 			if !c.IsTag {
 				builder.AddCol(c)
 			}
 		}
+
+		// Add tags.
+		execute.AddTags(tags, builder)
 
 		// Add columns for tags that are to be kept.
 		for _, k := range t.keep {
@@ -226,6 +273,104 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 	}
 
 	execute.AppendBlock(b, builder, colMap)
+}
+
+type tagMeta struct {
+	idx      int
+	isCommon bool
+}
+
+// processFanOut assumes each row of b could end up in a different builder.
+func (t *groupTransformation) processFanOut(b execute.Block) {
+	cols := b.Cols()
+	tagMap := make(map[string]tagMeta, len(cols))
+	for j, c := range cols {
+		if c.IsTag {
+			ignoreTag := false
+			for _, tag := range t.ignore {
+				if tag == c.Label {
+					ignoreTag = true
+					break
+				}
+			}
+			byTag := false
+			for _, tag := range t.keys {
+				if tag == c.Label {
+					byTag = true
+					break
+				}
+			}
+			keepTag := false
+			for _, tag := range t.keep {
+				if tag == c.Label {
+					keepTag = true
+					break
+				}
+			}
+			if (t.ignoring && !ignoreTag) || byTag || keepTag {
+				tagMap[c.Label] = tagMeta{
+					idx:      j,
+					isCommon: (t.ignoring && !keepTag) || (!t.ignoring && byTag),
+				}
+			}
+		}
+	}
+
+	// Iterate over each row and append to specific builder
+	b.Times().DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		for i := range ts {
+			tags := t.determineRowTags(tagMap, i, rr)
+			builder, new := t.cache.BlockBuilder(blockMetadata{
+				tags:   tags,
+				bounds: b.Bounds(),
+			})
+			if new {
+				// Add existing columns, skipping tags.
+				for _, c := range cols {
+					if !c.IsTag {
+						builder.AddCol(c)
+						continue
+					}
+					if meta, ok := tagMap[c.Label]; ok {
+						j := builder.AddCol(execute.ColMeta{
+							Label:    c.Label,
+							Type:     execute.TString,
+							IsTag:    true,
+							IsCommon: meta.isCommon,
+						})
+						if meta.isCommon {
+							builder.SetCommonString(j, tags[c.Label])
+						}
+					}
+				}
+			}
+			// Construct map of builder column index to block column index.
+			builderCols := builder.Cols()
+			colMap := make([]int, len(builderCols))
+			for j, c := range builderCols {
+				for nj, nc := range cols {
+					if c.Label == nc.Label {
+						colMap[j] = nj
+						break
+					}
+				}
+			}
+
+			// Add row to builder
+			execute.AppendRow(i, rr, builder, colMap)
+		}
+	})
+}
+
+func (t *groupTransformation) determineRowTags(tagMap map[string]tagMeta, i int, rr execute.RowReader) execute.Tags {
+	cols := rr.Cols()
+	tags := make(execute.Tags, len(cols))
+	for t, meta := range tagMap {
+		if meta.isCommon {
+			tags[t] = rr.AtString(i, meta.idx)
+		}
+	}
+	return tags
 }
 
 func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {

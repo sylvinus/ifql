@@ -337,8 +337,9 @@ type RowReader interface {
 	AtTime(i, j int) Time
 }
 
-func TagsForRow(cols []ColMeta, rr RowReader, i int) Tags {
-	tags := make(Tags, len(cols)-2)
+func TagsForRow(i int, rr RowReader) Tags {
+	cols := rr.Cols()
+	tags := make(Tags, len(cols))
 	for j, c := range cols {
 		if c.IsTag {
 			tags[c.Label] = rr.AtString(i, j)
@@ -389,12 +390,19 @@ func (t Tags) Key() TagsKey {
 	return TagsToKey(keys, t)
 }
 
-func (t Tags) Subset(keys []string) Tags {
+// Subset creates a new Tags that is a subset of t, using the list of keys.
+// If a keys is provided that does not exist on t, then a subset is not possible and
+// the boolean return value is false.
+func (t Tags) Subset(keys []string) (Tags, bool) {
 	subset := make(Tags, len(keys))
 	for _, k := range keys {
-		subset[k] = t[k]
+		v, ok := t[k]
+		if !ok {
+			return nil, false
+		}
+		subset[k] = v
 	}
-	return subset
+	return subset, true
 }
 
 func (t Tags) IntersectingSubset(keys []string) Tags {

@@ -403,7 +403,7 @@ func convertToTestBlock(b execute.Block) block {
 			case execute.TString:
 				v = rr.AtString(i, valueIdx)
 			}
-			tags := execute.TagsForRow(blk.cols, rr, i)
+			tags := execute.TagsForRow(i, rr)
 			blk.points = append(blk.points, point{
 				Time:  time,
 				Value: v,
