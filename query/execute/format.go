@@ -68,7 +68,7 @@ var minWidthsByType = map[DataType]int{
 	TInt:     22,
 	TUInt:    22,
 	TFloat:   22,
-	TString:  10,
+	TString:  15,
 	TTime:    len(fixedWidthTimeFmt),
 	TInvalid: 10,
 }

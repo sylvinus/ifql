@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -45,23 +46,114 @@ func NewStorageReader(hosts []string) (StorageReader, error) {
 	if len(hosts) == 0 {
 		return nil, errors.New("must provide at least one storage host")
 	}
-	conn, err := connect(hosts[0])
-	if err != nil {
-		return nil, err
+	conns := make([]connection, len(hosts))
+	for i, h := range hosts {
+		conn, err := yarpc.Dial(h)
+		if err != nil {
+			return nil, err
+		}
+		conns[i] = connection{
+			host:   h,
+			conn:   conn,
+			client: storage.NewStorageClient(conn),
+		}
 	}
 	return &storageReader{
-		conn: conn,
-		c:    storage.NewStorageClient(conn),
+		conns: conns,
 	}, nil
 }
 
 type storageReader struct {
-	conn *yarpc.ClientConn
-	c    storage.StorageClient
+	conns []connection
 }
 
-func connect(addr string) (*yarpc.ClientConn, error) {
-	return yarpc.Dial(addr)
+type connection struct {
+	host   string
+	conn   *yarpc.ClientConn
+	client storage.StorageClient
+}
+
+func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
+	var predicate *storage.Predicate
+	if readSpec.Predicate.Root != nil {
+		p, err := ExpressionToStoragePredicate(readSpec.Predicate.Root)
+		if err != nil {
+			return nil, err
+		}
+		predicate = p
+	}
+
+	bi := &storageBlockIterator{
+		bounds: Bounds{
+			Start: start,
+			Stop:  stop,
+		},
+		conns:     sr.conns,
+		readSpec:  readSpec,
+		predicate: predicate,
+	}
+	return bi, nil
+}
+
+func (sr *storageReader) Close() {
+	for _, conn := range sr.conns {
+		conn.conn.Close()
+	}
+}
+
+type storageBlockIterator struct {
+	bounds    Bounds
+	conns     []connection
+	readSpec  ReadSpec
+	predicate *storage.Predicate
+}
+
+func (bi *storageBlockIterator) Do(f func(Block)) error {
+	// Setup read request
+	var req storage.ReadRequest
+	req.Database = bi.readSpec.Database
+	req.Predicate = bi.predicate
+	req.Descending = bi.readSpec.Descending
+	req.TimestampRange.Start = int64(bi.bounds.Start)
+	req.TimestampRange.End = int64(bi.bounds.Stop)
+	req.Grouping = bi.readSpec.GroupKeys
+	if agg, err := determineAggregateType(bi.readSpec.AggregateType); err != nil {
+		return err
+	} else if agg != storage.AggregateTypeNone {
+		req.Aggregate = &storage.Aggregate{Type: agg}
+	}
+
+	streams := make([]*streamState, len(bi.conns))
+	for i, c := range bi.conns {
+		stream, err := c.client.Read(context.Background(), &req)
+		if err != nil {
+			return err
+		}
+		streams[i] = &streamState{
+			stream:   stream,
+			readSpec: &bi.readSpec,
+		}
+	}
+	ms := &mergedStreams{
+		streams: streams,
+	}
+
+	for ms.more() {
+		if p := ms.peek(); readFrameType(p) != seriesType {
+			//This means the consumer didn't read all the data off the block
+			return errors.New("internal error: short read")
+		}
+		frame := ms.next()
+		s := frame.GetSeries()
+		typ := convertDataType(s.DataType)
+		tags, keptTags := bi.determineBlockTags(s)
+		k := appendSeriesKey(nil, s, &bi.readSpec)
+		block := newStorageBlock(bi.bounds, tags, keptTags, k, ms, &bi.readSpec, typ)
+		f(block)
+		// Wait until the block has been read.
+		block.wait()
+	}
+	return nil
 }
 
 func determineAggregateType(agg string) (storage.Aggregate_AggregateType, error) {
@@ -74,78 +166,6 @@ func determineAggregateType(agg string) (storage.Aggregate_AggregateType, error)
 	}
 	return 0, fmt.Errorf("unknown aggregate type %q", agg)
 }
-
-func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
-	bi := &storageBlockIterator{
-		bounds: Bounds{
-			Start: start,
-			Stop:  stop,
-		},
-		readSpec: readSpec,
-		c:        sr.c,
-	}
-	return bi, nil
-}
-
-func (sr *storageReader) Close() {
-	sr.conn.Close()
-}
-
-type storageBlockIterator struct {
-	bounds Bounds
-	data   *readState
-
-	readSpec ReadSpec
-	c        storage.StorageClient
-}
-
-func (bi *storageBlockIterator) Do(f func(Block)) error {
-	// Setup read request
-	var req storage.ReadRequest
-	if bi.readSpec.Predicate.Root != nil {
-		predicate, err := ExpressionToStoragePredicate(bi.readSpec.Predicate.Root)
-		if err != nil {
-			return err
-		}
-		req.Predicate = predicate
-	}
-
-	req.Database = bi.readSpec.Database
-	req.Descending = bi.readSpec.Descending
-	req.TimestampRange.Start = int64(bi.bounds.Start)
-	req.TimestampRange.End = int64(bi.bounds.Stop)
-	req.Grouping = bi.readSpec.GroupKeys
-	if agg, err := determineAggregateType(bi.readSpec.AggregateType); err != nil {
-		return err
-	} else if agg != storage.AggregateTypeNone {
-		req.Aggregate = &storage.Aggregate{Type: agg}
-	}
-
-	stream, err := bi.c.Read(context.Background(), &req)
-	if err != nil {
-		return err
-	}
-	data := &readState{
-		stream: stream,
-	}
-
-	for data.more() {
-		if p := data.peek(); frameType(p) != seriesType {
-			//This means the consumer didn't read all the data off the block
-			return errors.New("internal error: short read")
-		}
-		frame := data.next()
-		s := frame.GetSeries()
-		typ := convertDataType(s.DataType)
-		tags, keptTags := bi.determineBlockTags(s)
-		block := newStorageBlock(bi.bounds, tags, keptTags, data, &bi.readSpec, typ)
-		f(block)
-		// Wait until the block has been read.
-		block.wait()
-	}
-	return nil
-}
-
 func convertDataType(t storage.ReadResponse_DataType) DataType {
 	switch t {
 	case storage.DataTypeFloat:
@@ -194,6 +214,7 @@ func (bi *storageBlockIterator) determineBlockTags(s *storage.ReadResponse_Serie
 			for _, key := range bi.readSpec.GroupKeep {
 				if k == key {
 					keptTags[key] = string(t.Value)
+					continue TAGS
 				}
 			}
 			for _, key := range bi.readSpec.GroupIgnore {
@@ -222,20 +243,91 @@ func (bi *storageBlockIterator) determineBlockTags(s *storage.ReadResponse_Serie
 	return
 }
 
+func appendSeriesKey(b key, s *storage.ReadResponse_SeriesFrame, readSpec *ReadSpec) key {
+	appendTag := func(t storage.Tag) {
+		b = append(b, t.Key...)
+		b = append(b, '=')
+		b = append(b, t.Value...)
+	}
+	if len(readSpec.GroupKeys) > 0 {
+		for i, key := range readSpec.GroupKeys {
+			if i != 0 {
+				b = append(b, ',')
+			}
+			for _, tag := range s.Tags {
+				if string(tag.Key) == key {
+					appendTag(tag)
+					break
+				}
+			}
+		}
+	} else if len(readSpec.GroupIgnore) > 0 {
+		i := 0
+	TAGS:
+		for _, t := range s.Tags {
+			k := string(t.Key)
+			for _, key := range readSpec.GroupKeep {
+				if k == key {
+					continue TAGS
+				}
+			}
+			for _, key := range readSpec.GroupIgnore {
+				if k == key {
+					continue TAGS
+				}
+			}
+			if i != 0 {
+				b = append(b, ',')
+			}
+			appendTag(t)
+			i++
+		}
+	} else if !readSpec.MergeAll {
+		for i, t := range s.Tags {
+			if i != 0 {
+				b = append(b, ',')
+			}
+			appendTag(t)
+		}
+	}
+	return b
+}
+
+// storageBlock implement OneTimeBlock as it can only be read once.
+// Since it can only be read once it is also a ValueIterator for itself.
 type storageBlock struct {
-	bounds   Bounds
-	tags     Tags
+	bounds Bounds
+	tags   Tags
+	tagKey key
+	// keptTags is a set of non common tags.
 	keptTags Tags
-	colMeta  []ColMeta
+	// colMeta always has at least two columns, where the first is a TimeCol
+	// and the second is any Value column.
+	colMeta []ColMeta
 
 	readSpec *ReadSpec
 
 	done chan struct{}
 
-	data *readState
+	ms *mergedStreams
+
+	// The index of the column to iterate
+	col int
+	// colBufs are the buffers for the given columns.
+	colBufs [2]interface{}
+
+	// resuable buffer for the time column
+	timeBuf []Time
+
+	// resuable buffers for the different types of values
+	boolBuf   []bool
+	intBuf    []int64
+	uintBuf   []uint64
+	floatBuf  []float64
+	stringBuf []string
 }
 
-func newStorageBlock(bounds Bounds, tags, keptTags Tags, data *readState, readSpec *ReadSpec, typ DataType) *storageBlock {
+func newStorageBlock(bounds Bounds, tags, keptTags Tags, tagKey key, ms *mergedStreams, readSpec *ReadSpec, typ DataType) *storageBlock {
 	colMeta := make([]ColMeta, 2, 2+len(tags)+len(keptTags))
 	colMeta[0] = TimeCol
 	colMeta[1] = ColMeta{
@@ -261,11 +353,12 @@ func newStorageBlock(bounds Bounds, tags, keptTags Tags, data *readState, readSp
 	}
 	return &storageBlock{
 		bounds:   bounds,
+		tagKey:   tagKey,
 		tags:     tags,
 		keptTags: keptTags,
 		colMeta:  colMeta,
 		readSpec: readSpec,
-		data:     data,
+		ms:       ms,
 		done:     make(chan struct{}),
 	}
 }
@@ -288,15 +381,8 @@ func (b *storageBlock) Cols() []ColMeta {
 }
 
 func (b *storageBlock) Col(c int) ValueIterator {
-	return &storageBlockValueIterator{
-		tags:     b.tags,
-		data:     b.data,
-		colMeta:  b.colMeta,
-		col:      c,
-		done:     b.done,
-		readSpec: b.readSpec,
-		keptTags: b.keptTags,
-	}
+	b.col = c
+	return b
 }
 
 func (b *storageBlock) Times() ValueIterator {
@@ -306,66 +392,35 @@ func (b *storageBlock) Values() ValueIterator {
 	return b.Col(1)
 }
 
-type storageBlockValueIterator struct {
-	tags Tags
-	data *readState
-	done chan<- struct{}
-
-	readSpec *ReadSpec
-
-	// colMeta always has at least two columns, where the first is a TimeCol
-	// and the second is any Value column.
-	colMeta []ColMeta
-	col     int
-
-	// colBufs are the buffers for the given columns.
-	colBufs [2]interface{}
-	// keptTags is a set of non common tags.
-	keptTags Tags
-
-	// resuable buffer for the time column
-	timeBuf []Time
-
-	// resuable buffers for the different types of values
-	boolBuf   []bool
-	intBuf    []int64
-	uintBuf   []uint64
-	floatBuf  []float64
-	stringBuf []string
-}
-
-func (b *storageBlockValueIterator) Cols() []ColMeta {
-	return b.colMeta
-}
-func (b *storageBlockValueIterator) DoBool(f func([]bool, RowReader)) {
+func (b *storageBlock) DoBool(f func([]bool, RowReader)) {
 	checkColType(b.colMeta[b.col], TBool)
 	for b.advance() {
 		f(b.colBufs[b.col].([]bool), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoInt(f func([]int64, RowReader)) {
+func (b *storageBlock) DoInt(f func([]int64, RowReader)) {
 	checkColType(b.colMeta[b.col], TInt)
 	for b.advance() {
 		f(b.colBufs[b.col].([]int64), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoUInt(f func([]uint64, RowReader)) {
+func (b *storageBlock) DoUInt(f func([]uint64, RowReader)) {
 	checkColType(b.colMeta[b.col], TUInt)
 	for b.advance() {
 		f(b.colBufs[b.col].([]uint64), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoFloat(f func([]float64, RowReader)) {
+func (b *storageBlock) DoFloat(f func([]float64, RowReader)) {
 	checkColType(b.colMeta[b.col], TFloat)
 	for b.advance() {
 		f(b.colBufs[b.col].([]float64), b)
 	}
 	close(b.done)
 }
-func (b *storageBlockValueIterator) DoString(f func([]string, RowReader)) {
+func (b *storageBlock) DoString(f func([]string, RowReader)) {
 	defer close(b.done)
 
 	meta := b.colMeta[b.col]
@@ -404,8 +459,7 @@ func (b *storageBlockValueIterator) DoString(f func([]string, RowReader)) {
 		f(b.colBufs[b.col].([]string), b)
 	}
 }
-
-func (b *storageBlockValueIterator) DoTime(f func([]Time, RowReader)) {
+func (b *storageBlock) DoTime(f func([]Time, RowReader)) {
 	checkColType(b.colMeta[b.col], TTime)
 	for b.advance() {
 		f(b.colBufs[b.col].([]Time), b)
@@ -413,23 +467,23 @@ func (b *storageBlockValueIterator) DoTime(f func([]Time, RowReader)) {
 	close(b.done)
 }
 
-func (b *storageBlockValueIterator) AtBool(i, j int) bool {
+func (b *storageBlock) AtBool(i, j int) bool {
 	checkColType(b.colMeta[j], TBool)
 	return b.colBufs[j].([]bool)[i]
 }
-func (b *storageBlockValueIterator) AtInt(i, j int) int64 {
+func (b *storageBlock) AtInt(i, j int) int64 {
 	checkColType(b.colMeta[j], TInt)
 	return b.colBufs[j].([]int64)[i]
 }
-func (b *storageBlockValueIterator) AtUInt(i, j int) uint64 {
+func (b *storageBlock) AtUInt(i, j int) uint64 {
 	checkColType(b.colMeta[j], TUInt)
 	return b.colBufs[j].([]uint64)[i]
 }
-func (b *storageBlockValueIterator) AtFloat(i, j int) float64 {
+func (b *storageBlock) AtFloat(i, j int) float64 {
 	checkColType(b.colMeta[j], TFloat)
 	return b.colBufs[j].([]float64)[i]
 }
-func (b *storageBlockValueIterator) AtString(i, j int) string {
+func (b *storageBlock) AtString(i, j int) string {
 	meta := b.colMeta[j]
 	checkColType(meta, TString)
 	if meta.IsTag {
@@ -440,13 +494,13 @@ func (b *storageBlockValueIterator) AtString(i, j int) string {
 	}
 	return b.colBufs[j].([]string)[i]
 }
-func (b *storageBlockValueIterator) AtTime(i, j int) Time {
+func (b *storageBlock) AtTime(i, j int) Time {
 	checkColType(b.colMeta[j], TTime)
 	return b.colBufs[j].([]Time)[i]
 }
 
-func (b *storageBlockValueIterator) advance() bool {
-	for b.data.more() {
+func (b *storageBlock) advance() bool {
+	for b.ms.more() {
 		//reset buffers
 		b.timeBuf = b.timeBuf[0:0]
 		b.boolBuf = b.boolBuf[0:0]
@@ -455,15 +509,13 @@ func (b *storageBlockValueIterator) advance() bool {
 		b.stringBuf = b.stringBuf[0:0]
 		b.floatBuf = b.floatBuf[0:0]
 
-		switch p := b.data.peek(); frameType(p) {
+		switch p := b.ms.peek(); readFrameType(p) {
 		case seriesType:
-			s := p.GetSeries()
-			for _, t := range s.Tags {
-				key := string(t.Key)
-				if v, ok := b.tags[key]; ok && v != string(t.Value) {
-					return false
-				}
+			if b.ms.key().Compare(b.tagKey) != 0 {
+				// We have reached the end of data for this block
+				return false
 			}
+			s := p.GetSeries()
 			// Populate keptTags with new series values
 			b.keptTags = make(Tags, len(b.readSpec.GroupKeep))
 			for _, t := range s.Tags {
@@ -475,7 +527,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				}
 			}
 			// Advance to next frame
-			b.data.next()
+			b.ms.next()
 		case boolPointsType:
 			if b.colMeta[1].Type != TBool {
 				// TODO: Add error handling
@@ -483,7 +535,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				return false
 			}
 			// read next frame
-			frame := b.data.next()
+			frame := b.ms.next()
 			p := frame.GetBooleanPoints()
 			l := len(p.Timestamps)
 			if l > cap(b.timeBuf) {
@@ -511,7 +563,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				return false
 			}
 			// read next frame
-			frame := b.data.next()
+			frame := b.ms.next()
 			p := frame.GetIntegerPoints()
 			l := len(p.Timestamps)
 			if l > cap(b.timeBuf) {
@@ -539,7 +591,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				return false
 			}
 			// read next frame
-			frame := b.data.next()
+			frame := b.ms.next()
 			p := frame.GetUnsignedPoints()
 			l := len(p.Timestamps)
 			if l > cap(b.timeBuf) {
@@ -567,7 +619,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				return false
 			}
 			// read next frame
-			frame := b.data.next()
+			frame := b.ms.next()
 			p := frame.GetFloatPoints()
 
 			l := len(p.Timestamps)
@@ -596,7 +648,7 @@ func (b *storageBlockValueIterator) advance() bool {
 				return false
 			}
 			// read next frame
-			frame := b.data.next()
+			frame := b.ms.next()
 			p := frame.GetStringPoints()
 
 			l := len(p.Timestamps)
@@ -623,15 +675,151 @@ func (b *storageBlockValueIterator) advance() bool {
 	return false
 }
 
-type readState struct {
-	stream storage.Storage_ReadClient
-	rep    storage.ReadResponse
+type streamState struct {
+	stream     storage.Storage_ReadClient
+	rep        storage.ReadResponse
+	currentKey key
+	readSpec   *ReadSpec
+	finished   bool
 }
 
-type responseType int
+func (s *streamState) peek() storage.ReadResponse_Frame {
+	return s.rep.Frames[0]
+}
+
+func (s *streamState) more() bool {
+	if s.finished {
+		return false
+	}
+	if len(s.rep.Frames) > 0 {
+		return true
+	}
+	if err := s.stream.RecvMsg(&s.rep); err != nil {
+		s.finished = true
+		if err == io.EOF {
+			// We are done
+			return false
+		}
+		//TODO add proper error handling
+		return false
+	}
+	s.computeKey()
+	return true
+}
+
+func (s *streamState) key() key {
+	return s.currentKey
+}
+
+func (s *streamState) computeKey() {
+	// Determine new currentKey
+	if p := s.peek(); readFrameType(p) == seriesType {
+		series := p.GetSeries()
+		s.currentKey = appendSeriesKey(s.currentKey[0:0], series, s.readSpec)
+	}
+}
+func (s *streamState) next() storage.ReadResponse_Frame {
+	frame := s.rep.Frames[0]
+	s.rep.Frames = s.rep.Frames[1:]
+	if len(s.rep.Frames) > 0 {
+		s.computeKey()
+	}
+	return frame
+}
+
+type key []byte
+
+// Compare keys, a nil key is always greater.
+func (k key) Compare(o key) int {
+	if k == nil && o == nil {
+		return 0
+	}
+	if k == nil {
+		return 1
+	}
+	if o == nil {
+		return -1
+	}
+	return bytes.Compare([]byte(k), []byte(o))
+}
+
+type mergedStreams struct {
+	streams    []*streamState
+	currentKey key
+	i          int
+}
+
+func (s *mergedStreams) key() key {
+	return s.currentKey
+}
+func (s *mergedStreams) peek() storage.ReadResponse_Frame {
+	return s.streams[s.i].peek()
+}
+
+func (s *mergedStreams) next() storage.ReadResponse_Frame {
+	return s.streams[s.i].next()
+}
+
+func (s *mergedStreams) more() bool {
+	if s.i < 0 {
+		return false
+	}
+	if s.currentKey == nil {
+		return s.determineNewKey()
+	}
+	if s.streams[s.i].more() {
+		cmp := s.streams[s.i].key().Compare(s.currentKey)
+		switch cmp {
+		case 0:
+			return true
+		case 1:
+			return s.advance()
+		case -1:
+			panic(errors.New("found smaller key, this should not be possible"))
+		}
+	}
+	return s.advance()
+}
+
+func (s *mergedStreams) advance() bool {
+	s.i++
+	if s.i == len(s.streams) {
+		if !s.determineNewKey() {
+			// no new data on any stream
+			return false
+		}
+	}
+	return s.more()
+}
+
+func (s *mergedStreams) determineNewKey() bool {
+	minIdx := -1
+	var minKey key
+	for i, stream := range s.streams {
+		if !stream.more() {
+			continue
+		}
+		k := stream.key()
+		if k.Compare(minKey) < 0 {
+			minIdx = i
+			minKey = k
+		}
+	}
+	l := len(minKey)
+	if cap(s.currentKey) < l {
+		s.currentKey = make(key, l)
+	} else {
+		s.currentKey = s.currentKey[:l]
+	}
+	copy(s.currentKey, minKey)
+	s.i = minIdx
+	return s.i >= 0
+}
+
+type frameType int
 
 const (
-	seriesType responseType = iota
+	seriesType frameType = iota
 	boolPointsType
 	intPointsType
 	uintPointsType
@@ -639,11 +827,7 @@ const (
 	stringPointsType
 )
 
-func (s *readState) peek() storage.ReadResponse_Frame {
-	return s.rep.Frames[0]
-}
-
-func frameType(frame storage.ReadResponse_Frame) responseType {
+func readFrameType(frame storage.ReadResponse_Frame) frameType {
 	switch frame.Data.(type) {
 	case *storage.ReadResponse_Frame_Series:
 		return seriesType
@@ -660,25 +844,4 @@ func frameType(frame storage.ReadResponse_Frame) responseType {
 	default:
 		panic(fmt.Errorf("unknown read response frame type: %T", frame.Data))
 	}
-}
-
-func (s *readState) more() bool {
-	if len(s.rep.Frames) > 0 {
-		return true
-	}
-	if err := s.stream.RecvMsg(&s.rep); err != nil {
-		if err == io.EOF {
-			// We are done
-			return false
-		}
-		//TODO add proper error handling
-		return false
-	}
-	return true
-}
-
-func (s *readState) next() storage.ReadResponse_Frame {
-	frame := s.rep.Frames[0]
-	s.rep.Frames = s.rep.Frames[1:]
-	return frame
 }
