@@ -215,10 +215,10 @@ func TestExecutor_Execute(t *testing.T) {
 	for i, tc := range testCases {
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			exe := execute.NewExecutor(
-				&storageReader{blocks: tc.src},
-				nil,
-			)
+			c := execute.Config{
+				StorageReader: &storageReader{blocks: tc.src},
+			}
+			exe := execute.NewExecutor(c)
 			results, err := exe.Execute(context.Background(), tc.plan)
 			if err != nil {
 				t.Fatal(err)

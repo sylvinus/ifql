@@ -43,6 +43,9 @@ func createRangeOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 			return nil, err
 		}
 		spec.Stop = stop
+	} else {
+		// Make stop time implicit "now"
+		spec.Stop.IsRelative = true
 	}
 
 	return spec, nil

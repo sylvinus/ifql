@@ -2,7 +2,7 @@ SUBDIRS := ast ifql promql
 
 SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
 
-all: Gopkg.lock $(SUBDIRS) bin/ifql
+all: Gopkg.lock $(SUBDIRS) bin/ifql bin/ifqld
 
 $(SUBDIRS): bin/pigeon bin/cmpgen
 	$(MAKE) -C $@ $(MAKECMDGOALS)

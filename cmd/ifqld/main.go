@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -18,10 +16,27 @@ import (
 
 var addr = flag.String("listen-address", ":8080", "The address to listen on for HTTP requests.")
 
+var defaultStorageHosts = []string{"localhost:8082"}
+var hosts []string
+var storageReader execute.StorageReader
+
+func usage() {
+	fmt.Println("Usage: ifqld [OPTIONS] <host>...")
+	fmt.Println()
+	fmt.Println("Start an ifqld daemon connected to the list of hosts.")
+	fmt.Println("OPTIONS")
+	flag.PrintDefaults()
+}
+
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
+	hosts = flag.Args()
+	if len(hosts) == 0 {
+		hosts = defaultStorageHosts
+	}
 	log.Printf("Starting on %s\n", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
@@ -37,8 +52,15 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	verbose := req.FormValue("verbose") != ""
 	trace := req.FormValue("trace") != ""
 
-	ctx := context.Background()
-	results, err := ifql.Query(ctx, query, verbose, trace)
+	results, err := ifql.Query(
+		req.Context(),
+		query,
+		&ifql.Options{
+			Verbose: verbose,
+			Trace:   trace,
+			Hosts:   hosts,
+		},
+	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
@@ -46,10 +68,11 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if req.FormValue("format") == "line" {
-		writeLineResults(results, w)
-	} else {
+	switch req.Header.Get("Content-Type") {
+	case "application/json":
 		writeJSONResults(results, w)
+	default:
+		writeLineResults(results, w)
 	}
 }
 
@@ -106,16 +129,13 @@ func writeJSONResults(results []execute.Result, w http.ResponseWriter) {
 }
 
 func writeLineResults(results []execute.Result, w http.ResponseWriter) {
-	buf := bytes.NewBuffer(nil)
-
-	iterateResults(results, func(m, f string, tags map[string]string, val interface{}, t) {
-							p, err := models.NewPoint(m, models.NewTags(tags), map[string]interface{}{f: val}, t)
-					if err != nil {
-						log.Println("error creating new point", err)
-						return
-					}
-					w.Write([]byte(p.String()))
-					w.Write([]byte("\n"))
-
-		})
+	iterateResults(results, func(m, f string, tags map[string]string, val interface{}, t time.Time) {
+		p, err := models.NewPoint(m, models.NewTags(tags), map[string]interface{}{f: val}, t)
+		if err != nil {
+			log.Println("error creating new point", err)
+			return
+		}
+		w.Write([]byte(p.String()))
+		w.Write([]byte("\n"))
+	})
 }

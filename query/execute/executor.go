@@ -3,91 +3,36 @@ package execute
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime/debug"
-	"time"
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
 	"github.com/pkg/errors"
 )
 
-type Option func(*Options)
-type Options struct {
-	Verbose bool
-	Trace   bool
-}
-
-func Verbose() Option {
-	return func(o *Options) { o.Verbose = true }
-}
-func Trace() Option {
-	return func(o *Options) { o.Trace = true }
-}
-
-func Execute(ctx context.Context, qSpec *query.QuerySpec, os ...Option) ([]Result, error) {
-	var opts Options
-	for _, o := range os {
-		o(&opts)
-	}
-	if opts.Verbose {
-		log.Println("query", query.Formatted(qSpec))
-	}
-
-	lplanner := plan.NewLogicalPlanner()
-	lp, err := lplanner.Plan(qSpec)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create logical plan")
-	}
-	if opts.Verbose {
-		log.Println("logical plan", plan.Formatted(lp))
-	}
-
-	planner := plan.NewPlanner()
-	p, err := planner.Plan(lp, nil, time.Now())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create physical plan")
-	}
-	if opts.Verbose {
-		log.Println("physical plan", plan.Formatted(p))
-	}
-
-	storage, err := NewStorageReader()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create storage reader")
-	}
-
-	e := NewExecutor(storage, &opts)
-	r, err := e.Execute(ctx, p)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to execute query")
-	}
-	return r, nil
-}
-
 type Executor interface {
 	Execute(context.Context, *plan.PlanSpec) ([]Result, error)
 }
 
 type executor struct {
-	sr   StorageReader
-	opts Options
+	c Config
 }
 
-func NewExecutor(sr StorageReader, opts *Options) Executor {
+type Config struct {
+	Trace         bool
+	StorageReader StorageReader
+}
+
+func NewExecutor(c Config) Executor {
 	e := &executor{
-		sr: sr,
-	}
-	if opts != nil {
-		e.opts = *opts
+		c: c,
 	}
 	return e
 }
 
 type executionState struct {
-	p    *plan.PlanSpec
-	sr   StorageReader
-	opts Options
+	p *plan.PlanSpec
+	c *Config
 
 	bounds Bounds
 
@@ -107,8 +52,7 @@ func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, err
 func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (*executionState, error) {
 	es := &executionState{
 		p:       p,
-		sr:      e.sr,
-		opts:    e.opts,
+		c:       &e.c,
 		results: make([]Result, len(p.Results)),
 		bounds: Bounds{
 			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
@@ -137,7 +81,7 @@ type triggeringSpec interface {
 
 func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
-		s := createS(pr.Spec, DatasetID(pr.ID), es.sr, es)
+		s := createS(pr.Spec, DatasetID(pr.ID), es.c.StorageReader, es)
 		es.runners = append(es.runners, s)
 		return s, nil
 	}
@@ -200,7 +144,7 @@ func (es *executionState) do(ctx context.Context) {
 					default:
 						err = fmt.Errorf("%v", e)
 					}
-					if es.opts.Trace {
+					if es.c.Trace {
 						es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
 					} else {
 						es.abort(errors.Wrap(err, "panic"))
