@@ -41,8 +41,11 @@ type ReadSpec struct {
 	GroupKeep []string
 }
 
-func NewStorageReader() (StorageReader, error) {
-	conn, err := connect("localhost:8082")
+func NewStorageReader(hosts []string) (StorageReader, error) {
+	if len(hosts) == 0 {
+		return nil, errors.New("must provide at least one storage host")
+	}
+	conn, err := connect(hosts[0])
 	if err != nil {
 		return nil, err
 	}
@@ -97,15 +100,17 @@ type storageBlockIterator struct {
 }
 
 func (bi *storageBlockIterator) Do(f func(Block)) error {
-	predicate, err := ExpressionToStoragePredicate(bi.readSpec.Predicate.Root)
-	if err != nil {
-		return err
-	}
-
 	// Setup read request
 	var req storage.ReadRequest
+	if bi.readSpec.Predicate.Root != nil {
+		predicate, err := ExpressionToStoragePredicate(bi.readSpec.Predicate.Root)
+		if err != nil {
+			return err
+		}
+		req.Predicate = predicate
+	}
+
 	req.Database = bi.readSpec.Database
-	req.Predicate = predicate
 	req.Descending = bi.readSpec.Descending
 	req.TimestampRange.Start = int64(bi.bounds.Start)
 	req.TimestampRange.End = int64(bi.bounds.Stop)

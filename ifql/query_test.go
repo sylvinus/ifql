@@ -643,6 +643,9 @@ a.join(keys:["host"], exp:{a + b})`,
 								Relative:   -1 * time.Hour,
 								IsRelative: true,
 							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
 						},
 					},
 					{
@@ -656,6 +659,9 @@ a.join(keys:["host"], exp:{a + b})`,
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
 								IsRelative: true,
 							},
 						},
@@ -724,6 +730,9 @@ a.join(keys:["host"], exp:{a + b})`,
 								Relative:   -1 * time.Hour,
 								IsRelative: true,
 							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
 						},
 					},
 					{
@@ -754,6 +763,9 @@ a.join(keys:["host"], exp:{a + b})`,
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
 								IsRelative: true,
 							},
 						},
@@ -824,6 +836,9 @@ a.join(keys:["host"], exp:{a + b})`,
 								Relative:   -1 * time.Hour,
 								IsRelative: true,
 							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
 						},
 					},
 					{
@@ -854,6 +869,9 @@ a.join(keys:["host"], exp:{a + b})`,
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
 								IsRelative: true,
 							},
 						},

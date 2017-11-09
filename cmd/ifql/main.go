@@ -9,11 +9,8 @@ import (
 	"runtime"
 	"runtime/pprof"
 
-	"github.com/influxdata/ifql/ifql"
-	"github.com/influxdata/ifql/promql"
-	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql"
 	"github.com/influxdata/ifql/query/execute"
-	"github.com/pkg/errors"
 )
 
 var version string
@@ -25,6 +22,8 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var verbose = flag.Bool("v", false, "print verbose output")
 var trace = flag.Bool("trace", false, "print trace output")
+
+var defaultStorageHosts = []string{"localhost:8082"}
 
 func main() {
 	flag.Parse()
@@ -43,7 +42,17 @@ func main() {
 	}
 
 	ctx := context.Background()
-	results, err := doQuery(ctx, *queryStr, *verbose, *trace)
+	fmt.Println("Running query", *queryStr)
+	results, err := ifql.Query(
+		ctx,
+		*queryStr,
+		&ifql.Options{
+			Verbose: *verbose,
+			Trace:   *trace,
+			Hosts:   defaultStorageHosts,
+		},
+	)
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
@@ -71,29 +80,4 @@ func main() {
 			log.Fatal("could not write memory profile: ", err)
 		}
 	}
-}
-
-func ifqlSpec(query string) (*query.QuerySpec, error) {
-	return ifql.NewQuery(query)
-}
-
-func promqlSpec(query string) (*query.QuerySpec, error) {
-	return promql.Build(query)
-}
-
-func doQuery(ctx context.Context, queryStr string, verbose, trace bool) ([]execute.Result, error) {
-	fmt.Println("Running query", queryStr)
-	qSpec, err := ifql.NewQuery(queryStr)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse query")
-	}
-
-	var opts []execute.Option
-	if verbose {
-		opts = append(opts, execute.Verbose())
-	}
-	if trace {
-		opts = append(opts, execute.Trace())
-	}
-	return execute.Execute(ctx, qSpec, opts...)
 }

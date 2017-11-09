@@ -2,13 +2,16 @@ SUBDIRS := ast ifql promql
 
 SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
 
-all: Gopkg.lock $(SUBDIRS) bin/ifql
+all: Gopkg.lock $(SUBDIRS) bin/ifql bin/ifqld
 
 $(SUBDIRS): bin/pigeon bin/cmpgen
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 bin/ifql: $(SOURCES) bin/pigeon bin/cmpgen
 	go build -i -o bin/ifql ./cmd/ifql
+
+bin/ifqld: $(SOURCES) bin/pigeon bin/cmpgen
+	go build -i -o bin/ifqld ./cmd/ifqld
 
 bin/pigeon: ./vendor/github.com/mna/pigeon/main.go
 	go build -i -o bin/pigeon  ./vendor/github.com/mna/pigeon
