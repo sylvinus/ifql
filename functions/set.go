@@ -1,0 +1,204 @@
+package functions
+
+import (
+	"fmt"
+
+	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/query/plan"
+)
+
+const SetKind = "set"
+
+type SetOpSpec struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func init() {
+	ifql.RegisterFunction(SetKind, createSetOpSpec)
+	query.RegisterOpSpec(SetKind, newSetOp)
+	plan.RegisterProcedureSpec(SetKind, newSetProcedure, SetKind)
+	execute.RegisterTransformation(SetKind, createSetTransformation)
+}
+
+func createSetOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+	spec := new(SetOpSpec)
+	if value, ok := args["key"]; ok {
+		if value.Type != ifql.TString {
+			return nil, fmt.Errorf(`set function argument "key" must be a string, got %v`, value.Type)
+		}
+		spec.Key = value.Value.(string)
+	}
+	if value, ok := args["value"]; ok {
+		if value.Type != ifql.TString {
+			return nil, fmt.Errorf(`set function argument "value" must be a string, got %v`, value.Type)
+		}
+		spec.Value = value.Value.(string)
+	}
+	return spec, nil
+}
+
+func newSetOp() query.OperationSpec {
+	return new(SetOpSpec)
+}
+
+func (s *SetOpSpec) Kind() query.OperationKind {
+	return SetKind
+}
+
+type SetProcedureSpec struct {
+	Key, Value string
+}
+
+func newSetProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+	s, ok := qs.(*SetOpSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type %T", qs)
+	}
+	p := &SetProcedureSpec{
+		Key:   s.Key,
+		Value: s.Value,
+	}
+	return p, nil
+}
+
+func (s *SetProcedureSpec) Kind() plan.ProcedureKind {
+	return SetKind
+}
+func (s *SetProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(SetProcedureSpec)
+	ns.Key = s.Key
+	ns.Value = s.Value
+	return ns
+}
+
+func createSetTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+	s, ok := spec.(*SetProcedureSpec)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
+	}
+	cache := execute.NewBlockBuilderCache()
+	d := execute.NewDataset(id, mode, cache)
+	t := NewSetTransformation(d, cache, s)
+	return t, d, nil
+}
+
+type setTransformation struct {
+	d       execute.Dataset
+	cache   execute.BlockBuilderCache
+	parents []execute.DatasetID
+
+	key, value string
+}
+
+func NewSetTransformation(
+	d execute.Dataset,
+	cache execute.BlockBuilderCache,
+	spec *SetProcedureSpec,
+) execute.Transformation {
+	return &setTransformation{
+		d:     d,
+		cache: cache,
+		key:   spec.Key,
+		value: spec.Value,
+	}
+}
+
+func (t *setTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+	// TODO
+}
+
+func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) {
+	tags := b.Tags()
+	isCommon := false
+	if v, ok := tags[t.key]; ok {
+		isCommon = true
+		if v != t.value {
+			tags = tags.Copy()
+			tags[t.key] = t.value
+		}
+	}
+	builder, new := t.cache.BlockBuilder(blockMetadata{
+		tags:   tags,
+		bounds: b.Bounds(),
+	})
+	if new {
+		// Add columns
+		found := false
+		cols := b.Cols()
+		for j, c := range cols {
+			if c.Label == t.key {
+				found = true
+			}
+			builder.AddCol(c)
+			if c.IsTag && c.IsCommon {
+				builder.SetCommonString(j, tags[c.Label])
+			}
+		}
+		if !found {
+			builder.AddCol(execute.ColMeta{
+				Label:    t.key,
+				Type:     execute.TString,
+				IsTag:    true,
+				IsCommon: isCommon,
+			})
+		}
+	}
+	cols := builder.Cols()
+	setIdx := 0
+	for j, c := range cols {
+		if c.Label == t.key {
+			setIdx = j
+			break
+		}
+	}
+	timeIdx := execute.TimeIdx(cols)
+	b.Col(timeIdx).DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		builder.AppendTimes(timeIdx, ts)
+		for j, c := range cols {
+			if j == timeIdx || c.IsCommon {
+				continue
+			}
+			for i := range ts {
+				switch c.Type {
+				case execute.TBool:
+					builder.AppendBool(j, rr.AtBool(i, j))
+				case execute.TInt:
+					builder.AppendInt(j, rr.AtInt(i, j))
+				case execute.TUInt:
+					builder.AppendUInt(j, rr.AtUInt(i, j))
+				case execute.TFloat:
+					builder.AppendFloat(j, rr.AtFloat(i, j))
+				case execute.TString:
+					// Set new value
+					var v string
+					if j == setIdx {
+						v = t.value
+					} else {
+						v = rr.AtString(i, j)
+					}
+					builder.AppendString(j, v)
+				case execute.TTime:
+					builder.AppendTime(j, rr.AtTime(i, j))
+				default:
+					execute.PanicUnknownType(c.Type)
+				}
+			}
+		}
+	})
+}
+
+func (t *setTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+	t.d.UpdateWatermark(mark)
+}
+func (t *setTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+	t.d.UpdateProcessingTime(pt)
+}
+func (t *setTransformation) Finish(id execute.DatasetID, err error) {
+	t.d.Finish(err)
+}
+func (t *setTransformation) SetParents(ids []execute.DatasetID) {
+	t.parents = ids
+}
