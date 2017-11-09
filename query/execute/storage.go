@@ -750,6 +750,9 @@ type mergedStreams struct {
 }
 
 func (s *mergedStreams) key() key {
+	if len(s.streams) == 1 {
+		return s.streams[0].key()
+	}
 	return s.currentKey
 }
 func (s *mergedStreams) peek() storage.ReadResponse_Frame {
@@ -761,6 +764,10 @@ func (s *mergedStreams) next() storage.ReadResponse_Frame {
 }
 
 func (s *mergedStreams) more() bool {
+	// Optimze for the case of just one stream
+	if len(s.streams) == 1 {
+		return s.streams[0].more()
+	}
 	if s.i < 0 {
 		return false
 	}
