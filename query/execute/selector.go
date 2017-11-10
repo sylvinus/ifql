@@ -184,7 +184,7 @@ func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, bui
 				}
 				builder.AppendTime(j, time)
 			default:
-				panicUnknownType(c.Type)
+				PanicUnknownType(c.Type)
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func (t *rowSelectorTransformation) appendRows(builder BlockBuilder, rows []Row,
 					builder.AppendTime(j, stop)
 				}
 			default:
-				panicUnknownType(c.Type)
+				PanicUnknownType(c.Type)
 			}
 		}
 	}

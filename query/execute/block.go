@@ -137,7 +137,7 @@ func AppendBlock(b Block, builder BlockBuilder, colMap []int) {
 				case TTime:
 					builder.AppendTime(j, rr.AtTime(i, colMap[j]))
 				default:
-					panicUnknownType(c.Type)
+					PanicUnknownType(c.Type)
 				}
 			}
 		}
@@ -162,7 +162,7 @@ func AppendRow(i int, rr RowReader, builder BlockBuilder, colMap []int) {
 		case TTime:
 			builder.AppendTime(j, rr.AtTime(i, colMap[j]))
 		default:
-			panicUnknownType(c.Type)
+			PanicUnknownType(c.Type)
 		}
 	}
 }
@@ -506,7 +506,7 @@ func (b ColListBlockBuilder) AddCol(c ColMeta) int {
 			ColMeta: c,
 		}
 	default:
-		panicUnknownType(c.Type)
+		PanicUnknownType(c.Type)
 	}
 	b.blk.colMeta = append(b.blk.colMeta, c)
 	b.blk.cols = append(b.blk.cols, col)
@@ -647,7 +647,7 @@ func checkColType(col ColMeta, typ DataType) {
 	}
 }
 
-func panicUnknownType(typ DataType) {
+func PanicUnknownType(typ DataType) {
 	panic(fmt.Errorf("unknown type %v", typ))
 }
 
