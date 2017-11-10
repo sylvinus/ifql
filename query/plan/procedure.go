@@ -60,6 +60,7 @@ type BoundedProcedureSpec interface {
 type PushDownRule struct {
 	Root    ProcedureKind
 	Through []ProcedureKind
+	Match   func(*Procedure) bool
 }
 
 // ProcedureKind denotes the kind of operations.
