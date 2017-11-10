@@ -47,7 +47,6 @@ fpm:
   files:
     "LICENSE": "/usr/share/ifqld/"
     "README.md": "/usr/share/ifqld/"
-# .goreleaser.yml
 dockers:
   -
     goos: linux
