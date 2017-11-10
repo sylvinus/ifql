@@ -21,6 +21,7 @@ type StorageReader interface {
 type ReadSpec struct {
 	RAMLimit   uint64
 	Database   string
+	Hosts      []string
 	Predicate  expression.Expression
 	Limit      int64
 	Descending bool
@@ -123,16 +124,29 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 		req.Aggregate = &storage.Aggregate{Type: agg}
 	}
 
-	streams := make([]*streamState, len(bi.conns))
-	for i, c := range bi.conns {
+	streams := make([]*streamState, 0, len(bi.conns))
+	for _, c := range bi.conns {
+		if len(bi.readSpec.Hosts) > 0 {
+			// Filter down to only hosts provided
+			found := false
+			for _, h := range bi.readSpec.Hosts {
+				if c.host == h {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
 		stream, err := c.client.Read(context.Background(), &req)
 		if err != nil {
 			return err
 		}
-		streams[i] = &streamState{
+		streams = append(streams, &streamState{
 			stream:   stream,
 			readSpec: &bi.readSpec,
-		}
+		})
 	}
 	ms := &mergedStreams{
 		streams: streams,

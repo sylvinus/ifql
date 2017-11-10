@@ -14,7 +14,8 @@ import (
 const SelectKind = "select"
 
 type SelectOpSpec struct {
-	Database string `json:"database"`
+	Database string   `json:"database"`
+	Hosts    []string `json:"hosts"`
 }
 
 func init() {
@@ -25,17 +26,27 @@ func init() {
 }
 
 func createSelectOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	dbValue, ok := args["db"]
-	if !ok {
+	spec := new(SelectOpSpec)
+	if value, ok := args["db"]; ok {
+		if value.Type != ifql.TString {
+			return nil, fmt.Errorf(`select function "db" argument must be a string, got %v`, value.Type)
+		}
+		spec.Database = value.Value.(string)
+	} else {
 		return nil, errors.New(`select function requires the "db" argument`)
 	}
-	if dbValue.Type != ifql.TString {
-		return nil, fmt.Errorf(`select function "db" argument must be a string, got %v`, dbValue.Type)
-	}
 
-	return &SelectOpSpec{
-		Database: dbValue.Value.(string),
-	}, nil
+	if value, ok := args["hosts"]; ok {
+		if value.Type != ifql.TArray {
+			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got %v. Example select(hosts:["a:8082", "b:8082"]).`, value.Type)
+		}
+		list := value.Value.(ifql.Array)
+		if list.Type != ifql.TString {
+			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got list of %v. Example select(hosts:["a:8082", "b:8082"]).`, list.Type)
+		}
+		spec.Hosts = list.Elements.([]string)
+	}
+	return spec, nil
 }
 
 func newSelectOp() query.OperationSpec {
@@ -48,6 +59,7 @@ func (s *SelectOpSpec) Kind() query.OperationKind {
 
 type SelectProcedureSpec struct {
 	Database string
+	Hosts    []string
 
 	BoundsSet bool
 	Bounds    plan.BoundsSpec
@@ -77,13 +89,15 @@ type SelectProcedureSpec struct {
 }
 
 func newSelectProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
-	s := new(SelectProcedureSpec)
 	spec, ok := qs.(*SelectOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
-	s.Database = spec.Database
-	return s, nil
+
+	return &SelectProcedureSpec{
+		Database: spec.Database,
+		Hosts:    spec.Hosts,
+	}, nil
 }
 
 func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
@@ -93,6 +107,11 @@ func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(SelectProcedureSpec)
 
 	ns.Database = s.Database
+
+	if len(s.Hosts) > 0 {
+		ns.Hosts = make([]string, len(s.Hosts))
+		copy(ns.Hosts, s.Hosts)
+	}
 
 	ns.BoundsSet = s.BoundsSet
 	ns.Bounds = s.Bounds
@@ -145,6 +164,7 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 		sr,
 		execute.ReadSpec{
 			Database:      spec.Database,
+			Hosts:         spec.Hosts,
 			Predicate:     spec.Where,
 			Limit:         spec.Limit,
 			Descending:    spec.Descending,
