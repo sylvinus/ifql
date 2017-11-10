@@ -8,7 +8,7 @@ cd $DIR
 imagename="ifql-img-${CIRCLE_BUILD_NUM}"
 dataname="ifql-data-${CIRCLE_BUILD_NUM}"
 
-docker build -t $imagename .
+docker build -f Dockerfile_build -t $imagename .
 
 # Create docker volume of repo
 
