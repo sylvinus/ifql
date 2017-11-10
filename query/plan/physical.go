@@ -70,8 +70,9 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 			pr := p.plan.Procedures[id]
 			if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
 				rule := pd.PushDownRule()
-				p.pushDownAndSearch(pr, rule, pd.PushDown)
-				p.removeProcedure(pr)
+				if p.pushDownAndSearch(pr, rule, pd.PushDown) {
+					p.removeProcedure(pr)
+				}
 			}
 			if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
 				bounds := bounded.TimeBounds()
@@ -99,19 +100,21 @@ func hasKind(kind ProcedureKind, kinds []ProcedureKind) bool {
 	return false
 }
 
-func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(parent *Procedure, dup func() *Procedure)) {
+func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(parent *Procedure, dup func() *Procedure)) bool {
+	matched := false
 	for _, parent := range pr.Parents {
 		pp := p.plan.Procedures[parent]
 		pk := pp.Spec.Kind()
 		if pk == rule.Root {
-			do(pp, func() *Procedure { return p.duplicate(pp, false) })
+			if rule.Match == nil || rule.Match(pp) {
+				do(pp, func() *Procedure { return p.duplicate(pp, false) })
+				matched = true
+			}
 		} else if hasKind(pk, rule.Through) {
 			p.pushDownAndSearch(pp, rule, do)
-		} else {
-			// Cannot push down
-			// TODO: create new branch since procedure cannot be pushed down
 		}
 	}
+	return matched
 }
 
 func (p *planner) removeProcedure(pr *Procedure) {
