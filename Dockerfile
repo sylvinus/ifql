@@ -1,6 +1,5 @@
 FROM gliderlabs/alpine
-RUN apk add --update ca-certificates tzdata && \
-    rm /var/cache/apk/*
+RUN apk add --no-cache ca-certificates tzdata
 EXPOSE 8093/tcp
 COPY ifqld /
 COPY LICENSE /
