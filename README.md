@@ -5,3 +5,4 @@ IFQLD is an HTTP server for processing IFQL queries to 1 or more InfluxDB server
 This repo contains the spec and implementation of IFQL.
 
 
+ifqld runs on 8093 by default
