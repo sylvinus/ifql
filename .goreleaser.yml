@@ -3,7 +3,7 @@ builds:
 - goos:
   - linux
   - darwin
-  - windows 
+  - windows
   goarch:
   - amd64
   - 386
@@ -47,6 +47,18 @@ fpm:
   files:
     "LICENSE": "/usr/share/ifqld/"
     "README.md": "/usr/share/ifqld/"
+# .goreleaser.yml
+dockers:
+  -
+    goos: linux
+    goarch: amd64
+    binary: ifqld
+    image: quay.io/influxdb/ifqld
+    dockerfile: Dockerfile
+    latest: true
+    extra_files:
+    - LICENSE
+    - README.md
 snapshot:
   name_template: SNAPSHOT-{{ .Commit }}
 checksum:
