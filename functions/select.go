@@ -38,11 +38,11 @@ func createSelectOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Ope
 
 	if value, ok := args["hosts"]; ok {
 		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got %v`, value.Type)
+			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got %v. Example select(hosts:["a:8082", "b:8082"]).`, value.Type)
 		}
 		list := value.Value.(ifql.Array)
 		if list.Type != ifql.TString {
-			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got list of %v`, list.Type)
+			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got list of %v. Example select(hosts:["a:8082", "b:8082"]).`, list.Type)
 		}
 		spec.Hosts = list.Elements.([]string)
 	}
