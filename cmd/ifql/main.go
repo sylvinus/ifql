@@ -23,6 +23,23 @@ var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var verbose = flag.Bool("v", false, "print verbose output")
 var trace = flag.Bool("trace", false, "print trace output")
 
+var hosts = make(hostList, 0)
+
+func init() {
+	flag.Var(&hosts, "host", "An InfluxDB host to connect to. Can be provided multiple times.")
+}
+
+type hostList []string
+
+func (l *hostList) String() string {
+	return "<host>..."
+}
+
+func (l *hostList) Set(s string) error {
+	*l = append(*l, s)
+	return nil
+}
+
 var defaultStorageHosts = []string{"localhost:8082"}
 
 func main() {
@@ -43,13 +60,16 @@ func main() {
 
 	ctx := context.Background()
 	fmt.Println("Running query", *queryStr)
+	if len(hosts) == 0 {
+		hosts = defaultStorageHosts
+	}
 	results, err := ifql.Query(
 		ctx,
 		*queryStr,
 		&ifql.Options{
 			Verbose: *verbose,
 			Trace:   *trace,
-			Hosts:   defaultStorageHosts,
+			Hosts:   hosts,
 		},
 	)
 
