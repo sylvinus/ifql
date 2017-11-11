@@ -63,6 +63,9 @@ func main() {
 	log.Fatal(http.ListenAndServe(option.Addr, nil))
 }
 
+// TODO (pauldix): pull all this out into a server object that can
+//                 be tested. Alas, demo day waits for no person.
+
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	atomic.AddInt64(&queryCount, 1)
 	query := req.FormValue("q")
