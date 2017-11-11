@@ -116,6 +116,12 @@
   revision = "036268cdec22b7074cd6d50cc6d7315c667063c7"
 
 [[projects]]
+  name = "github.com/jessevdk/go-flags"
+  packages = ["."]
+  revision = "96dc06278ce32a0e9d957d590bb987c81ee66407"
+  version = "v1.3.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/mattn/go-zglob"
   packages = [".","fastwalk"]
@@ -214,6 +220,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "efa8decc20fb0e8c2739a6bd42c15d60329a737c970931f7818155d6f4bd3041"
+  inputs-digest = "8e3273681ac9c7ae11d8fd8c0b1f94edf62189f21c9a1c74a53be8cad9b205f2"
   solver-name = "gps-cdcl"
   solver-version = 1
