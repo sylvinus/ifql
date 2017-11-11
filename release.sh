@@ -4,6 +4,8 @@
 DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 cd $DIR
 
+rm ./bin/*
+
 # Build image
 imagename="ifql-img"
 dataname="ifql-data"
@@ -14,7 +16,7 @@ docker build -f Dockerfile_build -t $imagename .
 
 docker create \
     --name $dataname \
-    -v "/root/go/src/github.com/influxdata/ifql" \
+    -v "/root/go/src/github.com/influxdata/ifqld" \
     $imagename /bin/true
 docker cp "$DIR/" "$dataname:/root/go/src/github.com/influxdata/"
 
@@ -27,3 +29,5 @@ docker run \
 
 docker cp "$dataname:/root/go/src/github.com/influxdata/ifql/dist" .
 docker rm $dataname
+
+make release-docker
