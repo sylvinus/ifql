@@ -6,19 +6,30 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/influxdata/ifql"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/influxdb/models"
+	client "github.com/influxdata/usage-client/v1"
 	"github.com/jessevdk/go-flags"
+	"github.com/satori/go.uuid"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var version string
+var commit string
+var date string
+var startTime = time.Now()
+var queryCount int64
+
 type options struct {
-	Hosts []string `long:"host" short:"h" description:"influx hosts to query from. Can be specified more than once for multiple hosts." default:"localhost:8082" env:"HOSTS" env-delim:","`
-	Addr  string   `long:"bind-address" short:"b" description:"The address to listen on for HTTP requests" default:":8093" env:"BIND_ADDRESS"`
+	Hosts             []string `long:"host" short:"h" description:"influx hosts to query from. Can be specified more than once for multiple hosts." default:"localhost:8082" env:"HOSTS" env-delim:","`
+	Addr              string   `long:"bind-address" short:"b" description:"The address to listen on for HTTP requests" default:":8093" env:"BIND_ADDRESS"`
+	ReportingDisabled bool     `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
 }
 
 var hosts []string
@@ -43,12 +54,17 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
 
+	if !option.ReportingDisabled {
+		go reportUsageStats()
+	}
+
 	hosts = option.Hosts
-	log.Printf("Starting on %s\n", option.Addr)
+	log.Printf("Starting version %s on %s\n", version, option.Addr)
 	log.Fatal(http.ListenAndServe(option.Addr, nil))
 }
 
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
+	atomic.AddInt64(&queryCount, 1)
 	query := req.FormValue("q")
 	if query == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -245,5 +261,39 @@ func writeLineResults(results []execute.Result, w http.ResponseWriter) {
 			w.Write([]byte(p.String()))
 			w.Write([]byte("\n"))
 		})
+	}
+}
+
+// reportUsageStats starts periodic server reporting.
+func reportUsageStats() {
+	id := uuid.NewV4().String()
+
+	reporter := client.New("")
+	u := &client.Usage{
+		Product: "ifqld",
+		Data: []client.UsageData{
+			{
+				Tags: client.Tags{
+					"version": version,
+					"arch":    runtime.GOARCH,
+					"os":      runtime.GOOS,
+				},
+				Values: client.Values{
+					"cluster_id": id,
+					"queryCount": atomic.LoadInt64(&queryCount),
+					"uptime":     time.Since(startTime).Seconds(),
+				},
+			},
+		},
+	}
+	_, _ = reporter.Save(u)
+
+	ticker := time.NewTicker(4 * time.Hour)
+	defer ticker.Stop()
+	for {
+		<-ticker.C
+		u.Data[0].Values["uptime"] = time.Since(startTime).Seconds()
+		u.Data[0].Values["queryCount"] = atomic.LoadInt64(&queryCount)
+		go reporter.Save(u)
 	}
 }

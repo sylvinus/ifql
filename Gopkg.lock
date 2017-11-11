@@ -105,6 +105,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/influxdata/usage-client"
+  packages = ["v1"]
+  revision = "6d3895376368aa52a3a81d2a16e90f0f52371967"
+
+[[projects]]
+  branch = "master"
   name = "github.com/influxdata/yamux"
   packages = ["."]
   revision = "e7f91523e648eeb91537e420aebbd96aa64ab6ae"
@@ -220,6 +226,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8e3273681ac9c7ae11d8fd8c0b1f94edf62189f21c9a1c74a53be8cad9b205f2"
+  inputs-digest = "730a340cee11b64c456bad821949301f3d1f06b33a5e44108adeb3c626899b8a"
   solver-name = "gps-cdcl"
   solver-version = 1
