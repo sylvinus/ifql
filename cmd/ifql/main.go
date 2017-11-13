@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -17,7 +18,7 @@ var version string
 var commit string
 var date string
 
-var queryStr = flag.String("query", `select(database:"mydb").where(exp:{"_measurement" == "m0"}).range(start:-170h).sum()`, "Query to run")
+var queryStr = flag.String("query", "", "Query to run")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var verbose = flag.Bool("v", false, "print verbose output")
@@ -63,7 +64,7 @@ func main() {
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts
 	}
-	results, _, err := ifql.Query(
+	results, querySpec, err := ifql.Query(
 		ctx,
 		*queryStr,
 		&ifql.Options{
@@ -76,6 +77,13 @@ func main() {
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
+	}
+
+	if *verbose {
+		octets, err := json.MarshalIndent(querySpec, "", "    ")
+		if err != nil {
+			fmt.Println(string(octets))
+		}
 	}
 
 	for _, r := range results {

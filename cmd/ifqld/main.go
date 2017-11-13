@@ -127,6 +127,12 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if verbose {
+		if octets, err := json.MarshalIndent(querySpec, "", "    "); err == nil {
+			fmt.Println(string(octets))
+		}
+	}
+
 	for _, f := range funcs {
 		functionCounter.WithLabelValues(f).Inc()
 	}
