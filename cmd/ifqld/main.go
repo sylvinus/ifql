@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql"
+	"github.com/influxdata/ifql/idfile"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/influxdb/models"
 	client "github.com/influxdata/usage-client/v1"
 	"github.com/jessevdk/go-flags"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -27,9 +28,10 @@ var startTime = time.Now()
 var queryCount int64
 
 type options struct {
-	Hosts             []string `long:"host" short:"h" description:"influx hosts to query from. Can be specified more than once for multiple hosts." default:"localhost:8082" env:"HOSTS" env-delim:","`
-	Addr              string   `long:"bind-address" short:"b" description:"The address to listen on for HTTP requests" default:":8093" env:"BIND_ADDRESS"`
-	ReportingDisabled bool     `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
+	Hosts             []string       `long:"host" short:"h" description:"influx hosts to query from. Can be specified more than once for multiple hosts." default:"localhost:8082" env:"HOSTS" env-delim:","`
+	Addr              string         `long:"bind-address" short:"b" description:"The address to listen on for HTTP requests" default:":8093" env:"BIND_ADDRESS"`
+	IDFile            flags.Filename `long:"id-file" description:"Path to file that persists ifqld id" env:"ID_FILE" default:"./ifqld.id"`
+	ReportingDisabled bool           `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
 }
 
 var hosts []string
@@ -55,7 +57,8 @@ func main() {
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
 
 	if !option.ReportingDisabled {
-		go reportUsageStats()
+		id := ID(string(option.IDFile))
+		go reportUsageStats(id)
 	}
 
 	hosts = option.Hosts
@@ -66,6 +69,7 @@ func main() {
 // TODO (pauldix): pull all this out into a server object that can
 //                 be tested. Alas, demo day waits for no person.
 
+// HandleQuery interprets and executes ifql syntax and returns results
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	atomic.AddInt64(&queryCount, 1)
 	query := req.FormValue("q")
@@ -267,10 +271,17 @@ func writeLineResults(results []execute.Result, w http.ResponseWriter) {
 	}
 }
 
-// reportUsageStats starts periodic server reporting.
-func reportUsageStats() {
-	id := uuid.NewV4().String()
+// ID returns the id of the running ifqld process
+func ID(filepath string) string {
+	id, err := idfile.ID(filepath)
+	if err != nil {
+		id = uuid.NewV4().String()
+	}
+	return id
+}
 
+// reportUsageStats starts periodic server reporting.
+func reportUsageStats(id string) {
 	reporter := client.New("")
 	u := &client.Usage{
 		Product: "ifqld",
