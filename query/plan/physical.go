@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"errors"
 	"time"
 
 	uuid "github.com/satori/go.uuid"
@@ -34,7 +35,7 @@ type Planner interface {
 type planner struct {
 	plan *PlanSpec
 
-	duplicated bool
+	modified bool
 }
 
 func NewPlanner() Planner {
@@ -57,9 +58,9 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
 	var order []ProcedureID
-	p.duplicated = true
-	for p.duplicated {
-		p.duplicated = false
+	p.modified = true
+	for p.modified {
+		p.modified = false
 		if cap(order) < len(p.plan.Order) {
 			order = make([]ProcedureID, len(p.plan.Order))
 		} else {
@@ -74,19 +75,23 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 					p.removeProcedure(pr)
 				}
 			}
-			if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
-				bounds := bounded.TimeBounds()
-				p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
-			}
 		}
 	}
 
-	// Now that plan is complete find results
+	// Now that plan is complete find results and time bounds
 	p.plan.Do(func(pr *Procedure) {
+		if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
+			bounds := bounded.TimeBounds()
+			p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
+		}
 		if len(pr.Children) == 0 {
 			p.plan.Results = append(p.plan.Results, pr.ID)
 		}
 	})
+
+	if p.plan.Bounds.Start.IsZero() && p.plan.Bounds.Stop.IsZero() {
+		return nil, errors.New("unbounded queries are not supported. Add a '.range' call to bound the query.")
+	}
 
 	return p.plan, nil
 }
@@ -118,6 +123,7 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 }
 
 func (p *planner) removeProcedure(pr *Procedure) {
+	p.modified = true
 	delete(p.plan.Procedures, pr.ID)
 	p.plan.Order = removeID(p.plan.Order, pr.ID)
 
@@ -138,7 +144,7 @@ func ProcedureIDForDuplicate(id ProcedureID) ProcedureID {
 }
 
 func (p *planner) duplicate(pr *Procedure, skipParents bool) *Procedure {
-	p.duplicated = true
+	p.modified = true
 	np := pr.Copy()
 	np.ID = ProcedureIDForDuplicate(pr.ID)
 	p.plan.Procedures[np.ID] = np

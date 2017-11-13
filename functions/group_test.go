@@ -450,6 +450,16 @@ func TestGroup_PushDown_Single(t *testing.T) {
 					Database: "mydb",
 				},
 				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("group")},
 			},
 			plan.ProcedureIDFromOperationID("group"): {
@@ -459,24 +469,30 @@ func TestGroup_PushDown_Single(t *testing.T) {
 					Keep:   []string{"c", "d"},
 					Ignore: []string{"e", "f"},
 				},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
-				},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("group"),
 		},
 	}
 
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
 				Spec: &functions.SelectProcedureSpec{
-					Database:    "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					GroupingSet: true,
 					GroupKeys:   []string{"a", "b"},
 					GroupKeep:   []string{"c", "d"},
@@ -506,6 +522,18 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 				},
 				Parents: nil,
 				Children: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("range"),
+				},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
+				Children: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("groupA"),
 					plan.ProcedureIDFromOperationID("groupB"),
 				},
@@ -518,7 +546,7 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 					Ignore: []string{"e", "f"},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					plan.ProcedureIDFromOperationID("range"),
 				},
 				Children: nil,
 			},
@@ -528,13 +556,14 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 					Keep: []string{"C", "D"},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					plan.ProcedureIDFromOperationID("range"),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("groupA"),
 			plan.ProcedureIDFromOperationID("groupB"), // groupB is last so it will be duplicated
 		},
@@ -543,11 +572,18 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 	selectID := plan.ProcedureIDFromOperationID("select")
 	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			selectID: {
 				ID: selectID,
 				Spec: &functions.SelectProcedureSpec{
-					Database:    "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					GroupingSet: true,
 					GroupKeys:   []string{"a", "b"},
 					GroupKeep:   []string{"c", "d"},
@@ -558,7 +594,11 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 			selectIDDup: {
 				ID: selectIDDup,
 				Spec: &functions.SelectProcedureSpec{
-					Database:    "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					GroupingSet: true,
 					MergeAll:    true,
 					GroupKeys:   []string{},

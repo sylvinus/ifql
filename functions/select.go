@@ -70,9 +70,10 @@ type SelectProcedureSpec struct {
 	DescendingSet bool
 	Descending    bool
 
-	LimitSet bool
-	Limit    int64
-	Offset   int64
+	LimitSet     bool
+	PointsLimit  int64
+	SeriesLimit  int64
+	SeriesOffset int64
 
 	WindowSet bool
 	Window    plan.WindowSpec
@@ -103,6 +104,9 @@ func newSelectProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
 	return SelectKind
 }
+func (s *SelectProcedureSpec) TimeBounds() plan.BoundsSpec {
+	return s.Bounds
+}
 func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(SelectProcedureSpec)
 
@@ -124,8 +128,9 @@ func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.Descending = s.Descending
 
 	ns.LimitSet = s.LimitSet
-	ns.Limit = s.Limit
-	ns.Offset = s.Offset
+	ns.PointsLimit = s.PointsLimit
+	ns.SeriesLimit = s.SeriesLimit
+	ns.SeriesOffset = s.SeriesOffset
 
 	ns.WindowSet = s.WindowSet
 	ns.Window = s.Window
@@ -166,7 +171,9 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 			Database:      spec.Database,
 			Hosts:         spec.Hosts,
 			Predicate:     spec.Where,
-			Limit:         spec.Limit,
+			PointsLimit:   spec.PointsLimit,
+			SeriesLimit:   spec.SeriesLimit,
+			SeriesOffset:  spec.SeriesOffset,
 			Descending:    spec.Descending,
 			OrderByTime:   spec.OrderByTime,
 			MergeAll:      spec.MergeAll,

@@ -47,29 +47,47 @@ func TestSum_PushDown_Single(t *testing.T) {
 					Database: "mydb",
 				},
 				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("sum")},
 			},
 			plan.ProcedureIDFromOperationID("sum"): {
 				ID:   plan.ProcedureIDFromOperationID("sum"),
 				Spec: &functions.SumProcedureSpec{},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("sum"),
 		},
 	}
 
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "sum",
 				},
@@ -95,7 +113,17 @@ func TestSum_PushDown_Branch(t *testing.T) {
 				Spec: &functions.SelectProcedureSpec{
 					Database: "mydb",
 				},
-				Parents: nil,
+				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("sum"),
 					plan.ProcedureIDFromOperationID("count"),
@@ -120,6 +148,7 @@ func TestSum_PushDown_Branch(t *testing.T) {
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("count"),
 			plan.ProcedureIDFromOperationID("sum"), // Sum is last so it will be duplicated
 		},
@@ -128,11 +157,18 @@ func TestSum_PushDown_Branch(t *testing.T) {
 	selectID := plan.ProcedureIDFromOperationID("select")
 	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			selectID: {
 				ID: selectID,
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "count",
 				},
@@ -141,7 +177,11 @@ func TestSum_PushDown_Branch(t *testing.T) {
 			selectIDDup: {
 				ID: selectIDDup,
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "sum",
 				},

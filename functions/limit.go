@@ -93,11 +93,11 @@ func (s *LimitProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 		root = dup()
 		selectSpec = root.Spec.(*SelectProcedureSpec)
 		selectSpec.LimitSet = false
-		selectSpec.Limit = 0
-		selectSpec.Offset = 0
+		selectSpec.SeriesLimit = 0
+		selectSpec.SeriesOffset = 0
 		return
 	}
 	selectSpec.LimitSet = true
-	selectSpec.Limit = s.Limit
-	selectSpec.Offset = s.Offset
+	selectSpec.SeriesLimit = s.Limit
+	selectSpec.SeriesOffset = s.Offset
 }

@@ -73,11 +73,11 @@ type BoundsSpec struct {
 
 func (b BoundsSpec) Union(o BoundsSpec, now time.Time) (u BoundsSpec) {
 	u.Start = b.Start
-	if u.Start.IsZero() || o.Start.Time(now).Before(b.Start.Time(now)) {
+	if u.Start.IsZero() || (!o.Start.IsZero() && o.Start.Time(now).Before(b.Start.Time(now))) {
 		u.Start = o.Start
 	}
 	u.Stop = b.Stop
-	if u.Stop.IsZero() || o.Stop.Time(now).After(b.Stop.Time(now)) {
+	if u.Stop.IsZero() || (!o.Start.IsZero() && o.Stop.Time(now).After(b.Stop.Time(now))) {
 		u.Stop = o.Stop
 	}
 	return

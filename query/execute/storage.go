@@ -19,12 +19,14 @@ type StorageReader interface {
 }
 
 type ReadSpec struct {
-	RAMLimit   uint64
-	Database   string
-	Hosts      []string
-	Predicate  expression.Expression
-	Limit      int64
-	Descending bool
+	RAMLimit     uint64
+	Database     string
+	Hosts        []string
+	Predicate    expression.Expression
+	PointsLimit  int64
+	SeriesLimit  int64
+	SeriesOffset int64
+	Descending   bool
 
 	AggregateType string
 
@@ -118,6 +120,11 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 	req.TimestampRange.Start = int64(bi.bounds.Start)
 	req.TimestampRange.End = int64(bi.bounds.Stop)
 	req.Grouping = bi.readSpec.GroupKeys
+
+	req.SeriesLimit = uint64(bi.readSpec.SeriesLimit)
+	req.PointsLimit = uint64(bi.readSpec.PointsLimit)
+	req.SeriesOffset = uint64(bi.readSpec.SeriesOffset)
+
 	if agg, err := determineAggregateType(bi.readSpec.AggregateType); err != nil {
 		return err
 	} else if agg != storage.AggregateTypeNone {

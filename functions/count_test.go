@@ -47,29 +47,49 @@ func TestCount_PushDown_Single(t *testing.T) {
 					Database: "mydb",
 				},
 				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+				},
 				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 			},
 			plan.ProcedureIDFromOperationID("count"): {
 				ID:   plan.ProcedureIDFromOperationID("count"),
 				Spec: &functions.CountProcedureSpec{},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("count"),
 		},
 	}
 
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "count",
 				},
@@ -77,7 +97,7 @@ func TestCount_PushDown_Single(t *testing.T) {
 			},
 		},
 		Results: []plan.ProcedureID{
-			(plan.ProcedureIDFromOperationID("select")),
+			plan.ProcedureIDFromOperationID("select"),
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
@@ -97,6 +117,20 @@ func TestCount_PushDown_Branch(t *testing.T) {
 				},
 				Parents: nil,
 				Children: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("range"),
+				},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("select"),
+				},
+				Children: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("sum"),
 					plan.ProcedureIDFromOperationID("count"),
 				},
@@ -105,7 +139,7 @@ func TestCount_PushDown_Branch(t *testing.T) {
 				ID:   plan.ProcedureIDFromOperationID("sum"),
 				Spec: &functions.SumProcedureSpec{},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
@@ -113,13 +147,14 @@ func TestCount_PushDown_Branch(t *testing.T) {
 				ID:   plan.ProcedureIDFromOperationID("count"),
 				Spec: &functions.CountProcedureSpec{},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("sum"),
 			plan.ProcedureIDFromOperationID("count"), // Count is last so it will get duplicated
 		},
@@ -128,11 +163,18 @@ func TestCount_PushDown_Branch(t *testing.T) {
 	selectID := plan.ProcedureIDFromOperationID("select")
 	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			selectID: {
 				ID: selectID,
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "sum",
 				},
@@ -141,7 +183,11 @@ func TestCount_PushDown_Branch(t *testing.T) {
 			selectIDDup: {
 				ID: selectIDDup,
 				Spec: &functions.SelectProcedureSpec{
-					Database:      "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					AggregateSet:  true,
 					AggregateType: "count",
 				},
