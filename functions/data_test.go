@@ -1,6 +1,7 @@
 package functions_test
 
 import (
+	"math"
 	"math/rand"
 	"time"
 
@@ -21,6 +22,12 @@ var NormalData []float64
 
 // NormalBlock is a block of data whose value col is NormalData.
 var NormalBlock execute.Block
+
+// TruncatedData is the truncated of NormalData in bucket size 1
+var TruncatedData []float64
+
+// HistorgramBlock is a block of data whose value col is TruncatedData.
+var TruncatedBlock execute.Block
 
 func init() {
 	dist := distuv.Normal{
@@ -70,4 +77,42 @@ func init() {
 	normalBlockBuilder.AppendStrings(3, t2)
 
 	NormalBlock = normalBlockBuilder.Block()
+
+	TruncatedData = make([]float64, len(NormalData))
+	for i, v := range NormalData {
+		TruncatedData[i] = math.Trunc(v)
+	}
+
+	truncatedBlockBuilder := execute.NewColListBlockBuilder()
+	truncatedBlockBuilder.SetBounds(execute.Bounds{
+		Start: execute.Time(time.Date(2016, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),
+		Stop:  execute.Time(time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),
+	})
+
+	truncatedBlockBuilder.AddCol(execute.TimeCol)
+	truncatedBlockBuilder.AddCol(execute.ColMeta{Label: "value", Type: execute.TFloat})
+	truncatedBlockBuilder.AddCol(execute.ColMeta{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true})
+	truncatedBlockBuilder.AddCol(execute.ColMeta{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false})
+
+	start = truncatedBlockBuilder.Bounds().Start
+	for i, v := range TruncatedData {
+		// There are roughly 1 million, 31 second intervals in a year.
+		times[i] = start + execute.Time(time.Duration(i*31)*time.Second)
+		// Pick t2 based off the value
+		switch int(v) % 3 {
+		case 0:
+			t2[i] = "x"
+		case 1:
+			t2[i] = "y"
+		case 2:
+			t2[i] = "z"
+		}
+	}
+
+	truncatedBlockBuilder.AppendTimes(0, times)
+	truncatedBlockBuilder.AppendFloats(1, TruncatedData)
+	truncatedBlockBuilder.SetCommonString(2, t1)
+	truncatedBlockBuilder.AppendStrings(3, t2)
+
+	TruncatedBlock = truncatedBlockBuilder.Block()
 }
