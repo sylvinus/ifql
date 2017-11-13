@@ -94,8 +94,8 @@
 [[projects]]
   name = "github.com/goreleaser/goreleaser"
   packages = [".","checksum","config","context","goreleaserlib","internal/archiveformat","internal/buildtarget","internal/client","internal/ext","internal/git","internal/linux","internal/name","pipeline","pipeline/archive","pipeline/brew","pipeline/build","pipeline/changelog","pipeline/checksums","pipeline/cleandist","pipeline/defaults","pipeline/docker","pipeline/env","pipeline/fpm","pipeline/git","pipeline/release","pipeline/snapcraft"]
-  revision = "11fee22a2edf211caec98f2bee97576d3160bdb7"
-  version = "v0.35.5"
+  revision = "adc2d7d4c572af20cc20290db48b664f12c158bb"
+  version = "v0.35.7"
 
 [[projects]]
   name = "github.com/influxdata/influxdb"
