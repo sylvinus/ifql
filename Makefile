@@ -43,6 +43,9 @@ bin/goreleaser:
 release: bin/goreleaser
 	PATH=./bin:${PATH} goreleaser --skip-publish  --snapshot --rm-dist
 
+release-docker: bin/goreleaser
+	PATH=./bin:${PATH} goreleaser --skip-publish  --snapshot --rm-dist -f .goreleaser.docker.yml
+
 clean: $(SUBDIRS)
 	rm -rf bin dist
 

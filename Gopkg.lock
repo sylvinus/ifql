@@ -105,6 +105,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/influxdata/usage-client"
+  packages = ["v1"]
+  revision = "6d3895376368aa52a3a81d2a16e90f0f52371967"
+
+[[projects]]
+  branch = "master"
   name = "github.com/influxdata/yamux"
   packages = ["."]
   revision = "e7f91523e648eeb91537e420aebbd96aa64ab6ae"
@@ -114,6 +120,12 @@
   name = "github.com/influxdata/yarpc"
   packages = [".","codes","status","yarpcproto"]
   revision = "036268cdec22b7074cd6d50cc6d7315c667063c7"
+
+[[projects]]
+  name = "github.com/jessevdk/go-flags"
+  packages = ["."]
+  revision = "96dc06278ce32a0e9d957d590bb987c81ee66407"
+  version = "v1.3.0"
 
 [[projects]]
   branch = "master"
@@ -214,6 +226,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "efa8decc20fb0e8c2739a6bd42c15d60329a737c970931f7818155d6f4bd3041"
+  inputs-digest = "730a340cee11b64c456bad821949301f3d1f06b33a5e44108adeb3c626899b8a"
   solver-name = "gps-cdcl"
   solver-version = 1
