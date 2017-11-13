@@ -42,6 +42,7 @@ fpm:
   formats:
     - deb
     - rpm
+  bindir: /usr/bin
   dependencies:
     - coreutils
   files:
