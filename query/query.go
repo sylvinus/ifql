@@ -7,14 +7,15 @@ import (
 
 // QuerySpec specifies a query.
 type QuerySpec struct {
-	Operations []*Operation
-	Edges      []Edge
+	Operations []*Operation `json:"operations"`
+	Edges      []Edge       `json:"edges"`
 
 	sorted   []*Operation
 	children map[OperationID][]*Operation
 	parents  map[OperationID][]*Operation
 }
 
+// Edge is a data flow relationship between a parent and a child
 type Edge struct {
 	Parent OperationID `json:"parent"`
 	Child  OperationID `json:"child"`
@@ -158,4 +159,14 @@ func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, o *Operation) err
 		q.sorted = append(q.sorted, o)
 	}
 	return nil
+}
+
+// Functions return the names of all functions used in the plan
+func (q *QuerySpec) Functions() ([]string, error) {
+	funcs := []string{}
+	err := q.Walk(func(o *Operation) error {
+		funcs = append(funcs, string(o.Spec.Kind()))
+		return nil
+	})
+	return funcs, err
 }

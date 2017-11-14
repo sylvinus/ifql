@@ -18,6 +18,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -36,6 +37,24 @@ type options struct {
 
 var hosts []string
 var storageReader execute.StorageReader
+
+var functionCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "function_total",
+		Help: "How times a function was used in a query",
+	},
+	[]string{"function"},
+)
+
+var queryCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "query_count",
+	Help: "Number of queries executed",
+})
+
+func init() {
+	prometheus.MustRegister(functionCounter)
+	prometheus.MustRegister(queryCounter)
+}
 
 func main() {
 	option := &options{}
@@ -72,6 +91,8 @@ func main() {
 // HandleQuery interprets and executes ifql syntax and returns results
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	atomic.AddInt64(&queryCount, 1)
+	queryCounter.Inc()
+
 	query := req.FormValue("q")
 	if query == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -82,7 +103,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	verbose := req.FormValue("verbose") != ""
 	trace := req.FormValue("trace") != ""
 
-	results, err := ifql.Query(
+	results, querySpec, err := ifql.Query(
 		req.Context(),
 		query,
 		&ifql.Options{
@@ -96,6 +117,24 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
 		log.Println("Error:", err)
 		return
+	}
+
+	funcs, err := querySpec.Functions()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("Error analyzing query %s", err.Error())))
+		log.Println("Error:", err)
+		return
+	}
+
+	if verbose {
+		if octets, err := json.MarshalIndent(querySpec, "", "    "); err == nil {
+			fmt.Println(string(octets))
+		}
+	}
+
+	for _, f := range funcs {
+		functionCounter.WithLabelValues(f).Inc()
 	}
 
 	if req.FormValue("format") == "json" {
