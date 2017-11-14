@@ -59,6 +59,42 @@ func newFirstProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 func (s *FirstProcedureSpec) Kind() plan.ProcedureKind {
 	return FirstKind
 }
+func (s *FirstProcedureSpec) PushDownRule() plan.PushDownRule {
+	return plan.PushDownRule{
+		Root:    SelectKind,
+		Through: []plan.ProcedureKind{GroupKind, LimitKind, WhereKind},
+		Match: func(pr *plan.Procedure) bool {
+			selectSpec := pr.Spec.(*SelectProcedureSpec)
+			return !selectSpec.AggregateSet
+		},
+	}
+}
+
+func (s *FirstProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
+	selectSpec := root.Spec.(*SelectProcedureSpec)
+	if selectSpec.BoundsSet || selectSpec.LimitSet || selectSpec.DescendingSet {
+		root = dup()
+		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec.BoundsSet = false
+		selectSpec.Bounds = plan.BoundsSpec{}
+		selectSpec.LimitSet = false
+		selectSpec.PointsLimit = 0
+		selectSpec.SeriesLimit = 0
+		selectSpec.SeriesOffset = 0
+		selectSpec.DescendingSet = false
+		selectSpec.Descending = false
+		return
+	}
+	selectSpec.BoundsSet = true
+	selectSpec.Bounds = plan.BoundsSpec{
+		Start: query.MinTime,
+		Stop:  query.Now,
+	}
+	selectSpec.LimitSet = true
+	selectSpec.PointsLimit = 1
+	selectSpec.DescendingSet = true
+	selectSpec.Descending = false
+}
 func (s *FirstProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FirstProcedureSpec)
 	*ns = *s

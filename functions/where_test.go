@@ -62,6 +62,16 @@ func TestWhere_PushDown_Single(t *testing.T) {
 					Database: "mydb",
 				},
 				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("where")},
 			},
 			plan.ProcedureIDFromOperationID("where"): {
@@ -81,23 +91,31 @@ func TestWhere_PushDown_Single(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("where"),
 		},
 	}
 
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
 				Spec: &functions.SelectProcedureSpec{
-					Database: "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					WhereSet: true,
 					Where: expression.Expression{
 						Root: &expression.BinaryNode{
@@ -134,7 +152,17 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 				Spec: &functions.SelectProcedureSpec{
 					Database: "mydb",
 				},
-				Parents: nil,
+				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
+				},
+				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("whereA"),
 					plan.ProcedureIDFromOperationID("whereB"),
@@ -157,7 +185,7 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
@@ -178,13 +206,14 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("range")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("whereA"),
 			plan.ProcedureIDFromOperationID("whereB"), // WhereB is last so it will be duplicated
 		},
@@ -193,11 +222,18 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 	selectID := plan.ProcedureIDFromOperationID("select")
 	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
 	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Stop: query.Now,
+		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			selectID: {
 				ID: selectID,
 				Spec: &functions.SelectProcedureSpec{
-					Database: "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					WhereSet: true,
 					Where: expression.Expression{
 						Root: &expression.BinaryNode{
@@ -217,7 +253,11 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 			selectIDDup: {
 				ID: selectIDDup,
 				Spec: &functions.SelectProcedureSpec{
-					Database: "mydb",
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Stop: query.Now,
+					},
 					WhereSet: true,
 					Where: expression.Expression{
 						Root: &expression.BinaryNode{

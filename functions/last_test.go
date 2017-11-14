@@ -7,6 +7,8 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
+	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 	"github.com/influxdata/ifql/query/querytest"
 )
 
@@ -70,4 +72,153 @@ func TestLast_Process(t *testing.T) {
 
 func BenchmarkLast(b *testing.B) {
 	executetest.RowSelectorFuncBenchmarkHelper(b, new(functions.LastSelector), NormalBlock)
+}
+
+func TestLast_PushDown_Single(t *testing.T) {
+	lp := &plan.LogicalPlanSpec{
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			plan.ProcedureIDFromOperationID("select"): {
+				ID: plan.ProcedureIDFromOperationID("select"),
+				Spec: &functions.SelectProcedureSpec{
+					Database: "mydb",
+				},
+				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("last")},
+			},
+			plan.ProcedureIDFromOperationID("last"): {
+				ID:   plan.ProcedureIDFromOperationID("last"),
+				Spec: &functions.LastProcedureSpec{},
+				Parents: []plan.ProcedureID{
+					(plan.ProcedureIDFromOperationID("select")),
+				},
+				Children: nil,
+			},
+		},
+		Order: []plan.ProcedureID{
+			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("last"),
+		},
+	}
+
+	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Start: query.MinTime,
+			Stop:  query.Now,
+		},
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			plan.ProcedureIDFromOperationID("select"): {
+				ID: plan.ProcedureIDFromOperationID("select"),
+				Spec: &functions.SelectProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.MinTime,
+						Stop:  query.Now,
+					},
+					LimitSet:      true,
+					PointsLimit:   1,
+					DescendingSet: true,
+					Descending:    true,
+				},
+				Children: []plan.ProcedureID{},
+			},
+		},
+		Results: []plan.ProcedureID{
+			(plan.ProcedureIDFromOperationID("select")),
+		},
+		Order: []plan.ProcedureID{
+			plan.ProcedureIDFromOperationID("select"),
+		},
+	}
+
+	plantest.PhysicalPlanTestHelper(t, lp, want)
+}
+
+func TestLast_PushDown_Branch(t *testing.T) {
+	lp := &plan.LogicalPlanSpec{
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			plan.ProcedureIDFromOperationID("select"): {
+				ID: plan.ProcedureIDFromOperationID("select"),
+				Spec: &functions.SelectProcedureSpec{
+					Database: "mydb",
+				},
+				Parents: nil,
+				Children: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("first"),
+					plan.ProcedureIDFromOperationID("last"),
+				},
+			},
+			plan.ProcedureIDFromOperationID("first"): {
+				ID:       plan.ProcedureIDFromOperationID("first"),
+				Spec:     &functions.FirstProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
+				Children: nil,
+			},
+			plan.ProcedureIDFromOperationID("last"): {
+				ID:       plan.ProcedureIDFromOperationID("last"),
+				Spec:     &functions.LastProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
+				Children: nil,
+			},
+		},
+		Order: []plan.ProcedureID{
+			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("first"),
+			plan.ProcedureIDFromOperationID("last"), // last is last so it will be duplicated
+		},
+	}
+
+	selectID := plan.ProcedureIDFromOperationID("select")
+	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
+	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Start: query.MinTime,
+			Stop:  query.Now,
+		},
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			selectID: {
+				ID: selectID,
+				Spec: &functions.SelectProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.MinTime,
+						Stop:  query.Now,
+					},
+					LimitSet:      true,
+					PointsLimit:   1,
+					DescendingSet: true,
+					Descending:    false, // first
+				},
+				Children: []plan.ProcedureID{},
+			},
+			selectIDDup: {
+				ID: selectIDDup,
+				Spec: &functions.SelectProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.MinTime,
+						Stop:  query.Now,
+					},
+					LimitSet:      true,
+					PointsLimit:   1,
+					DescendingSet: true,
+					Descending:    true, // last
+				},
+				Parents:  []plan.ProcedureID{},
+				Children: []plan.ProcedureID{},
+			},
+		},
+		Results: []plan.ProcedureID{
+			selectID,
+			selectIDDup,
+		},
+		Order: []plan.ProcedureID{
+			selectID,
+			selectIDDup,
+		},
+	}
+
+	plantest.PhysicalPlanTestHelper(t, lp, want)
 }

@@ -1,6 +1,21 @@
 package query
 
-import "time"
+import (
+	"math"
+	"time"
+)
+
+var (
+	MinTime = Time{
+		Absolute: time.Unix(0, math.MinInt64),
+	}
+	MaxTime = Time{
+		Absolute: time.Unix(0, math.MaxInt64),
+	}
+	Now = Time{
+		IsRelative: true,
+	}
+)
 
 // Time represents either a relavite or absolute time.
 // If Time is its zero value then it represents a time.Time{}.

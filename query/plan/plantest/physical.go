@@ -21,6 +21,7 @@ func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.P
 	}
 
 	if !cmp.Equal(got, want) {
+		t.Log(plan.Formatted(got))
 		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got))
 	}
 }

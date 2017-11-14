@@ -31,7 +31,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						ID: plan.ProcedureIDFromOperationID("range"),
 						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -1 * time.Hour},
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
 							},
 						},
 						Parents: []plan.ProcedureID{
@@ -57,7 +60,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Bounds: plan.BoundsSpec{
-					Start: query.Time{Relative: -1 * time.Hour},
+					Start: query.Time{
+						IsRelative: true,
+						Relative:   -1 * time.Hour,
+					},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
@@ -66,7 +72,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -1 * time.Hour},
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
 							},
 							AggregateSet:  true,
 							AggregateType: "count",
@@ -98,7 +107,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						ID: plan.ProcedureIDFromOperationID("range"),
 						Spec: &functions.RangeProcedureSpec{
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -1 * time.Hour},
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
 							},
 						},
 						Parents: []plan.ProcedureID{
@@ -135,7 +147,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Bounds: plan.BoundsSpec{
-					Start: query.Time{Relative: -1 * time.Hour},
+					Start: query.Time{
+						IsRelative: true,
+						Relative:   -1 * time.Hour,
+					},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
@@ -144,10 +159,13 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
-								Start: query.Time{Relative: -1 * time.Hour},
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
 							},
-							LimitSet: true,
-							Limit:    10,
+							LimitSet:    true,
+							SeriesLimit: 10,
 						},
 						Parents:  nil,
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
