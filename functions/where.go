@@ -7,6 +7,7 @@ import (
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
 
@@ -20,8 +21,7 @@ func init() {
 	ifql.RegisterFunction(WhereKind, createWhereOpSpec)
 	query.RegisterOpSpec(WhereKind, newWhereOp)
 	plan.RegisterProcedureSpec(WhereKind, newWhereProcedure, WhereKind)
-	// TODO register a where transformation. Currently where is only supported if it is pushed down into a select procedure.
-	//execute.RegisterTransformation(WhereKind, createWhereTransformation)
+	execute.RegisterTransformation(WhereKind, createWhereTransformation)
 }
 
 func createWhereOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
