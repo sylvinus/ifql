@@ -174,9 +174,13 @@ func CompileExpression(e expression.Expression, types map[string]DataType) (Comp
 	if err != nil {
 		return nil, err
 	}
+	cpy := make(map[string]DataType, len(types))
+	for k, v := range types {
+		cpy[k] = v
+	}
 	return compiledExpression{
 		root:  root,
-		types: types,
+		types: cpy,
 	}, nil
 }
 
@@ -1376,6 +1380,17 @@ var binaryFuncs = map[binarySignature]struct {
 		Func: func(scope Scope, left, right DataTypeEvaluator) Value {
 			l := left.EvalFloat(scope)
 			r := right.EvalFloat(scope)
+			return Value{
+				Type:  TBool,
+				Value: l == r,
+			}
+		},
+		ResultType: TBool,
+	},
+	{Operator: expression.EqualOperator, Left: TString, Right: TString}: {
+		Func: func(scope Scope, left, right DataTypeEvaluator) Value {
+			l := left.EvalString(scope)
+			r := right.EvalString(scope)
 			return Value{
 				Type:  TBool,
 				Value: l == r,
