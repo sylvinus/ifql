@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/influxdata/ifql"
 	"github.com/influxdata/ifql/idfile"
+	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/influxdb/models"
 	client "github.com/influxdata/usage-client/v1"
@@ -86,6 +88,30 @@ func main() {
 	log.Fatal(http.ListenAndServe(option.Addr, nil))
 }
 
+func ifqlQuery(ctx context.Context, query string, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
+	return ifql.Query(
+		ctx,
+		query,
+		&ifql.Options{
+			Verbose: verbose,
+			Trace:   trace,
+			Hosts:   hosts,
+		},
+	)
+}
+
+func ifqlSpecQuery(ctx context.Context, spec *query.QuerySpec, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
+	return ifql.QueryWithSpec(
+		ctx,
+		spec,
+		&ifql.Options{
+			Verbose: verbose,
+			Trace:   trace,
+			Hosts:   hosts,
+		},
+	)
+}
+
 // TODO (pauldix): pull all this out into a server object that can
 //                 be tested. Alas, demo day waits for no person.
 
@@ -94,29 +120,51 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	atomic.AddInt64(&queryCount, 1)
 	queryCounter.Inc()
 
-	query := req.FormValue("q")
-	if query == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("must pass query in q parameter"))
-		return
-	}
-
-	if option.Verbose {
-		log.Print(query)
-	}
-
+	var (
+		results []execute.Result
+		spec    *query.QuerySpec
+		err     error
+	)
 	verbose := req.FormValue("verbose") != ""
 	trace := req.FormValue("trace") != ""
 
-	results, querySpec, err := ifql.Query(
-		req.Context(),
-		query,
-		&ifql.Options{
-			Verbose: verbose,
-			Trace:   trace,
-			Hosts:   hosts,
-		},
-	)
+	if req.Header.Get("Content-type") == "application/json" {
+		spec = new(query.QuerySpec)
+		if err := json.NewDecoder(req.Body).Decode(spec); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
+			log.Println("Error:", err)
+			return
+		}
+
+		results, spec, err = ifqlSpecQuery(req.Context(), spec, verbose, trace)
+	} else {
+		query := req.FormValue("q")
+		if query == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("must pass query in q parameter"))
+			return
+		}
+		if option.Verbose {
+			log.Print(query)
+		}
+
+		analyze := req.FormValue("analyze") != ""
+		if analyze {
+			spec, err = ifql.QuerySpec(req.Context(), query)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
+				log.Println("Error:", err)
+				return
+			}
+
+			encodeJSON(w, http.StatusOK, spec)
+			return
+		}
+		results, spec, err = ifqlQuery(req.Context(), query, verbose, trace)
+	}
+
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
@@ -124,7 +172,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	funcs, err := querySpec.Functions()
+	funcs, err := spec.Functions()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error analyzing query %s", err.Error())))
@@ -133,7 +181,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if option.Verbose {
-		if octets, err := json.MarshalIndent(querySpec, "", "    "); err == nil {
+		if octets, err := json.MarshalIndent(spec, "", "    "); err == nil {
 			log.Print(string(octets))
 		}
 	}
@@ -142,12 +190,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		functionCounter.WithLabelValues(f).Inc()
 	}
 
-	if req.FormValue("format") == "json" {
-		writeJSONChunks(results, w)
-		return
-	}
-
-	switch req.Header.Get("Content-Type") {
+	switch req.Header.Get("Accept") {
 	case "application/json":
 		writeJSONChunks(results, w)
 	default:
@@ -354,4 +397,11 @@ func reportUsageStats(id string) {
 		u.Data[0].Values["queryCount"] = atomic.LoadInt64(&queryCount)
 		go reporter.Save(u)
 	}
+}
+
+func encodeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	// already wrote to client
+	_ = json.NewEncoder(w).Encode(v)
 }
