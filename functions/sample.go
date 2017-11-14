@@ -14,9 +14,9 @@ import (
 const SampleKind = "sample"
 
 type SampleOpSpec struct {
-	UseRowTime bool `json:"useRowtime"`
-	N          int  `json:"n"`
-	Pos        int  `json:"pos"`
+	UseRowTime bool  `json:"useRowtime"`
+	N          int64 `json:"n"`
+	Pos        int64 `json:"pos"`
 }
 
 func init() {
@@ -39,7 +39,7 @@ func createSampleOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Ope
 		if value.Type != ifql.TInt {
 			return nil, fmt.Errorf(`sample n argument must be an integer`)
 		}
-		spec.N = value.Value.(int)
+		spec.N = value.Value.(int64)
 	} else {
 		return nil, fmt.Errorf(`n argument is required for sample function`)
 	}
@@ -48,7 +48,7 @@ func createSampleOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Ope
 		if value.Type != ifql.TInt {
 			return nil, fmt.Errorf(`sample pos argument must be an integer`)
 		}
-		spec.Pos = value.Value.(int)
+		spec.Pos = value.Value.(int64)
 	} else {
 		spec.Pos = -1
 	}
@@ -66,8 +66,8 @@ func (s *SampleOpSpec) Kind() query.OperationKind {
 
 type SampleProcedureSpec struct {
 	UseRowTime bool
-	N          int
-	Pos        int
+	N          int64
+	Pos        int64
 }
 
 func newSampleProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -108,8 +108,8 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 	}
 
 	ss := &SampleSelector{
-		N:   ps.N,
-		Pos: ps.Pos,
+		N:   int(ps.N),
+		Pos: int(ps.Pos),
 	}
 	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, ctx.Bounds(), ss, ps.UseRowTime)
 	return t, d, nil
