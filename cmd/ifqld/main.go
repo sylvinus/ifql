@@ -33,21 +33,23 @@ type options struct {
 	Addr              string         `long:"bind-address" short:"b" description:"The address to listen on for HTTP requests" default:":8093" env:"BIND_ADDRESS"`
 	IDFile            flags.Filename `long:"id-file" description:"Path to file that persists ifqld id" env:"ID_FILE" default:"./ifqld.id"`
 	ReportingDisabled bool           `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
+	Verbose           bool           `short:"v" long:"verbose" description:"Log more verbose debugging output"`
 }
 
 var hosts []string
 var storageReader execute.StorageReader
+var option options
 
 var functionCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "function_total",
+		Name: "ifql_function_count",
 		Help: "How times a function was used in a query",
 	},
 	[]string{"function"},
 )
 
 var queryCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "query_count",
+	Name: "ifql_query_count",
 	Help: "Number of queries executed",
 })
 
@@ -57,8 +59,7 @@ func init() {
 }
 
 func main() {
-	option := &options{}
-	parser := flags.NewParser(option, flags.Default)
+	parser := flags.NewParser(&option, flags.Default)
 	parser.ShortDescription = `IFQLD`
 	parser.LongDescription = `Options for the IFQLD server`
 
@@ -100,6 +101,10 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if option.Verbose {
+		log.Print(query)
+	}
+
 	verbose := req.FormValue("verbose") != ""
 	trace := req.FormValue("trace") != ""
 
@@ -127,9 +132,9 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if verbose {
+	if option.Verbose {
 		if octets, err := json.MarshalIndent(querySpec, "", "    "); err == nil {
-			fmt.Println(string(octets))
+			log.Print(string(octets))
 		}
 	}
 
