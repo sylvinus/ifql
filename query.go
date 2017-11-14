@@ -35,11 +35,20 @@ func Query(ctx context.Context, queryStr string, opts *Options) ([]execute.Resul
 		opts = new(Options)
 	}
 
-	qSpec, err := ifql.NewQuery(queryStr)
+	qSpec, err := QuerySpec(ctx, queryStr)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to parse query")
 	}
 
+	return QueryWithSpec(ctx, qSpec, opts)
+}
+
+func QuerySpec(ctx context.Context, queryStr string) (*query.QuerySpec, error) {
+	return ifql.NewQuery(queryStr)
+}
+
+// QueryWithSpec unmarshals the JSON plan, returns results and the query specification
+func QueryWithSpec(ctx context.Context, qSpec *query.QuerySpec, opts *Options) ([]execute.Result, *query.QuerySpec, error) {
 	lplanner := plan.NewLogicalPlanner()
 	lp, err := lplanner.Plan(qSpec)
 	if err != nil {
