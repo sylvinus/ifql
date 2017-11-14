@@ -1,3 +1,4 @@
+VERSION ?= $(shell git describe --always --tags)
 SUBDIRS := ast ifql promql
 
 SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
@@ -40,13 +41,18 @@ bench: Gopkg.lock bin/ifql
 bin/goreleaser:
 	go build -i -o bin/goreleaser ./vendor/github.com/goreleaser/goreleaser
 
-release: bin/goreleaser
-	PATH=./bin:${PATH} goreleaser --skip-publish  --snapshot --rm-dist
+dist: bin/goreleaser
+	PATH=./bin:${PATH} goreleaser --rm-dist --release-notes CHANGELOG.md
 
-release-docker: bin/goreleaser
-	PATH=./bin:${PATH} goreleaser --skip-publish  --snapshot --rm-dist -f .goreleaser.docker.yml
+release: dist docker
+
+docker:
+	docker build -t quay.io/influxdb/ifqld:latest .
+	docker tag quay.io/influxdb/ifqld:latest quay.io/influxdb/ifqld:${VERSION}
+	docker push quay.io/influxdb/ifqld:latest
+	docker push quay.io/influxdb/ifqld:${VERSION}
 
 clean: $(SUBDIRS)
 	rm -rf bin dist
 
-.PHONY: all clean $(SUBDIRS) update test test-race bench release
+.PHONY: all clean $(SUBDIRS) update test test-race bench release docker dist
