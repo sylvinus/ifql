@@ -724,6 +724,9 @@ func (s *streamState) more() bool {
 		//TODO add proper error handling
 		return false
 	}
+	if len(s.rep.Frames) == 0 {
+		return false
+	}
 	s.computeKey()
 	return true
 }
