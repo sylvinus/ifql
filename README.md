@@ -53,3 +53,8 @@ Inside the `root` directory. It will spin up an `influxdb` and `ifqld` daemon
 ready to be used. `influxd` is exposed on port `8086` and port `8082`.
 
 
+### Prometheus metrics
+Metrics are exposed on `/metrics`
+ifqld records the number of queries and the number of different functions within ifql queries
+
+
