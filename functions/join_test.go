@@ -18,7 +18,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"id":"join",
 		"kind":"join",
 		"spec":{
-			"keys":["t1","t2"],
+			"on":["t1","t2"],
 			"expression":{
 				"root":{
 					"type":"binary",
@@ -40,7 +40,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
-			Keys: []string{"t1", "t2"},
+			On: []string{"t1", "t2"},
 			Expression: expression.Expression{
 				Root: &expression.BinaryNode{
 					Operator: expression.AdditionOperator,
@@ -314,7 +314,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with common tags",
 			spec: &functions.MergeJoinProcedureSpec{
-				Keys:       []string{"t1"},
+				On:         []string{"t1"},
 				Expression: addExpression,
 			},
 			data0: []*executetest.Block{
@@ -375,7 +375,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				Keys:       []string{"t1"},
+				On:         []string{"t1"},
 				Expression: addExpression,
 			},
 			data0: []*executetest.Block{
@@ -445,7 +445,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with tags and extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				Keys:       []string{"t1", "t2"},
+				On:         []string{"t1", "t2"},
 				Expression: addExpression,
 			},
 			data0: []*executetest.Block{
