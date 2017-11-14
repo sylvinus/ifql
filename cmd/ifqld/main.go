@@ -221,14 +221,18 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 						}
 					} else {
 						switch c.Type {
-						case execute.TTime:
-							value = rr.AtTime(i, j)
-						case execute.TString:
-							value = rr.AtString(i, j)
+						case execute.TBool:
+							value = rr.AtBool(i, j)
+						case execute.TInt:
+							value = rr.AtInt(i, j)
+						case execute.TUInt:
+							value = rr.AtUInt(i, j)
 						case execute.TFloat:
 							value = rr.AtFloat(i, j)
-						case execute.TInt:
-							value = "int not supported"
+						case execute.TString:
+							value = rr.AtString(i, j)
+						case execute.TTime:
+							value = rr.AtTime(i, j)
 						default:
 							value = "unknown"
 						}
