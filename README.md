@@ -1,17 +1,17 @@
 # IFQL (Influx Query Language)
 
-`ifqld` is an HTTP server for processing **IFQL** queries to one or more InfluxDB
+`ifqld` is an HTTP server for running **IFQL** queries to one or more InfluxDB
 servers.
 
-`ifqld` runs on `8093` by default
+`ifqld` runs on port `8093` by default
 
 ### INSTALLATION
 1. Upgrade to InfluxDB >= 1.4.1
 https://portal.influxdata.com/downloads
 
 
-2. Update the InfluxDB configuration file to enable **IFQL** processing. InfluxDB
-will open port `8082` to accept **IFQL** queries.
+2. Update the InfluxDB configuration file to enable **IFQL** processing; restart
+the InfluxDB server. InfluxDB will open port `8082` to accept **IFQL** queries.
 
 > **This port has no authentication.**
 
@@ -22,10 +22,10 @@ will open port `8082` to accept **IFQL** queries.
   bind-address = ":8082"
 ```
 
-3. Install `ifqld`: https://github.com/influxdata/ifql/releases
+3. Download `ifqld` and install from https://github.com/influxdata/ifql/releases
 
 4. Start `ifqld` with the InfluxDB host and port of `8082`. To run in federated
-mode, add the `--host` option for each InfluxDB host.
+mode (see below), add the `--host` option for each InfluxDB host.
 
 ```sh
 ifqld --verbose --host localhost:8082
@@ -40,7 +40,7 @@ curl -XPOST --data-urlencode \
 localhost:8093/query
 ```
 
-#### Docker compose
+#### docker compose
 
 To spin up a testing environment you can run:
 
@@ -55,3 +55,16 @@ ready to be used. `influxd` is exposed on port `8086` and port `8082`.
 ### Prometheus metrics
 Metrics are exposed on `/metrics`.
 `ifqld` records the number of queries and the number of different functions within **IFQL** queries
+
+### Federated Mode
+By passing the `--host` option multiple times `ifqld` will query multiple
+InfluxDB servers.
+
+For example:
+
+```sh
+ifqld --host influxdb1:8082 --host influxdb2:8082
+```
+
+The results from multiple InfluxDB are merged together as if there was
+one server.
