@@ -121,7 +121,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					plan.ProcedureIDFromOperationID("limit"): {
 						ID: plan.ProcedureIDFromOperationID("limit"),
 						Spec: &functions.LimitProcedureSpec{
-							Limit: 10,
+							N: 10,
 						},
 						Parents: []plan.ProcedureID{
 							(plan.ProcedureIDFromOperationID("range")),
@@ -165,7 +165,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 								},
 							},
 							LimitSet:    true,
-							SeriesLimit: 10,
+							PointsLimit: 10,
 						},
 						Parents:  nil,
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
