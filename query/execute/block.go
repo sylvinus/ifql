@@ -167,6 +167,27 @@ func AppendRow(i int, rr RowReader, builder BlockBuilder, colMap []int) {
 	}
 }
 
+func ValueForRow(i, j int, rr RowReader) (v Value) {
+	v.Type = rr.Cols()[j].Type
+	switch v.Type {
+	case TBool:
+		v.Value = rr.AtBool(i, j)
+	case TInt:
+		v.Value = rr.AtInt(i, j)
+	case TUInt:
+		v.Value = rr.AtUInt(i, j)
+	case TFloat:
+		v.Value = rr.AtFloat(i, j)
+	case TString:
+		v.Value = rr.AtString(i, j)
+	case TTime:
+		v.Value = rr.AtTime(i, j)
+	default:
+		PanicUnknownType(v.Type)
+	}
+	return
+}
+
 // AddTags add columns to the builder for the given tags.
 // It is assumed that all tags are common to all rows of this block.
 func AddTags(t Tags, b BlockBuilder) {
@@ -266,6 +287,8 @@ const (
 	TString
 	TTime
 )
+
+var ValueDataTypes = [...]DataType{TBool, TInt, TUInt, TFloat, TString}
 
 func (t DataType) String() string {
 	switch t {

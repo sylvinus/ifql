@@ -20,7 +20,6 @@ func init() {
 	ifql.RegisterFunction(SortKind, createSortOpSpec)
 	query.RegisterOpSpec(SortKind, newSortOp)
 	plan.RegisterProcedureSpec(SortKind, newSortProcedure, SortKind)
-	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
 	execute.RegisterTransformation(SortKind, createSortTransformation)
 }
 
