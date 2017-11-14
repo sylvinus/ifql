@@ -6,14 +6,17 @@ import (
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 )
 
 const LimitKind = "limit"
 
+// LimitOpSpec limits the number of rows returned per block.
+// Currently offset is not supported.
 type LimitOpSpec struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	N int64 `json:"n"`
+	//Offset int64 `json:"offset"`
 }
 
 func init() {
@@ -21,28 +24,28 @@ func init() {
 	query.RegisterOpSpec(LimitKind, newLimitOp)
 	plan.RegisterProcedureSpec(LimitKind, newLimitProcedure, LimitKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
-	//execute.RegisterTransformation(LimitKind, createLimitTransformation)
+	execute.RegisterTransformation(LimitKind, createLimitTransformation)
 }
 
 func createLimitOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(LimitOpSpec)
 
-	limitValue, ok := args["limit"]
+	limitValue, ok := args["n"]
 	if !ok {
-		return nil, errors.New(`limit function requires argument "limit"`)
+		return nil, errors.New(`limit function requires argument "n"`)
 	}
 
 	if limitValue.Type != ifql.TInt {
-		return nil, fmt.Errorf(`limit argument "limit" must be an integer, got %v`, limitValue.Type)
+		return nil, fmt.Errorf(`limit argument "n" must be an integer, got %v`, limitValue.Type)
 	}
-	spec.Limit = limitValue.Value.(int64)
+	spec.N = limitValue.Value.(int64)
 
-	if offsetValue, ok := args["offset"]; ok {
-		if offsetValue.Type != ifql.TInt {
-			return nil, fmt.Errorf(`limit argument "offset" must be an integer, got %v`, offsetValue.Type)
-		}
-		spec.Offset = offsetValue.Value.(int64)
-	}
+	//if offsetValue, ok := args["offset"]; ok {
+	//	if offsetValue.Type != ifql.TInt {
+	//		return nil, fmt.Errorf(`limit argument "offset" must be an integer, got %v`, offsetValue.Type)
+	//	}
+	//	spec.Offset = offsetValue.Value.(int64)
+	//}
 
 	return spec, nil
 }
@@ -56,8 +59,8 @@ func (s *LimitOpSpec) Kind() query.OperationKind {
 }
 
 type LimitProcedureSpec struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	N int64 `json:"n"`
+	//Offset int64 `json:"offset"`
 }
 
 func newLimitProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -66,8 +69,8 @@ func newLimitProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 	return &LimitProcedureSpec{
-		Limit:  spec.Limit,
-		Offset: spec.Offset,
+		N: spec.N,
+		//Offset: spec.Offset,
 	}, nil
 }
 
@@ -76,8 +79,8 @@ func (s *LimitProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *LimitProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(LimitProcedureSpec)
-	ns.Limit = s.Limit
-	ns.Offset = s.Offset
+	ns.N = s.N
+	//ns.Offset = s.Offset
 	return ns
 }
 
@@ -93,11 +96,112 @@ func (s *LimitProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 		root = dup()
 		selectSpec = root.Spec.(*SelectProcedureSpec)
 		selectSpec.LimitSet = false
+		selectSpec.PointsLimit = 0
 		selectSpec.SeriesLimit = 0
 		selectSpec.SeriesOffset = 0
 		return
 	}
 	selectSpec.LimitSet = true
-	selectSpec.SeriesLimit = s.Limit
-	selectSpec.SeriesOffset = s.Offset
+	selectSpec.PointsLimit = s.N
+	selectSpec.SeriesLimit = 0
+	selectSpec.SeriesOffset = 0
+}
+
+func createLimitTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+	s, ok := spec.(*LimitProcedureSpec)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
+	}
+	cache := execute.NewBlockBuilderCache()
+	d := execute.NewDataset(id, mode, cache)
+	t := NewLimitTransformation(d, cache, s)
+	return t, d, nil
+}
+
+type limitTransformation struct {
+	d     execute.Dataset
+	cache execute.BlockBuilderCache
+
+	n int
+
+	colMap []int
+}
+
+func NewLimitTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *LimitProcedureSpec) *limitTransformation {
+	return &limitTransformation{
+		d:     d,
+		cache: cache,
+		n:     int(spec.N),
+	}
+}
+
+func (t *limitTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+	t.d.RetractBlock(execute.ToBlockKey(meta))
+}
+
+func (t *limitTransformation) Process(id execute.DatasetID, b execute.Block) {
+	builder, new := t.cache.BlockBuilder(b)
+	if new {
+		execute.AddBlockCols(b, builder)
+	}
+
+	ncols := builder.NCols()
+	if cap(t.colMap) < ncols {
+		t.colMap = make([]int, ncols)
+		for j := range t.colMap {
+			t.colMap[j] = j
+		}
+	} else {
+		t.colMap = t.colMap[:ncols]
+	}
+
+	// AppendBlock with limit
+	n := t.n
+	times := b.Times()
+
+	cols := builder.Cols()
+	timeIdx := execute.TimeIdx(cols)
+	times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
+		l := len(ts)
+		if l > n {
+			l = n
+		}
+		n -= l
+		builder.AppendTimes(timeIdx, ts[:l])
+		for j, c := range cols {
+			if j == timeIdx || c.IsCommon {
+				continue
+			}
+			for i := range ts[:l] {
+				switch c.Type {
+				case execute.TBool:
+					builder.AppendBool(j, rr.AtBool(i, t.colMap[j]))
+				case execute.TInt:
+					builder.AppendInt(j, rr.AtInt(i, t.colMap[j]))
+				case execute.TUInt:
+					builder.AppendUInt(j, rr.AtUInt(i, t.colMap[j]))
+				case execute.TFloat:
+					builder.AppendFloat(j, rr.AtFloat(i, t.colMap[j]))
+				case execute.TString:
+					builder.AppendString(j, rr.AtString(i, t.colMap[j]))
+				case execute.TTime:
+					builder.AppendTime(j, rr.AtTime(i, t.colMap[j]))
+				default:
+					execute.PanicUnknownType(c.Type)
+				}
+			}
+		}
+	})
+}
+
+func (t *limitTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+	t.d.UpdateWatermark(mark)
+}
+func (t *limitTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+	t.d.UpdateProcessingTime(pt)
+}
+func (t *limitTransformation) Finish(id execute.DatasetID, err error) {
+	t.d.Finish(err)
+}
+func (t *limitTransformation) SetParents(ids []execute.DatasetID) {
 }
