@@ -18,7 +18,7 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	Keys       []string              `json:"keys"`
+	On         []string              `json:"on"`
 	Expression expression.Expression `json:"expression"`
 }
 
@@ -45,15 +45,15 @@ func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Opera
 		},
 	}
 
-	if keysValue, ok := args["keys"]; ok {
-		if keysValue.Type != ifql.TArray {
-			return nil, fmt.Errorf(`join argument "keys" must be a list, got %v`, keysValue.Type)
+	if onValue, ok := args["on"]; ok {
+		if onValue.Type != ifql.TArray {
+			return nil, fmt.Errorf(`join argument "on" must be a list, got %v`, onValue.Type)
 		}
-		list := keysValue.Value.(ifql.Array)
+		list := onValue.Value.(ifql.Array)
 		if list.Type != ifql.TString {
-			return nil, fmt.Errorf(`join argument "keys" must be a list of strings, got list of %v`, list.Type)
+			return nil, fmt.Errorf(`join argument "on" must be a list of strings, got list of %v`, list.Type)
 		}
-		spec.Keys = list.Elements.([]string)
+		spec.On = list.Elements.([]string)
 	}
 
 	// Find identifier of parent nodes
@@ -83,7 +83,7 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	Keys       []string              `json:"keys"`
+	On         []string              `json:"keys"`
 	Expression expression.Expression `json:"expression"`
 }
 
@@ -94,10 +94,10 @@ func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	p := &MergeJoinProcedureSpec{
-		Keys:       spec.Keys,
+		On:         spec.On,
 		Expression: spec.Expression,
 	}
-	sort.Strings(p.Keys)
+	sort.Strings(p.On)
 	return p, nil
 }
 
@@ -107,8 +107,8 @@ func (s *MergeJoinProcedureSpec) Kind() plan.ProcedureKind {
 func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(MergeJoinProcedureSpec)
 
-	ns.Keys = make([]string, len(s.Keys))
-	copy(ns.Keys, s.Keys)
+	ns.On = make([]string, len(s.On))
+	copy(ns.On, s.On)
 
 	// TODO Copy Expression
 	ns.Expression = s.Expression
@@ -152,7 +152,7 @@ func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *M
 		d:           d,
 		cache:       cache,
 		parentState: make(map[execute.DatasetID]*mergeJoinParentState),
-		keys:        spec.Keys,
+		keys:        spec.On,
 	}
 }
 

@@ -627,7 +627,7 @@ func TestNewQuery(t *testing.T) {
 			raw: `
 var a = select(db:"dbA").range(start:-1h)
 var b = select(db:"dbB").range(start:-1h)
-a.join(keys:["host"], exp:{a + b})`,
+a.join(on:["host"], exp:{a + b})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -669,7 +669,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
-							Keys: []string{"host"},
+							On: []string{"host"},
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AdditionOperator,
@@ -697,7 +697,7 @@ a.join(keys:["host"], exp:{a + b})`,
 		{
 			name: "select with join and anonymous",
 			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{a/$})`,
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{a/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -773,7 +773,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
-							Keys: []string{"t1"},
+							On: []string{"t1"},
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
@@ -803,7 +803,7 @@ a.join(keys:["host"], exp:{a + b})`,
 		{
 			name: "select with join with complex expression",
 			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(keys:["t1"], exp:{(a-$)/$})`,
+			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{(a-$)/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -879,7 +879,7 @@ a.join(keys:["host"], exp:{a + b})`,
 					{
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
-							Keys: []string{"t1"},
+							On: []string{"t1"},
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
