@@ -670,7 +670,7 @@ a.join(on:["host"], exp:{a + b})`,
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							On: []string{"host"},
-							Expression: expression.Expression{
+							Eval: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AdditionOperator,
 									Left: &expression.ReferenceNode{
@@ -774,7 +774,7 @@ a.join(on:["host"], exp:{a + b})`,
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
 							On: []string{"t1"},
-							Expression: expression.Expression{
+							Eval: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
 									Left: &expression.ReferenceNode{
@@ -880,7 +880,7 @@ a.join(on:["host"], exp:{a + b})`,
 						ID: "join6",
 						Spec: &functions.JoinOpSpec{
 							On: []string{"t1"},
-							Expression: expression.Expression{
+							Eval: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
 									Left: &expression.BinaryNode{

@@ -165,7 +165,7 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("join"): {
 						ID: plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
-							Expression: expression.Expression{
+							Eval: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
 									Left: &expression.ReferenceNode{

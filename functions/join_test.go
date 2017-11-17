@@ -19,7 +19,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"kind":"join",
 		"spec":{
 			"on":["t1","t2"],
-			"expression":{
+			"eval":{
 				"root":{
 					"type":"binary",
 					"operator": "+",
@@ -41,7 +41,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
 			On: []string{"t1", "t2"},
-			Expression: expression.Expression{
+			Eval: expression.Expression{
 				Root: &expression.BinaryNode{
 					Operator: expression.AdditionOperator,
 					Left: &expression.ReferenceNode{
@@ -84,7 +84,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner",
 			spec: &functions.MergeJoinProcedureSpec{
-				Expression: addExpression,
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -141,7 +141,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner with ints",
 			spec: &functions.MergeJoinProcedureSpec{
-				Expression: addExpression,
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -198,7 +198,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with missing values",
 			spec: &functions.MergeJoinProcedureSpec{
-				Expression: addExpression,
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -253,7 +253,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with multiple matches",
 			spec: &functions.MergeJoinProcedureSpec{
-				Expression: addExpression,
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -314,8 +314,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with common tags",
 			spec: &functions.MergeJoinProcedureSpec{
-				On:         []string{"t1"},
-				Expression: addExpression,
+				On:   []string{"t1"},
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -375,8 +375,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On:         []string{"t1"},
-				Expression: addExpression,
+				On:   []string{"t1"},
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -445,8 +445,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with tags and extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On:         []string{"t1", "t2"},
-				Expression: addExpression,
+				On:   []string{"t1", "t2"},
+				Eval: addExpression,
 			},
 			data0: []*executetest.Block{
 				{
@@ -523,7 +523,7 @@ func TestMergeJoin_Process(t *testing.T) {
 				t.Skip()
 			}
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			joinExpr, err := functions.NewExpressionSpec(tc.spec.Expression)
+			joinExpr, err := functions.NewExpressionSpec(tc.spec.Eval)
 			if err != nil {
 				t.Fatal(err)
 			}
