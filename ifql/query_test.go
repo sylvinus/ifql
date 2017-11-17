@@ -21,18 +21,18 @@ func TestNewQuery(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "select",
-			raw:     `select()`,
+			name:    "from",
+			raw:     `from()`,
 			wantErr: true,
 		},
 		{
-			name: "select with database",
-			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).sum()`,
+			name: "from with database",
+			raw:  `from(db:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -55,19 +55,19 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "range1"},
+					{Parent: "from0", Child: "range1"},
 					{Parent: "range1", Child: "sum2"},
 				},
 			},
 		},
 		{
-			name: "select with database with range",
-			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).sum()`,
+			name: "from with database with range",
+			raw:  `from(db:"mydb").range(start:-4h, stop:-2h).sum()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -90,19 +90,19 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "range1"},
+					{Parent: "from0", Child: "range1"},
 					{Parent: "range1", Child: "sum2"},
 				},
 			},
 		},
 		{
-			name: "select with database with range and count",
-			raw:  `select(db:"mydb").range(start:-4h, stop:-2h).count()`,
+			name: "from with database with range and count",
+			raw:  `from(db:"mydb").range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -125,19 +125,19 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "range1"},
+					{Parent: "from0", Child: "range1"},
 					{Parent: "range1", Child: "count2"},
 				},
 			},
 		},
 		{
-			name: "select with database filter and range",
-			raw:  `select(db:"mydb").filter(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
+			name: "from with database filter and range",
+			raw:  `from(db:"mydb").filter(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -190,15 +190,15 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database filter (and with or) and range",
-			raw: `select(db:"mydb")
+			name: "from with database filter (and with or) and range",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 								(
 									("t1"=="val1")
@@ -213,8 +213,8 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -280,15 +280,15 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database filter including fields",
-			raw: `select(db:"mydb")
+			name: "from with database filter including fields",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 							("t1"=="val1")
 							and
@@ -299,8 +299,8 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -353,15 +353,15 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database filter with no parens including fields",
-			raw: `select(db:"mydb")
+			name: "from with database filter with no parens including fields",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 							"t1"=="val1"
 							and
@@ -372,8 +372,8 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -426,15 +426,15 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database filter with no parens including regex and field",
-			raw: `select(db:"mydb")
+			name: "from with database filter with no parens including regex and field",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 							"t1"==/val1/
 							and
@@ -445,8 +445,8 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -499,23 +499,23 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database regex with escape",
-			raw: `select(db:"mydb")
+			name: "from with database regex with escape",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 							"t1"==/va\/l1/
 						})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -538,13 +538,13 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 				},
 			},
 		},
 		{
-			name: "select with database with two regex",
-			raw: `select(db:"mydb")
+			name: "from with database with two regex",
+			raw: `from(db:"mydb")
 						.filter(exp:{
 							"t1"==/va\/l1/
 							and
@@ -553,8 +553,8 @@ func TestNewQuery(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -590,18 +590,18 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 				},
 			},
 		},
 		{
-			name: "select with window",
-			raw:  `select(db:"mydb").window(start:-4h, every:1h)`,
+			name: "from with window",
+			raw:  `from(db:"mydb").window(start:-4h, every:1h)`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "mydb",
 						},
 					},
@@ -618,21 +618,21 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "window1"},
+					{Parent: "from0", Child: "window1"},
 				},
 			},
 		},
 		{
-			name: "select with join",
+			name: "from with join",
 			raw: `
-var a = select(db:"dbA").range(start:-1h)
-var b = select(db:"dbB").range(start:-1h)
+var a = from(db:"dbA").range(start:-1h)
+var b = from(db:"dbB").range(start:-1h)
 a.join(on:["host"], exp:{a + b})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "dbA",
 						},
 					},
@@ -649,8 +649,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "select2",
-						Spec: &functions.SelectOpSpec{
+						ID: "from2",
+						Spec: &functions.FromOpSpec{
 							Database: "dbB",
 						},
 					},
@@ -687,22 +687,22 @@ a.join(on:["host"], exp:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "range1"},
-					{Parent: "select2", Child: "range3"},
+					{Parent: "from0", Child: "range1"},
+					{Parent: "from2", Child: "range3"},
 					{Parent: "range1", Child: "join4"},
 					{Parent: "range3", Child: "join4"},
 				},
 			},
 		},
 		{
-			name: "select with join and anonymous",
-			raw: `var a = select(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{a/$})`,
+			name: "from with join and anonymous",
+			raw: `var a = from(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
+			from(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{a/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "ifql",
 						},
 					},
@@ -736,8 +736,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "select3",
-						Spec: &functions.SelectOpSpec{
+						ID: "from3",
+						Spec: &functions.FromOpSpec{
 							Database: "ifql",
 						},
 					},
@@ -791,9 +791,9 @@ a.join(on:["host"], exp:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
-					{Parent: "select3", Child: "filter4"},
+					{Parent: "from3", Child: "filter4"},
 					{Parent: "filter4", Child: "range5"},
 					{Parent: "range5", Child: "join6"},
 					{Parent: "range2", Child: "join6"},
@@ -801,14 +801,14 @@ a.join(on:["host"], exp:{a + b})`,
 			},
 		},
 		{
-			name: "select with join with complex expression",
-			raw: `var a = select(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{(a-$)/$})`,
+			name: "from with join with complex expression",
+			raw: `var a = from(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
+			from(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{(a-$)/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID: "select0",
-						Spec: &functions.SelectOpSpec{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
 							Database: "ifql",
 						},
 					},
@@ -842,8 +842,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "select3",
-						Spec: &functions.SelectOpSpec{
+						ID: "from3",
+						Spec: &functions.FromOpSpec{
 							Database: "ifql",
 						},
 					},
@@ -904,9 +904,9 @@ a.join(on:["host"], exp:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "filter1"},
+					{Parent: "from0", Child: "filter1"},
 					{Parent: "filter1", Child: "range2"},
-					{Parent: "select3", Child: "filter4"},
+					{Parent: "from3", Child: "filter4"},
 					{Parent: "filter4", Child: "range5"},
 					{Parent: "range5", Child: "join6"},
 					{Parent: "range2", Child: "join6"},

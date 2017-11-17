@@ -87,19 +87,19 @@ func (s *RangeProcedureSpec) Copy() plan.ProcedureSpec {
 
 func (s *RangeProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
-		Root:    SelectKind,
+		Root:    FromKind,
 		Through: []plan.ProcedureKind{GroupKind, LimitKind, FilterKind},
 	}
 }
 func (s *RangeProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
-	selectSpec := root.Spec.(*SelectProcedureSpec)
+	selectSpec := root.Spec.(*FromProcedureSpec)
 	if selectSpec.BoundsSet {
 		// Example case where this matters
 		//    var data = select(database: "mydb")
 		//    var past = data.range(start:-2d,stop:-1d)
 		//    var current = data.range(start:-1d,stop:now)
 		root = dup()
-		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec = root.Spec.(*FromProcedureSpec)
 		selectSpec.BoundsSet = false
 		selectSpec.Bounds = plan.BoundsSpec{}
 		return

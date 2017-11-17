@@ -140,11 +140,11 @@ type Selector struct {
 }
 
 func (s *Selector) QuerySpec() (*query.QuerySpec, error) {
-	parent := "select"
+	parent := "from"
 	ops := []*query.Operation{
 		{
-			ID: "select", // TODO: Change this to a UUID
-			Spec: &functions.SelectOpSpec{
+			ID: "from", // TODO: Change this to a UUID
+			Spec: &functions.FromOpSpec{
 				Database: "prometheus",
 			},
 		},
@@ -426,7 +426,7 @@ func (a *AggregateExpr) QuerySpec() (*query.QuerySpec, error) {
 			return nil, err
 		}
 
-		parent := query.OperationID("select")
+		parent := query.OperationID("from")
 		if len(spec.Edges) > 0 {
 			tail := spec.Edges[len(spec.Edges)-1]
 			parent = tail.Child
@@ -444,7 +444,7 @@ func (a *AggregateExpr) QuerySpec() (*query.QuerySpec, error) {
 		return nil, err
 	}
 
-	parent := query.OperationID("select")
+	parent := query.OperationID("from")
 	if len(spec.Edges) > 0 {
 		tail := spec.Edges[len(spec.Edges)-1]
 		parent = tail.Child

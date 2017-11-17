@@ -75,15 +75,15 @@ func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 
 func (s *FilterProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
-		Root:    SelectKind,
+		Root:    FromKind,
 		Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
 	}
 }
 func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
-	selectSpec := root.Spec.(*SelectProcedureSpec)
+	selectSpec := root.Spec.(*FromProcedureSpec)
 	if selectSpec.FilterSet {
 		root = dup()
-		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec = root.Spec.(*FromProcedureSpec)
 		selectSpec.FilterSet = false
 		selectSpec.Filter = expression.Expression{}
 		return

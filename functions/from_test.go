@@ -8,11 +8,11 @@ import (
 	"github.com/influxdata/ifql/query/querytest"
 )
 
-func TestSelectOperation_Marshaling(t *testing.T) {
-	data := []byte(`{"id":"select","kind":"select","spec":{"database":"mydb"}}`)
+func TestFromOperation_Marshaling(t *testing.T) {
+	data := []byte(`{"id":"from","kind":"from","spec":{"database":"mydb"}}`)
 	op := &query.Operation{
-		ID: "select",
-		Spec: &functions.SelectOpSpec{
+		ID: "from",
+		Spec: &functions.FromOpSpec{
 			Database: "mydb",
 		},
 	}

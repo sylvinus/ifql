@@ -43,7 +43,7 @@ func TestSum_PushDown_Single(t *testing.T) {
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+				Spec: &functions.FromProcedureSpec{
 					Database: "mydb",
 				},
 				Parents:  nil,
@@ -82,7 +82,7 @@ func TestSum_PushDown_Single(t *testing.T) {
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
@@ -110,7 +110,7 @@ func TestSum_PushDown_Branch(t *testing.T) {
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
 				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+				Spec: &functions.FromProcedureSpec{
 					Database: "mydb",
 				},
 				Parents:  nil,
@@ -163,7 +163,7 @@ func TestSum_PushDown_Branch(t *testing.T) {
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			selectID: {
 				ID: selectID,
-				Spec: &functions.SelectProcedureSpec{
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
@@ -176,7 +176,7 @@ func TestSum_PushDown_Branch(t *testing.T) {
 			},
 			selectIDDup: {
 				ID: selectIDDup,
-				Spec: &functions.SelectProcedureSpec{
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
