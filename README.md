@@ -122,7 +122,7 @@ Example:
 ```
 var cpu = select(db: "telegraf").where(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
 select(db: "telegraf").where(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
-.join(on:["host"], exp:{$ + cpu})
+.join(on:["host"], eval:{$ + cpu})
 ````
 
 The special identifier `$` represents the current value of the query.  It can

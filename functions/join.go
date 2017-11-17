@@ -18,8 +18,8 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	On         []string              `json:"on"`
-	Expression expression.Expression `json:"expression"`
+	On   []string              `json:"on"`
+	Eval expression.Expression `json:"eval"`
 }
 
 func init() {
@@ -40,7 +40,7 @@ func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Opera
 	}
 	node := expValue.Value.(expression.Node)
 	spec := &JoinOpSpec{
-		Expression: expression.Expression{
+		Eval: expression.Expression{
 			Root: node,
 		},
 	}
@@ -83,8 +83,8 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On         []string              `json:"keys"`
-	Expression expression.Expression `json:"expression"`
+	On   []string              `json:"keys"`
+	Eval expression.Expression `json:"eval"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -94,8 +94,8 @@ func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	p := &MergeJoinProcedureSpec{
-		On:         spec.On,
-		Expression: spec.Expression,
+		On:   spec.On,
+		Eval: spec.Eval,
 	}
 	sort.Strings(p.On)
 	return p, nil
@@ -111,7 +111,7 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	copy(ns.On, s.On)
 
 	// TODO Copy Expression
-	ns.Expression = s.Expression
+	ns.Eval = s.Eval
 
 	return ns
 }
@@ -121,11 +121,11 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinExpr, err := NewExpressionSpec(s.Expression)
+	joinEval, err := NewExpressionSpec(s.Eval)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := NewMergeJoinCache(joinExpr)
+	cache := NewMergeJoinCache(joinEval)
 	d := execute.NewDataset(id, mode, cache)
 	t := NewMergeJoinTransformation(d, cache, s)
 	return t, d, nil
@@ -316,13 +316,13 @@ type mergeJoinCache struct {
 
 	triggerSpec query.TriggerSpec
 
-	joinExpr *expressionSpec
+	joinEval *expressionSpec
 }
 
-func NewMergeJoinCache(joinExpr *expressionSpec) *mergeJoinCache {
+func NewMergeJoinCache(joinEval *expressionSpec) *mergeJoinCache {
 	return &mergeJoinCache{
 		data:     make(map[execute.BlockKey]*joinTables),
-		joinExpr: joinExpr,
+		joinEval: joinEval,
 	}
 }
 
@@ -372,7 +372,7 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 			left:     execute.NewColListBlockBuilder(),
 			right:    execute.NewColListBlockBuilder(),
 			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
-			joinExpr: c.joinExpr.Copy(),
+			joinEval: c.joinEval.Copy(),
 		}
 		tables.left.AddCol(execute.TimeCol)
 		tables.right.AddCol(execute.TimeCol)
@@ -389,7 +389,7 @@ type joinTables struct {
 
 	trigger execute.Trigger
 
-	joinExpr *expressionSpec
+	joinEval *expressionSpec
 }
 
 func (t *joinTables) Bounds() execute.Bounds {
@@ -410,7 +410,7 @@ func (t *joinTables) ClearData() {
 // Join performs a sort-merge join
 func (t *joinTables) Join() execute.Block {
 	// First determine new value type
-	newType, err := t.joinExpr.Compile(
+	newType, err := t.joinEval.Compile(
 		execute.ValueCol(t.left.Cols()).Type,
 		execute.ValueCol(t.right.Cols()).Type,
 	)
@@ -615,7 +615,7 @@ func (k joinKey) Less(o joinKey) bool {
 }
 
 func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
-	return t.joinExpr.Eval(l, r)
+	return t.joinEval.Eval(l, r)
 }
 
 type expressionSpec struct {
