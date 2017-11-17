@@ -16,7 +16,7 @@ const GroupKind = "group"
 type GroupOpSpec struct {
 	By     []string `json:"by"`
 	Keep   []string `json:"keep"`
-	Ignore []string `json:"ignore"`
+	Except []string `json:"except"`
 }
 
 func init() {
@@ -53,18 +53,18 @@ func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.Oper
 		}
 		spec.Keep = list.Elements.([]string)
 	}
-	if value, ok := args["ignore"]; ok {
+	if value, ok := args["except"]; ok {
 		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("ignore argument must be a list of strings got %v", value.Type)
+			return nil, fmt.Errorf("except argument must be a list of strings got %v", value.Type)
 		}
 		list := value.Value.(ifql.Array)
 		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("ignore argument must be a list of strings, got list of %v", list.Type)
+			return nil, fmt.Errorf("except argument must be a list of strings, got list of %v", list.Type)
 		}
-		spec.Ignore = list.Elements.([]string)
+		spec.Except = list.Elements.([]string)
 	}
-	if len(spec.By) > 0 && len(spec.Ignore) > 0 {
-		return nil, errors.New("cannot specify both by and ignore keys")
+	if len(spec.By) > 0 && len(spec.Except) > 0 {
+		return nil, errors.New("cannot specify both by and except keys")
 	}
 	return spec, nil
 }
@@ -79,7 +79,7 @@ func (s *GroupOpSpec) Kind() query.OperationKind {
 
 type GroupProcedureSpec struct {
 	By     []string
-	Ignore []string
+	Except []string
 	Keep   []string
 }
 
@@ -91,7 +91,7 @@ func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 
 	p := &GroupProcedureSpec{
 		By:     spec.By,
-		Ignore: spec.Ignore,
+		Except: spec.Except,
 		Keep:   spec.Keep,
 	}
 	return p, nil
@@ -106,8 +106,8 @@ func (s *GroupProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.By = make([]string, len(s.By))
 	copy(ns.By, s.By)
 
-	ns.Ignore = make([]string, len(s.Ignore))
-	copy(ns.Ignore, s.Ignore)
+	ns.Except = make([]string, len(s.Except))
+	copy(ns.Except, s.Except)
 
 	ns.Keep = make([]string, len(s.Keep))
 	copy(ns.Keep, s.Keep)
@@ -135,7 +135,7 @@ func (s *GroupProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 		selectSpec.GroupingSet = false
 		selectSpec.MergeAll = false
 		selectSpec.GroupKeys = nil
-		selectSpec.GroupIgnore = nil
+		selectSpec.GroupExcept = nil
 		selectSpec.GroupKeep = nil
 		return
 	}
@@ -144,9 +144,9 @@ func (s *GroupProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 	//selectSpec.OrderByTime = true
 
 	// Merge all series into a single group if we have no specific grouping dimensions.
-	selectSpec.MergeAll = len(s.By) == 0 && len(s.Ignore) == 0
+	selectSpec.MergeAll = len(s.By) == 0 && len(s.Except) == 0
 	selectSpec.GroupKeys = s.By
-	selectSpec.GroupIgnore = s.Ignore
+	selectSpec.GroupExcept = s.Except
 	selectSpec.GroupKeep = s.Keep
 }
 
@@ -166,10 +166,10 @@ type groupTransformation struct {
 	cache execute.BlockBuilderCache
 
 	keys   []string
-	ignore []string
+	except []string
 	keep   []string
 
-	// Ignoring is true of len(keys) == 0 && len(ignore) > 0
+	// Ignoring is true of len(keys) == 0 && len(except) > 0
 	ignoring bool
 }
 
@@ -178,12 +178,12 @@ func NewGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, 
 		d:        d,
 		cache:    cache,
 		keys:     spec.By,
-		ignore:   spec.Ignore,
+		except:   spec.Except,
 		keep:     spec.Keep,
-		ignoring: len(spec.By) == 0 && len(spec.Ignore) > 0,
+		ignoring: len(spec.By) == 0 && len(spec.Except) > 0,
 	}
 	sort.Strings(t.keys)
-	sort.Strings(t.ignore)
+	sort.Strings(t.except)
 	sort.Strings(t.keep)
 	return t
 }
@@ -209,7 +209,7 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 		for _, c := range cols {
 			if c.IsTag {
 				found := false
-				for _, tag := range t.ignore {
+				for _, tag := range t.except {
 					if tag == c.Label {
 						found = true
 						break
@@ -291,7 +291,7 @@ func (t *groupTransformation) processFanOut(b execute.Block) {
 	for j, c := range cols {
 		if c.IsTag {
 			ignoreTag := false
-			for _, tag := range t.ignore {
+			for _, tag := range t.except {
 				if tag == c.Label {
 					ignoreTag = true
 					break

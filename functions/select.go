@@ -82,7 +82,7 @@ type SelectProcedureSpec struct {
 	OrderByTime bool
 	MergeAll    bool
 	GroupKeys   []string
-	GroupIgnore []string
+	GroupExcept []string
 	GroupKeep   []string
 
 	AggregateSet  bool
@@ -178,7 +178,7 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 			OrderByTime:   spec.OrderByTime,
 			MergeAll:      spec.MergeAll,
 			GroupKeys:     spec.GroupKeys,
-			GroupIgnore:   spec.GroupIgnore,
+			GroupExcept:   spec.GroupExcept,
 			GroupKeep:     spec.GroupKeep,
 			AggregateType: spec.AggregateType,
 		},

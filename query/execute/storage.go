@@ -39,8 +39,8 @@ type ReadSpec struct {
 	MergeAll bool
 	// GroupKeys is the list of dimensions along which to group
 	GroupKeys []string
-	// GroupIgnore is the list of dimensions along which to not group
-	GroupIgnore []string
+	// GroupExcept is the list of dimensions along which to not group
+	GroupExcept []string
 	// GroupKeep is the list of tags to keep but not group by.
 	GroupKeep []string
 }
@@ -226,8 +226,8 @@ func (bi *storageBlockIterator) determineBlockTags(s *storage.ReadResponse_Serie
 				}
 			}
 		}
-	} else if len(bi.readSpec.GroupIgnore) > 0 {
-		tags = make(Tags, len(s.Tags)-len(bi.readSpec.GroupIgnore))
+	} else if len(bi.readSpec.GroupExcept) > 0 {
+		tags = make(Tags, len(s.Tags)-len(bi.readSpec.GroupExcept))
 		keptTags = make(Tags, len(bi.readSpec.GroupKeep))
 	TAGS:
 		for _, t := range s.Tags {
@@ -238,7 +238,7 @@ func (bi *storageBlockIterator) determineBlockTags(s *storage.ReadResponse_Serie
 					continue TAGS
 				}
 			}
-			for _, key := range bi.readSpec.GroupIgnore {
+			for _, key := range bi.readSpec.GroupExcept {
 				if k == key {
 					continue TAGS
 				}
@@ -282,7 +282,7 @@ func appendSeriesKey(b key, s *storage.ReadResponse_SeriesFrame, readSpec *ReadS
 				}
 			}
 		}
-	} else if len(readSpec.GroupIgnore) > 0 {
+	} else if len(readSpec.GroupExcept) > 0 {
 		i := 0
 	TAGS:
 		for _, t := range s.Tags {
@@ -292,7 +292,7 @@ func appendSeriesKey(b key, s *storage.ReadResponse_SeriesFrame, readSpec *ReadS
 					continue TAGS
 				}
 			}
-			for _, key := range readSpec.GroupIgnore {
+			for _, key := range readSpec.GroupExcept {
 				if k == key {
 					continue TAGS
 				}
