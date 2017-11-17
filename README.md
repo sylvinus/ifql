@@ -101,7 +101,7 @@ Groups results by a user-specified set of tags
 
 *  `by` array of strings
 Group by these specific tag names
-Cannot be used with `ignore` option
+Cannot be used with `except` option
 
 Example: `select(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"])`
 
@@ -109,11 +109,11 @@ Example: `select(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"]
 Keep specific tag keys that were not in `by` in the results 
 
 Example: `select(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
-*  `ignore` array of strings
+*  `except` array of strings
 Group by all but these tag keys
 Cannot be used with `by` option
 
-Example: `select(db: "telegraf").range(start: -30m).group(ignore: ["tag_a"], keep:["tag_b", "tag_c"])`
+Example: `select(db: "telegraf").range(start: -30m).group(except: ["tag_a"], keep:["tag_b", "tag_c"])`
 
 #### join
 Join two time series together on time and the list of `on` keys.

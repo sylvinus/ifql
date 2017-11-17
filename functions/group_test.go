@@ -106,7 +106,7 @@ func TestGroup_Process(t *testing.T) {
 		{
 			name: "fan in ignoring",
 			spec: &functions.GroupProcedureSpec{
-				Ignore: []string{"t2"},
+				Except: []string{"t2"},
 			},
 			data: []execute.Block{
 				&executetest.Block{
@@ -182,7 +182,7 @@ func TestGroup_Process(t *testing.T) {
 		{
 			name: "fan in ignoring with keep",
 			spec: &functions.GroupProcedureSpec{
-				Ignore: []string{"t2"},
+				Except: []string{"t2"},
 				Keep:   []string{"t2"},
 			},
 			data: []execute.Block{
@@ -312,7 +312,7 @@ func TestGroup_Process(t *testing.T) {
 		{
 			name: "fan out ignoring",
 			spec: &functions.GroupProcedureSpec{
-				Ignore: []string{"t2"},
+				Except: []string{"t2"},
 			},
 			data: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
@@ -367,7 +367,7 @@ func TestGroup_Process(t *testing.T) {
 		{
 			name: "fan out ignoring with keep",
 			spec: &functions.GroupProcedureSpec{
-				Ignore: []string{"t2"},
+				Except: []string{"t2"},
 				Keep:   []string{"t2"},
 			},
 			data: []execute.Block{&executetest.Block{
@@ -467,7 +467,7 @@ func TestGroup_PushDown_Single(t *testing.T) {
 				Spec: &functions.GroupProcedureSpec{
 					By:     []string{"a", "b"},
 					Keep:   []string{"c", "d"},
-					Ignore: []string{"e", "f"},
+					Except: []string{"e", "f"},
 				},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
 				Children: nil,
@@ -496,7 +496,7 @@ func TestGroup_PushDown_Single(t *testing.T) {
 					GroupingSet: true,
 					GroupKeys:   []string{"a", "b"},
 					GroupKeep:   []string{"c", "d"},
-					GroupIgnore: []string{"e", "f"},
+					GroupExcept: []string{"e", "f"},
 				},
 				Children: []plan.ProcedureID{},
 			},
@@ -543,7 +543,7 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 				Spec: &functions.GroupProcedureSpec{
 					By:     []string{"a", "b"},
 					Keep:   []string{"c", "d"},
-					Ignore: []string{"e", "f"},
+					Except: []string{"e", "f"},
 				},
 				Parents: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("range"),
@@ -587,7 +587,7 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 					GroupingSet: true,
 					GroupKeys:   []string{"a", "b"},
 					GroupKeep:   []string{"c", "d"},
-					GroupIgnore: []string{"e", "f"},
+					GroupExcept: []string{"e", "f"},
 				},
 				Children: []plan.ProcedureID{},
 			},
@@ -603,7 +603,7 @@ func TestGroup_PushDown_Branch(t *testing.T) {
 					MergeAll:    true,
 					GroupKeys:   []string{},
 					GroupKeep:   []string{"C", "D"},
-					GroupIgnore: []string{},
+					GroupExcept: []string{},
 				},
 				Parents:  []plan.ProcedureID{},
 				Children: []plan.ProcedureID{},
