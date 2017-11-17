@@ -364,8 +364,8 @@ func TestBuild(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID:   query.OperationID("select"),
-						Spec: &functions.SelectOpSpec{Database: "prometheus"},
+						ID:   query.OperationID("from"),
+						Spec: &functions.FromOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: "where",
@@ -416,7 +416,7 @@ func TestBuild(t *testing.T) {
 				},
 				Edges: []query.Edge{
 					{
-						Parent: query.OperationID("select"),
+						Parent: query.OperationID("from"),
 						Child:  query.OperationID("where"),
 					},
 					{
@@ -432,8 +432,8 @@ func TestBuild(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID:   query.OperationID("select"),
-						Spec: &functions.SelectOpSpec{Database: "prometheus"},
+						ID:   query.OperationID("from"),
+						Spec: &functions.FromOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: query.OperationID("range"),
@@ -474,7 +474,7 @@ func TestBuild(t *testing.T) {
 				},
 				Edges: []query.Edge{
 					{
-						Parent: query.OperationID("select"),
+						Parent: query.OperationID("from"),
 						Child:  query.OperationID("range"),
 					},
 					{
@@ -491,8 +491,8 @@ func TestBuild(t *testing.T) {
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
-						ID:   query.OperationID("select"),
-						Spec: &functions.SelectOpSpec{Database: "prometheus"},
+						ID:   query.OperationID("from"),
+						Spec: &functions.FromOpSpec{Database: "prometheus"},
 					},
 					{
 						ID: query.OperationID("range"),
@@ -536,7 +536,7 @@ func TestBuild(t *testing.T) {
 				},
 				Edges: []query.Edge{
 					{
-						Parent: query.OperationID("select"),
+						Parent: query.OperationID("from"),
 						Child:  query.OperationID("range"),
 					},
 					{

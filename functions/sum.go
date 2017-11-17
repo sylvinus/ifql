@@ -54,19 +54,19 @@ func (s *SumProcedureSpec) Copy() plan.ProcedureSpec {
 
 func (s *SumProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
-		Root:    SelectKind,
+		Root:    FromKind,
 		Through: nil,
 		Match: func(root *plan.Procedure) bool {
-			selectSpec := root.Spec.(*SelectProcedureSpec)
+			selectSpec := root.Spec.(*FromProcedureSpec)
 			return !selectSpec.GroupingSet
 		},
 	}
 }
 func (s *SumProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
-	selectSpec := root.Spec.(*SelectProcedureSpec)
+	selectSpec := root.Spec.(*FromProcedureSpec)
 	if selectSpec.AggregateSet {
 		root = dup()
-		selectSpec = root.Spec.(*SelectProcedureSpec)
+		selectSpec = root.Spec.(*FromProcedureSpec)
 		selectSpec.AggregateSet = false
 		selectSpec.AggregateType = ""
 		return

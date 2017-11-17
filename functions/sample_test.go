@@ -26,13 +26,13 @@ func TestSampleOperation_Marshaling(t *testing.T) {
 
 func TestSample_Process(t *testing.T) {
 	testCases := []struct {
-		name     string
-		data     execute.Block
-		want     [][]int
-		selector *functions.SampleSelector
+		name   string
+		data   execute.Block
+		want   [][]int
+		fromor *functions.SampleSelector
 	}{
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   1,
 				Pos: 0,
 			},
@@ -71,7 +71,7 @@ func TestSample_Process(t *testing.T) {
 			},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   1,
 				Pos: 0,
 			},
@@ -110,7 +110,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   2,
 				Pos: 0,
 			},
@@ -144,7 +144,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   2,
 				Pos: 1,
 			},
@@ -178,7 +178,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   3,
 				Pos: 0,
 			},
@@ -211,7 +211,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   3,
 				Pos: 1,
 			},
@@ -243,7 +243,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   3,
 				Pos: 2,
 			},
@@ -275,7 +275,7 @@ func TestSample_Process(t *testing.T) {
 			}},
 		},
 		{
-			selector: &functions.SampleSelector{
+			fromor: &functions.SampleSelector{
 				N:   3,
 				Pos: 2,
 			},
@@ -319,7 +319,7 @@ func TestSample_Process(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			executetest.IndexSelectorFuncTestHelper(
 				t,
-				tc.selector,
+				tc.fromor,
 				tc.data,
 				tc.want,
 			)

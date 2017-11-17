@@ -11,53 +11,53 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-const SelectKind = "select"
+const FromKind = "from"
 
-type SelectOpSpec struct {
+type FromOpSpec struct {
 	Database string   `json:"database"`
 	Hosts    []string `json:"hosts"`
 }
 
 func init() {
-	ifql.RegisterFunction(SelectKind, createSelectOpSpec)
-	query.RegisterOpSpec(SelectKind, newSelectOp)
-	plan.RegisterProcedureSpec(SelectKind, newSelectProcedure, SelectKind)
-	execute.RegisterSource(SelectKind, createSelectSource)
+	ifql.RegisterFunction(FromKind, createFromOpSpec)
+	query.RegisterOpSpec(FromKind, newFromOp)
+	plan.RegisterProcedureSpec(FromKind, newFromProcedure, FromKind)
+	execute.RegisterSource(FromKind, createFromSource)
 }
 
-func createSelectOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	spec := new(SelectOpSpec)
+func createFromOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+	spec := new(FromOpSpec)
 	if value, ok := args["db"]; ok {
 		if value.Type != ifql.TString {
-			return nil, fmt.Errorf(`select function "db" argument must be a string, got %v`, value.Type)
+			return nil, fmt.Errorf(`from function "db" argument must be a string, got %v`, value.Type)
 		}
 		spec.Database = value.Value.(string)
 	} else {
-		return nil, errors.New(`select function requires the "db" argument`)
+		return nil, errors.New(`from function requires the "db" argument`)
 	}
 
 	if value, ok := args["hosts"]; ok {
 		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got %v. Example select(hosts:["a:8082", "b:8082"]).`, value.Type)
+			return nil, fmt.Errorf(`from function "hosts" argument must be a list of strings, got %v. Example from(hosts:["a:8082", "b:8082"]).`, value.Type)
 		}
 		list := value.Value.(ifql.Array)
 		if list.Type != ifql.TString {
-			return nil, fmt.Errorf(`select function "hosts" argument must be a list of strings, got list of %v. Example select(hosts:["a:8082", "b:8082"]).`, list.Type)
+			return nil, fmt.Errorf(`from function "hosts" argument must be a list of strings, got list of %v. Example from(hosts:["a:8082", "b:8082"]).`, list.Type)
 		}
 		spec.Hosts = list.Elements.([]string)
 	}
 	return spec, nil
 }
 
-func newSelectOp() query.OperationSpec {
-	return new(SelectOpSpec)
+func newFromOp() query.OperationSpec {
+	return new(FromOpSpec)
 }
 
-func (s *SelectOpSpec) Kind() query.OperationKind {
-	return SelectKind
+func (s *FromOpSpec) Kind() query.OperationKind {
+	return FromKind
 }
 
-type SelectProcedureSpec struct {
+type FromProcedureSpec struct {
 	Database string
 	Hosts    []string
 
@@ -89,26 +89,26 @@ type SelectProcedureSpec struct {
 	AggregateType string
 }
 
-func newSelectProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
-	spec, ok := qs.(*SelectOpSpec)
+func newFromProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+	spec, ok := qs.(*FromOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 
-	return &SelectProcedureSpec{
+	return &FromProcedureSpec{
 		Database: spec.Database,
 		Hosts:    spec.Hosts,
 	}, nil
 }
 
-func (s *SelectProcedureSpec) Kind() plan.ProcedureKind {
-	return SelectKind
+func (s *FromProcedureSpec) Kind() plan.ProcedureKind {
+	return FromKind
 }
-func (s *SelectProcedureSpec) TimeBounds() plan.BoundsSpec {
+func (s *FromProcedureSpec) TimeBounds() plan.BoundsSpec {
 	return s.Bounds
 }
-func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
-	ns := new(SelectProcedureSpec)
+func (s *FromProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(FromProcedureSpec)
 
 	ns.Database = s.Database
 
@@ -141,8 +141,8 @@ func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.Context) execute.Source {
-	spec := prSpec.(*SelectProcedureSpec)
+func createFromSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.Context) execute.Source {
+	spec := prSpec.(*FromProcedureSpec)
 	var w execute.Window
 	if spec.WindowSet {
 		w = execute.Window{

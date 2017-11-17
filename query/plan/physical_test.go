@@ -21,7 +21,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &functions.SelectProcedureSpec{
+						Spec: &functions.FromProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -68,7 +68,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &functions.SelectProcedureSpec{
+						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{
@@ -97,7 +97,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &functions.SelectProcedureSpec{
+						Spec: &functions.FromProcedureSpec{
 							Database: "mydb",
 						},
 						Parents:  nil,
@@ -155,7 +155,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("select"): {
 						ID: plan.ProcedureIDFromOperationID("select"),
-						Spec: &functions.SelectProcedureSpec{
+						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
 							Bounds: plan.BoundsSpec{

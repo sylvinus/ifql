@@ -32,9 +32,9 @@ func TestRangeOperation_Marshaling(t *testing.T) {
 func TestRange_PushDown_Single(t *testing.T) {
 	lp := &plan.LogicalPlanSpec{
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("select"): {
-				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
+				Spec: &functions.FromProcedureSpec{
 					Database: "mydb",
 				},
 				Parents:  nil,
@@ -54,13 +54,13 @@ func TestRange_PushDown_Single(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("from")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("from"),
 			plan.ProcedureIDFromOperationID("range"),
 		},
 	}
@@ -76,9 +76,9 @@ func TestRange_PushDown_Single(t *testing.T) {
 			},
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("select"): {
-				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
@@ -95,10 +95,10 @@ func TestRange_PushDown_Single(t *testing.T) {
 			},
 		},
 		Results: []plan.ProcedureID{
-			(plan.ProcedureIDFromOperationID("select")),
+			(plan.ProcedureIDFromOperationID("from")),
 		},
 		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("from"),
 		},
 	}
 
@@ -108,9 +108,9 @@ func TestRange_PushDown_Single(t *testing.T) {
 func TestRange_PushDown_Branch(t *testing.T) {
 	lp := &plan.LogicalPlanSpec{
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("select"): {
-				ID: plan.ProcedureIDFromOperationID("select"),
-				Spec: &functions.SelectProcedureSpec{
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
+				Spec: &functions.FromProcedureSpec{
 					Database: "mydb",
 				},
 				Parents: nil,
@@ -133,7 +133,7 @@ func TestRange_PushDown_Branch(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("from")),
 				},
 				Children: nil,
 			},
@@ -151,20 +151,20 @@ func TestRange_PushDown_Branch(t *testing.T) {
 					},
 				},
 				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("select")),
+					(plan.ProcedureIDFromOperationID("from")),
 				},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("select"),
+			plan.ProcedureIDFromOperationID("from"),
 			plan.ProcedureIDFromOperationID("rangeA"),
 			plan.ProcedureIDFromOperationID("rangeB"), // rangeB is last so it will be duplicated
 		},
 	}
 
-	selectID := plan.ProcedureIDFromOperationID("select")
-	selectIDDup := plan.ProcedureIDForDuplicate(selectID)
+	fromID := plan.ProcedureIDFromOperationID("from")
+	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
 	want := &plan.PlanSpec{
 		Bounds: plan.BoundsSpec{
 			Start: query.Time{
@@ -176,9 +176,9 @@ func TestRange_PushDown_Branch(t *testing.T) {
 			},
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			selectID: {
-				ID: selectID,
-				Spec: &functions.SelectProcedureSpec{
+			fromID: {
+				ID: fromID,
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
@@ -193,9 +193,9 @@ func TestRange_PushDown_Branch(t *testing.T) {
 				},
 				Children: []plan.ProcedureID{},
 			},
-			selectIDDup: {
-				ID: selectIDDup,
-				Spec: &functions.SelectProcedureSpec{
+			fromIDDup: {
+				ID: fromIDDup,
+				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
 					Bounds: plan.BoundsSpec{
@@ -213,12 +213,12 @@ func TestRange_PushDown_Branch(t *testing.T) {
 			},
 		},
 		Results: []plan.ProcedureID{
-			selectID,
-			selectIDDup,
+			fromID,
+			fromIDDup,
 		},
 		Order: []plan.ProcedureID{
-			selectID,
-			selectIDDup,
+			fromID,
+			fromIDDup,
 		},
 	}
 

@@ -20,8 +20,8 @@ func TestQuery_JSON(t *testing.T) {
 {
 	"operations":[
 		{
-			"id": "select",
-			"kind": "select",
+			"id": "from",
+			"kind": "from",
 			"spec": {
 				"database":"mydb"
 			}
@@ -40,7 +40,7 @@ func TestQuery_JSON(t *testing.T) {
 		}
 	],
 	"edges":[
-		{"parent":"select","child":"range"},
+		{"parent":"from","child":"range"},
 		{"parent":"range","child":"sum"}
 	]
 }
@@ -54,8 +54,8 @@ func TestQuery_JSON(t *testing.T) {
 	expQ := query.QuerySpec{
 		Operations: []*query.Operation{
 			{
-				ID: "select",
-				Spec: &functions.SelectOpSpec{
+				ID: "from",
+				Spec: &functions.FromOpSpec{
 					Database: "mydb",
 				},
 			},
@@ -77,7 +77,7 @@ func TestQuery_JSON(t *testing.T) {
 			},
 		},
 		Edges: []query.Edge{
-			{Parent: "select", Child: "range"},
+			{Parent: "from", Child: "range"},
 			{Parent: "range", Child: "sum"},
 		},
 	}
