@@ -369,7 +369,7 @@ func TestBuild(t *testing.T) {
 					},
 					{
 						ID: "where",
-						Spec: &functions.WhereOpSpec{
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -443,7 +443,7 @@ func TestBuild(t *testing.T) {
 					},
 					{
 						ID: "where",
-						Spec: &functions.WhereOpSpec{
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -502,7 +502,7 @@ func TestBuild(t *testing.T) {
 					},
 					{
 						ID: "where",
-						Spec: &functions.WhereOpSpec{
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,

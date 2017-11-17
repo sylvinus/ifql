@@ -13,10 +13,10 @@ import (
 	"github.com/influxdata/ifql/query/querytest"
 )
 
-func TestWhereOperation_Marshaling(t *testing.T) {
+func TestFilterOperation_Marshaling(t *testing.T) {
 	data := []byte(`{
-		"id":"where",
-		"kind":"where",
+		"id":"filter",
+		"kind":"filter",
 		"spec":{
 			"expression":{
 				"root":{
@@ -36,8 +36,8 @@ func TestWhereOperation_Marshaling(t *testing.T) {
 		}
 	}`)
 	op := &query.Operation{
-		ID: "where",
-		Spec: &functions.WhereOpSpec{
+		ID: "filter",
+		Spec: &functions.FilterOpSpec{
 			Expression: expression.Expression{
 				Root: &expression.BinaryNode{
 					Operator: expression.NotEqualOperator,
@@ -55,16 +55,16 @@ func TestWhereOperation_Marshaling(t *testing.T) {
 	querytest.OperationMarshalingTestHelper(t, data, op)
 }
 
-func TestWhere_Process(t *testing.T) {
+func TestFilter_Process(t *testing.T) {
 	testCases := []struct {
 		name string
-		spec *functions.WhereProcedureSpec
+		spec *functions.FilterProcedureSpec
 		data []execute.Block
 		want []*executetest.Block
 	}{
 		{
 			name: "$>5",
-			spec: &functions.WhereProcedureSpec{
+			spec: &functions.FilterProcedureSpec{
 				Expression: expression.Expression{
 					Root: &expression.BinaryNode{
 						Operator: expression.GreaterThanOperator,
@@ -107,7 +107,7 @@ func TestWhere_Process(t *testing.T) {
 		},
 		{
 			name: "$>5 multiple blocks",
-			spec: &functions.WhereProcedureSpec{
+			spec: &functions.FilterProcedureSpec{
 				Expression: expression.Expression{
 					Root: &expression.BinaryNode{
 						Operator: expression.GreaterThanOperator,
@@ -183,7 +183,7 @@ func TestWhere_Process(t *testing.T) {
 		},
 		{
 			name: "$>5 and t1 = a and t2 = y",
-			spec: &functions.WhereProcedureSpec{
+			spec: &functions.FilterProcedureSpec{
 				Expression: expression.Expression{
 					Root: &expression.BinaryNode{
 						Operator: expression.AndOperator,
@@ -262,14 +262,14 @@ func TestWhere_Process(t *testing.T) {
 				tc.data,
 				tc.want,
 				func(d execute.Dataset, c execute.BlockBuilderCache) execute.Transformation {
-					return functions.NewWhereTransformation(d, c, tc.spec)
+					return functions.NewFilterTransformation(d, c, tc.spec)
 				},
 			)
 		})
 	}
 }
 
-func TestWhere_PushDown_Single(t *testing.T) {
+func TestFilter_PushDown_Single(t *testing.T) {
 	lp := &plan.LogicalPlanSpec{
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
@@ -288,11 +288,11 @@ func TestWhere_PushDown_Single(t *testing.T) {
 					},
 				},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("where")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("filter")},
 			},
-			plan.ProcedureIDFromOperationID("where"): {
-				ID: plan.ProcedureIDFromOperationID("where"),
-				Spec: &functions.WhereProcedureSpec{
+			plan.ProcedureIDFromOperationID("filter"): {
+				ID: plan.ProcedureIDFromOperationID("filter"),
+				Spec: &functions.FilterProcedureSpec{
 					Expression: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
@@ -315,7 +315,7 @@ func TestWhere_PushDown_Single(t *testing.T) {
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
 			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("where"),
+			plan.ProcedureIDFromOperationID("filter"),
 		},
 	}
 
@@ -332,8 +332,8 @@ func TestWhere_PushDown_Single(t *testing.T) {
 					Bounds: plan.BoundsSpec{
 						Stop: query.Now,
 					},
-					WhereSet: true,
-					Where: expression.Expression{
+					FilterSet: true,
+					Filter: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
 							Left: &expression.ReferenceNode{
@@ -360,7 +360,7 @@ func TestWhere_PushDown_Single(t *testing.T) {
 	plantest.PhysicalPlanTestHelper(t, lp, want)
 }
 
-func TestWhere_PushDown_Branch(t *testing.T) {
+func TestFilter_PushDown_Branch(t *testing.T) {
 	lp := &plan.LogicalPlanSpec{
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			plan.ProcedureIDFromOperationID("select"): {
@@ -380,13 +380,13 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 				},
 				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("select")},
 				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("whereA"),
-					plan.ProcedureIDFromOperationID("whereB"),
+					plan.ProcedureIDFromOperationID("filterA"),
+					plan.ProcedureIDFromOperationID("filterB"),
 				},
 			},
-			plan.ProcedureIDFromOperationID("whereA"): {
-				ID: plan.ProcedureIDFromOperationID("whereA"),
-				Spec: &functions.WhereProcedureSpec{
+			plan.ProcedureIDFromOperationID("filterA"): {
+				ID: plan.ProcedureIDFromOperationID("filterA"),
+				Spec: &functions.FilterProcedureSpec{
 					Expression: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
@@ -405,9 +405,9 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 				},
 				Children: nil,
 			},
-			plan.ProcedureIDFromOperationID("whereB"): {
-				ID: plan.ProcedureIDFromOperationID("whereB"),
-				Spec: &functions.WhereProcedureSpec{
+			plan.ProcedureIDFromOperationID("filterB"): {
+				ID: plan.ProcedureIDFromOperationID("filterB"),
+				Spec: &functions.FilterProcedureSpec{
 					Expression: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
@@ -430,8 +430,8 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("select"),
 			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("whereA"),
-			plan.ProcedureIDFromOperationID("whereB"), // WhereB is last so it will be duplicated
+			plan.ProcedureIDFromOperationID("filterA"),
+			plan.ProcedureIDFromOperationID("filterB"), // FilterB is last so it will be duplicated
 		},
 	}
 
@@ -450,8 +450,8 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 					Bounds: plan.BoundsSpec{
 						Stop: query.Now,
 					},
-					WhereSet: true,
-					Where: expression.Expression{
+					FilterSet: true,
+					Filter: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
 							Left: &expression.ReferenceNode{
@@ -474,8 +474,8 @@ func TestWhere_PushDown_Branch(t *testing.T) {
 					Bounds: plan.BoundsSpec{
 						Stop: query.Now,
 					},
-					WhereSet: true,
-					Where: expression.Expression{
+					FilterSet: true,
+					Filter: expression.Expression{
 						Root: &expression.BinaryNode{
 							Operator: expression.NotEqualOperator,
 							Left: &expression.ReferenceNode{
