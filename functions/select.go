@@ -64,8 +64,8 @@ type SelectProcedureSpec struct {
 	BoundsSet bool
 	Bounds    plan.BoundsSpec
 
-	WhereSet bool
-	Where    expression.Expression
+	FilterSet bool
+	Filter    expression.Expression
 
 	DescendingSet bool
 	Descending    bool
@@ -120,9 +120,9 @@ func (s *SelectProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.BoundsSet = s.BoundsSet
 	ns.Bounds = s.Bounds
 
-	ns.WhereSet = s.WhereSet
+	ns.FilterSet = s.FilterSet
 	// TODO copy predicate
-	ns.Where = s.Where
+	ns.Filter = s.Filter
 
 	ns.DescendingSet = s.DescendingSet
 	ns.Descending = s.Descending
@@ -170,7 +170,7 @@ func createSelectSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr exec
 		execute.ReadSpec{
 			Database:      spec.Database,
 			Hosts:         spec.Hosts,
-			Predicate:     spec.Where,
+			Predicate:     spec.Filter,
 			PointsLimit:   spec.PointsLimit,
 			SeriesLimit:   spec.SeriesLimit,
 			SeriesOffset:  spec.SeriesOffset,

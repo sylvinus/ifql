@@ -131,8 +131,8 @@ func TestNewQuery(t *testing.T) {
 			},
 		},
 		{
-			name: "select with database where and range",
-			raw:  `select(db:"mydb").where(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
+			name: "select with database filter and range",
+			raw:  `select(db:"mydb").filter(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -142,8 +142,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -190,16 +190,16 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database where (and with or) and range",
+			name: "select with database filter (and with or) and range",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 								(
 									("t1"=="val1")
 									and
@@ -219,8 +219,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.OrOperator,
@@ -280,16 +280,16 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database where including fields",
+			name: "select with database filter including fields",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 							("t1"=="val1")
 							and
 							($ == 10)
@@ -305,8 +305,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -353,16 +353,16 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database where with no parens including fields",
+			name: "select with database filter with no parens including fields",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 							"t1"=="val1"
 							and
 							$ == 10
@@ -378,8 +378,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -426,16 +426,16 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
 		},
 		{
-			name: "select with database where with no parens including regex and field",
+			name: "select with database filter with no parens including regex and field",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 							"t1"==/val1/
 							and
 							$ == 10.5
@@ -451,8 +451,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -499,8 +499,8 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
 					{Parent: "range2", Child: "count3"},
 				},
 			},
@@ -508,7 +508,7 @@ func TestNewQuery(t *testing.T) {
 		{
 			name: "select with database regex with escape",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 							"t1"==/va\/l1/
 						})`,
 			want: &query.QuerySpec{
@@ -520,8 +520,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.RegexpMatchOperator,
@@ -538,14 +538,14 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
+					{Parent: "select0", Child: "filter1"},
 				},
 			},
 		},
 		{
 			name: "select with database with two regex",
 			raw: `select(db:"mydb")
-						.where(exp:{
+						.filter(exp:{
 							"t1"==/va\/l1/
 							and
 							"t2" != /val2/
@@ -559,8 +559,8 @@ func TestNewQuery(t *testing.T) {
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
@@ -590,7 +590,7 @@ func TestNewQuery(t *testing.T) {
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
+					{Parent: "select0", Child: "filter1"},
 				},
 			},
 		},
@@ -696,8 +696,8 @@ a.join(on:["host"], exp:{a + b})`,
 		},
 		{
 			name: "select with join and anonymous",
-			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{a/$})`,
+			raw: `var a = select(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{a/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -707,8 +707,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -742,8 +742,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "where4",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter4",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -791,10 +791,10 @@ a.join(on:["host"], exp:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
-					{Parent: "select3", Child: "where4"},
-					{Parent: "where4", Child: "range5"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "select3", Child: "filter4"},
+					{Parent: "filter4", Child: "range5"},
 					{Parent: "range5", Child: "join6"},
 					{Parent: "range2", Child: "join6"},
 				},
@@ -802,8 +802,8 @@ a.join(on:["host"], exp:{a + b})`,
 		},
 		{
 			name: "select with join with complex expression",
-			raw: `var a = select(db:"ifql").where(exp:{"_measurement" == "a"}).range(start:-1h)
-			select(db:"ifql").where(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{(a-$)/$})`,
+			raw: `var a = select(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
+			select(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h).join(on:["t1"], exp:{(a-$)/$})`,
 			want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -813,8 +813,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "where1",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -848,8 +848,8 @@ a.join(on:["host"], exp:{a + b})`,
 						},
 					},
 					{
-						ID: "where4",
-						Spec: &functions.WhereOpSpec{
+						ID: "filter4",
+						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.EqualOperator,
@@ -904,10 +904,10 @@ a.join(on:["host"], exp:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "select0", Child: "where1"},
-					{Parent: "where1", Child: "range2"},
-					{Parent: "select3", Child: "where4"},
-					{Parent: "where4", Child: "range5"},
+					{Parent: "select0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "select3", Child: "filter4"},
+					{Parent: "filter4", Child: "range5"},
 					{Parent: "range5", Child: "join6"},
 					{Parent: "range2", Child: "join6"},
 				},

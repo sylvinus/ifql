@@ -38,7 +38,7 @@ ifqld --verbose --host localhost:8082
 ```sh
 curl -XPOST --data-urlencode \
 'q=select(db:"telegraf")
-.where(exp:{"_measurement" == "cpu" AND "_field" == "usage_user"})
+.filter(exp:{"_measurement" == "cpu" AND "_field" == "usage_user"})
 .range(start:-170h).sum()' \
 localhost:8093/query
 ```
@@ -120,8 +120,8 @@ Join two time series together on time and the list of `on` keys.
 
 Example:
 ```
-var cpu = select(db: "telegraf").where(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
-select(db: "telegraf").where(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
+var cpu = select(db: "telegraf").filter(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
+select(db: "telegraf").filter(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
 .join(on:["host"], exp:{$ + cpu})
 ````
 
@@ -154,7 +154,7 @@ Returns the max value within the results
 Example:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="cpu" AND 
+    .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system" AND 
                 "service"=="app-server"})
     .range(start:-12h)
@@ -168,7 +168,7 @@ Returns the mean of the values within the results
 Example:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="mem" AND 
+    .filter(exp:{"_measurement"=="mem" AND 
                 "_field"=="used_percent"})
     .range(start:-12h)
     .window(every:10m)
@@ -181,7 +181,7 @@ Returns the min value within the results
 Example:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="cpu" AND 
+    .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-12h)
     .window(every:10m, period: 5m)
@@ -195,7 +195,7 @@ Filters the results by time boundaries
 Example:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="cpu" AND 
+    .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-12h, stop: -15m)
 ```
@@ -213,7 +213,7 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="cpu" AND 
+    .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-1d)
     .sample(n: 5, pos: 1)
@@ -247,7 +247,7 @@ Default sort is ascending
 Example: 
 ```
 select(db:"telegraf")
-    .where(exp:{"_measurement"=="system" AND 
+    .filter(exp:{"_measurement"=="system" AND 
                 "_field"=="uptime"})
     .range(start:-12h)
     .sort(cols:["region", "host", "value"])
@@ -263,7 +263,7 @@ running instances.
 
 ```
 select(db:"telegraf")
-    .where(exp:{"_measurement"=="system" AND 
+    .filter(exp:{"_measurement"=="system" AND 
                 "_field"=="uptime"})
     .range(start:-12h)
     .sort(desc: true)
@@ -287,13 +287,13 @@ Sum of the results
 
 Example: `select(db: "telegraf").range(start: -30m, stop: -15m).sum()`
 
-#### where
+#### filter
 Filters the results using an expression
 
 Example:
 ```
 select(db:"foo")
-    .where(exp:{"_measurement"=="cpu" AND 
+    .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system" AND 
                 "service"=="app-server"})
     .range(start:-12h)

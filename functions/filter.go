@@ -12,98 +12,98 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-const WhereKind = "where"
+const FilterKind = "filter"
 
-type WhereOpSpec struct {
+type FilterOpSpec struct {
 	Expression expression.Expression `json:"expression"`
 }
 
 func init() {
-	ifql.RegisterFunction(WhereKind, createWhereOpSpec)
-	query.RegisterOpSpec(WhereKind, newWhereOp)
-	plan.RegisterProcedureSpec(WhereKind, newWhereProcedure, WhereKind)
-	execute.RegisterTransformation(WhereKind, createWhereTransformation)
+	ifql.RegisterFunction(FilterKind, createFilterOpSpec)
+	query.RegisterOpSpec(FilterKind, newFilterOp)
+	plan.RegisterProcedureSpec(FilterKind, newFilterProcedure, FilterKind)
+	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
-func createWhereOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createFilterOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
 	expValue, ok := args["exp"]
 	if !ok {
-		return nil, errors.New(`where function requires an argument "exp"`)
+		return nil, errors.New(`filter function requires an argument "exp"`)
 	}
 	if expValue.Type != ifql.TExpression {
-		return nil, fmt.Errorf(`where function argument "exp" must be an expression, got %v`, expValue.Type)
+		return nil, fmt.Errorf(`filter function argument "exp" must be an expression, got %v`, expValue.Type)
 	}
 
-	return &WhereOpSpec{
+	return &FilterOpSpec{
 		Expression: expression.Expression{
 			Root: expValue.Value.(expression.Node),
 		},
 	}, nil
 }
-func newWhereOp() query.OperationSpec {
-	return new(WhereOpSpec)
+func newFilterOp() query.OperationSpec {
+	return new(FilterOpSpec)
 }
 
-func (s *WhereOpSpec) Kind() query.OperationKind {
-	return WhereKind
+func (s *FilterOpSpec) Kind() query.OperationKind {
+	return FilterKind
 }
 
-type WhereProcedureSpec struct {
+type FilterProcedureSpec struct {
 	Expression expression.Expression
 }
 
-func newWhereProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
-	spec, ok := qs.(*WhereOpSpec)
+func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+	spec, ok := qs.(*FilterOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 
-	return &WhereProcedureSpec{
+	return &FilterProcedureSpec{
 		Expression: spec.Expression,
 	}, nil
 }
 
-func (s *WhereProcedureSpec) Kind() plan.ProcedureKind {
-	return WhereKind
+func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
+	return FilterKind
 }
-func (s *WhereProcedureSpec) Copy() plan.ProcedureSpec {
-	ns := new(WhereProcedureSpec)
+func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(FilterProcedureSpec)
 	//TODO copy expression
 	ns.Expression = s.Expression
 	return ns
 }
 
-func (s *WhereProcedureSpec) PushDownRule() plan.PushDownRule {
+func (s *FilterProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
 		Root:    SelectKind,
 		Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
 	}
 }
-func (s *WhereProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
+func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*SelectProcedureSpec)
-	if selectSpec.WhereSet {
+	if selectSpec.FilterSet {
 		root = dup()
 		selectSpec = root.Spec.(*SelectProcedureSpec)
-		selectSpec.WhereSet = false
-		selectSpec.Where = expression.Expression{}
+		selectSpec.FilterSet = false
+		selectSpec.Filter = expression.Expression{}
 		return
 	}
-	selectSpec.WhereSet = true
-	selectSpec.Where = s.Expression
+	selectSpec.FilterSet = true
+	selectSpec.Filter = s.Expression
 }
 
-func createWhereTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	s, ok := spec.(*WhereProcedureSpec)
+func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+	s, ok := spec.(*FilterProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
 	cache := execute.NewBlockBuilderCache()
 	d := execute.NewDataset(id, mode, cache)
-	t := NewWhereTransformation(d, cache, s)
+	t := NewFilterTransformation(d, cache, s)
 	return t, d, nil
 }
 
-type whereTransformation struct {
+type filterTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
@@ -120,7 +120,7 @@ type expressionOrError struct {
 	Expr execute.CompiledExpression
 }
 
-func NewWhereTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *WhereProcedureSpec) *whereTransformation {
+func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *FilterProcedureSpec) *filterTransformation {
 	names := execute.ExpressionNames(spec.Expression.Root)
 	types := make(map[string]execute.DataType, len(names))
 	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
@@ -144,7 +144,7 @@ func NewWhereTransformation(d execute.Dataset, cache execute.BlockBuilderCache, 
 		}
 	}
 
-	return &whereTransformation{
+	return &filterTransformation{
 		d:         d,
 		cache:     cache,
 		names:     names,
@@ -154,11 +154,11 @@ func NewWhereTransformation(d execute.Dataset, cache execute.BlockBuilderCache, 
 	}
 }
 
-func (t *whereTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *filterTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
 	t.d.RetractBlock(execute.ToBlockKey(meta))
 }
 
-func (t *whereTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) {
 	builder, new := t.cache.BlockBuilder(b)
 	if new {
 		execute.AddBlockCols(b, builder)
@@ -235,14 +235,14 @@ func (t *whereTransformation) Process(id execute.DatasetID, b execute.Block) {
 	})
 }
 
-func (t *whereTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+func (t *filterTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
 	t.d.UpdateWatermark(mark)
 }
-func (t *whereTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+func (t *filterTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
 	t.d.UpdateProcessingTime(pt)
 }
-func (t *whereTransformation) Finish(id execute.DatasetID, err error) {
+func (t *filterTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
 }
-func (t *whereTransformation) SetParents(ids []execute.DatasetID) {
+func (t *filterTransformation) SetParents(ids []execute.DatasetID) {
 }
