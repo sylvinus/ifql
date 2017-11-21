@@ -16,7 +16,7 @@ type SkewOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(SkewKind, createSkewOpSpec)
+	ifql.RegisterMethod(SkewKind, createSkewOpSpec)
 	query.RegisterOpSpec(SkewKind, newSkewOp)
 	plan.RegisterProcedureSpec(SkewKind, newSkewProcedure, SkewKind)
 	execute.RegisterTransformation(SkewKind, createSkewTransformation)

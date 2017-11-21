@@ -17,7 +17,7 @@ type SetOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(SetKind, createSetOpSpec)
+	ifql.RegisterMethod(SetKind, createSetOpSpec)
 	query.RegisterOpSpec(SetKind, newSetOp)
 	plan.RegisterProcedureSpec(SetKind, newSetProcedure, SetKind)
 	execute.RegisterTransformation(SetKind, createSetTransformation)

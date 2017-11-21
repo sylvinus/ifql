@@ -2,9 +2,11 @@ package functions_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/functions"
+	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
@@ -13,6 +15,481 @@ import (
 	"github.com/influxdata/ifql/query/querytest"
 )
 
+func TestFilter_NewQuery(t *testing.T) {
+	tests := []ifqltest.NewQueryTestCase{
+		{
+			Name: "from with database filter and range",
+			Raw:  `from(db:"mydb").filter(exp:{("t1"=="val1") and ("t2"=="val2")}).range(start:-4h, stop:-2h).count()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t2",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val2",
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "count3",
+						Spec: &functions.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
+				},
+			},
+		},
+		{
+			Name: "from with database filter (and with or) and range",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+								(
+									("t1"=="val1")
+									and
+									("t2"=="val2")
+								)
+								or
+								("t3"=="val3")
+							})
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.OrOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.AndOperator,
+										Left: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "t1",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "val1",
+											},
+										},
+										Right: &expression.BinaryNode{
+											Operator: expression.EqualOperator,
+											Left: &expression.ReferenceNode{
+												Name: "t2",
+												Kind: "tag",
+											},
+											Right: &expression.StringLiteralNode{
+												Value: "val2",
+											},
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t3",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val3",
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "count3",
+						Spec: &functions.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
+				},
+			},
+		},
+		{
+			Name: "from with database filter including fields",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+							("t1"=="val1")
+							and
+							($ == 10)
+						})
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.IntegerLiteralNode{
+											Value: 10,
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "count3",
+						Spec: &functions.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
+				},
+			},
+		},
+		{
+			Name: "from with database filter with no parens including fields",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+							"t1"=="val1"
+							and
+							$ == 10
+						})
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.StringLiteralNode{
+											Value: "val1",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.IntegerLiteralNode{
+											Value: 10,
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "count3",
+						Spec: &functions.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
+				},
+			},
+		},
+		{
+			Name: "from with database filter with no parens including regex and field",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+							"t1"==/val1/
+							and
+							$ == 10.5
+						})
+						.range(start:-4h, stop:-2h)
+						.count()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.RegexpMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: "val1",
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.EqualOperator,
+										Left: &expression.ReferenceNode{
+											Name: "$",
+											Kind: "field",
+										},
+										Right: &expression.FloatLiteralNode{
+											Value: 10.5,
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "count3",
+						Spec: &functions.CountOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "range2", Child: "count3"},
+				},
+			},
+		},
+		{
+			Name: "from with database regex with escape",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+							"t1"==/va\/l1/
+						})`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.RegexpMatchOperator,
+									Left: &expression.ReferenceNode{
+										Name: "t1",
+										Kind: "tag",
+									},
+									Right: &expression.RegexpLiteralNode{
+										Value: `va/l1`,
+									},
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+				},
+			},
+		},
+		{
+			Name: "from with database with two regex",
+			Raw: `from(db:"mydb")
+						.filter(exp:{
+							"t1"==/va\/l1/
+							and
+							"t2" != /val2/
+						})`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AndOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.RegexpMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t1",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: `va/l1`,
+										},
+									},
+									Right: &expression.BinaryNode{
+										Operator: expression.RegexpNotMatchOperator,
+										Left: &expression.ReferenceNode{
+											Name: "t2",
+											Kind: "tag",
+										},
+										Right: &expression.RegexpLiteralNode{
+											Value: `val2`,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			ifqltest.NewQueryTestHelper(t, tc)
+		})
+	}
+}
 func TestFilterOperation_Marshaling(t *testing.T) {
 	data := []byte(`{
 		"id":"filter",

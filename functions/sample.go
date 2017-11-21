@@ -20,7 +20,7 @@ type SampleOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(SampleKind, createSampleOpSpec)
+	ifql.RegisterMethod(SampleKind, createSampleOpSpec)
 	query.RegisterOpSpec(SampleKind, newSampleOp)
 	plan.RegisterProcedureSpec(SampleKind, newSampleProcedure, SampleKind)
 	execute.RegisterTransformation(SampleKind, createSampleTransformation)

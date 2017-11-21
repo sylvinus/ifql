@@ -8,11 +8,52 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/functions"
+	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/querytest"
 )
+
+func TestWindow_NewQuery(t *testing.T) {
+	tests := []ifqltest.NewQueryTestCase{
+		{
+			Name: "from with window",
+			Raw:  `from(db:"mydb").window(start:-4h, every:1h)`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "window1",
+						Spec: &functions.WindowOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Every:  query.Duration(time.Hour),
+							Period: query.Duration(time.Hour),
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "window1"},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			ifqltest.NewQueryTestHelper(t, tc)
+		})
+	}
+}
 
 func TestWindowOperation_Marshaling(t *testing.T) {
 	//TODO: Test marshalling of triggerspec

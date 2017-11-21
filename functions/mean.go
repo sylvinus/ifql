@@ -16,7 +16,7 @@ type MeanOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(MeanKind, createMeanOpSpec)
+	ifql.RegisterMethod(MeanKind, createMeanOpSpec)
 	query.RegisterOpSpec(MeanKind, newMeanOp)
 	plan.RegisterProcedureSpec(MeanKind, newMeanProcedure, MeanKind)
 	execute.RegisterTransformation(MeanKind, createMeanTransformation)

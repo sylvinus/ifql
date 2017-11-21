@@ -17,7 +17,7 @@ type RangeOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(RangeKind, createRangeOpSpec)
+	ifql.RegisterMethod(RangeKind, createRangeOpSpec)
 	query.RegisterOpSpec(RangeKind, newRangeOp)
 	plan.RegisterProcedureSpec(RangeKind, newRangeProcedure, RangeKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.

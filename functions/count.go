@@ -15,7 +15,7 @@ type CountOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(CountKind, createCountOpSpec)
+	ifql.RegisterMethod(CountKind, createCountOpSpec)
 	query.RegisterOpSpec(CountKind, newCountOp)
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)

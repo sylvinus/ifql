@@ -16,7 +16,7 @@ type LastOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(LastKind, createLastOpSpec)
+	ifql.RegisterMethod(LastKind, createLastOpSpec)
 	query.RegisterOpSpec(LastKind, newLastOp)
 	plan.RegisterProcedureSpec(LastKind, newLastProcedure, LastKind)
 	execute.RegisterTransformation(LastKind, createLastTransformation)

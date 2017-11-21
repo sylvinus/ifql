@@ -21,7 +21,7 @@ type WindowOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(WindowKind, createWindowOpSpec)
+	ifql.RegisterMethod(WindowKind, createWindowOpSpec)
 	query.RegisterOpSpec(WindowKind, newWindowOp)
 	plan.RegisterProcedureSpec(WindowKind, newWindowProcedure, WindowKind)
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)

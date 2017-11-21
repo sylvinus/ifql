@@ -16,7 +16,7 @@ type MaxOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(MaxKind, createMaxOpSpec)
+	ifql.RegisterMethod(MaxKind, createMaxOpSpec)
 	query.RegisterOpSpec(MaxKind, newMaxOp)
 	plan.RegisterProcedureSpec(MaxKind, newMaxProcedure, MaxKind)
 	execute.RegisterTransformation(MaxKind, createMaxTransformation)

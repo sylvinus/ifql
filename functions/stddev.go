@@ -16,7 +16,7 @@ type StddevOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(StddevKind, createStddevOpSpec)
+	ifql.RegisterMethod(StddevKind, createStddevOpSpec)
 	query.RegisterOpSpec(StddevKind, newStddevOp)
 	plan.RegisterProcedureSpec(StddevKind, newStddevProcedure, StddevKind)
 	execute.RegisterTransformation(StddevKind, createStddevTransformation)

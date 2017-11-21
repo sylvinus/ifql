@@ -19,7 +19,7 @@ type FilterOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(FilterKind, createFilterOpSpec)
+	ifql.RegisterMethod(FilterKind, createFilterOpSpec)
 	query.RegisterOpSpec(FilterKind, newFilterOp)
 	plan.RegisterProcedureSpec(FilterKind, newFilterProcedure, FilterKind)
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)

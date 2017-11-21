@@ -3,15 +3,226 @@ package functions_test
 import (
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/functions"
+	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/querytest"
 )
+
+func TestJoin_NewQuery(t *testing.T) {
+	tests := []ifqltest.NewQueryTestCase{
+		{
+			Name: "basic two-way join",
+			Raw: `
+var a = from(db:"dbA").range(start:-1h)
+var b = from(db:"dbB").range(start:-1h)
+join(on:["host"], eval:{a + b})`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "dbA",
+						},
+					},
+					{
+						ID: "range1",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID: "from2",
+						Spec: &functions.FromOpSpec{
+							Database: "dbB",
+						},
+					},
+					{
+						ID: "range3",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID: "join4",
+						Spec: &functions.JoinOpSpec{
+							On: []string{"host"},
+							Eval: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.AdditionOperator,
+									Left: &expression.ReferenceNode{
+										Name: "a",
+										Kind: "identifier",
+									},
+									Right: &expression.ReferenceNode{
+										Name: "b",
+										Kind: "identifier",
+									},
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "range1"},
+					{Parent: "from2", Child: "range3"},
+					{Parent: "range1", Child: "join4"},
+					{Parent: "range3", Child: "join4"},
+				},
+			},
+		},
+		{
+			Name: "error: join as chain",
+			Raw: `
+				var a = from(db:"dbA").range(start:-1h)
+				var b = from(db:"dbB").range(start:-1h)
+				a.join(on:["host"], eval:{a + b})
+			`,
+			WantErr: true,
+		},
+		{
+			Name: "from with join with complex expression",
+			Raw: `
+				var a = from(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
+				var b = from(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h)
+				join(on:["t1"], eval:{(a-b)/b})
+			`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "filter1",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "a",
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range2",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID: "from3",
+						Spec: &functions.FromOpSpec{
+							Database: "ifql",
+						},
+					},
+					{
+						ID: "filter4",
+						Spec: &functions.FilterOpSpec{
+							Expression: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.EqualOperator,
+									Left: &expression.ReferenceNode{
+										Name: "_measurement",
+										Kind: "tag",
+									},
+									Right: &expression.StringLiteralNode{
+										Value: "b",
+									},
+								},
+							},
+						},
+					},
+					{
+						ID: "range5",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -1 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID: "join6",
+						Spec: &functions.JoinOpSpec{
+							On: []string{"t1"},
+							Eval: expression.Expression{
+								Root: &expression.BinaryNode{
+									Operator: expression.DivisionOperator,
+									Left: &expression.BinaryNode{
+										Operator: expression.SubtractionOperator,
+										Left: &expression.ReferenceNode{
+											Name: "a",
+											Kind: "identifier",
+										},
+										Right: &expression.ReferenceNode{
+											Name: "b",
+											Kind: "identifier",
+										},
+									},
+									Right: &expression.ReferenceNode{
+										Name: "b",
+										Kind: "identifier",
+									},
+								},
+							},
+						},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "filter1"},
+					{Parent: "filter1", Child: "range2"},
+					{Parent: "from3", Child: "filter4"},
+					{Parent: "filter4", Child: "range5"},
+					{Parent: "range2", Child: "join6"},
+					{Parent: "range5", Child: "join6"},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			ifqltest.NewQueryTestHelper(t, tc)
+		})
+	}
+}
 
 func TestJoinOperation_Marshaling(t *testing.T) {
 	data := []byte(`{
@@ -64,7 +275,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		Root: &expression.BinaryNode{
 			Operator: expression.AdditionOperator,
 			Left: &expression.ReferenceNode{
-				Name: "$",
+				Name: "a",
 				Kind: "identifier",
 			},
 			Right: &expression.ReferenceNode{

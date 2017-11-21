@@ -13,7 +13,7 @@ import (
 const SpreadKind = "spread"
 
 func init() {
-	ifql.RegisterFunction(SpreadKind, createSpreadOpSpec)
+	ifql.RegisterMethod(SpreadKind, createSpreadOpSpec)
 	query.RegisterOpSpec(SpreadKind, newSpreadOp)
 	plan.RegisterProcedureSpec(SpreadKind, newSpreadProcedure, SpreadKind)
 	execute.RegisterTransformation(SpreadKind, createSpreadTransformation)

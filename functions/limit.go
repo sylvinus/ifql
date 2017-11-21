@@ -20,7 +20,7 @@ type LimitOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(LimitKind, createLimitOpSpec)
+	ifql.RegisterMethod(LimitKind, createLimitOpSpec)
 	query.RegisterOpSpec(LimitKind, newLimitOp)
 	plan.RegisterProcedureSpec(LimitKind, newLimitProcedure, LimitKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
