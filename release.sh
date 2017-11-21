@@ -16,7 +16,7 @@ dataname="ifql-data"
 docker build -f Dockerfile_build -t $imagename .
 
 # Create docker volume of repo
-docker rm -f $dataname
+docker rm $dataname 2>/dev/null >/dev/null || true
 docker create \
     --name $dataname \
     -v "/root/go/src/github.com/influxdata/ifqld" \
