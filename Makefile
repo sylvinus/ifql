@@ -44,9 +44,9 @@ bin/goreleaser:
 dist: bin/goreleaser
 	PATH=./bin:${PATH} goreleaser --rm-dist --release-notes CHANGELOG.md
 
-release: dist docker
+release: dist release-docker
 
-docker:
+release-docker:
 	docker build -t quay.io/influxdb/ifqld:latest .
 	docker tag quay.io/influxdb/ifqld:latest quay.io/influxdb/ifqld:${VERSION}
 	docker push quay.io/influxdb/ifqld:latest
