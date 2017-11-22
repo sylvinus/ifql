@@ -752,6 +752,10 @@ func (c *context) AdditionalParent(id query.OperationID) {
 	c.parents = append(c.parents, id)
 }
 
+// Arguments provides access to the keyword arguments passed to a function.
+// The Get{Type} methods return three values: the typed value of the arg,
+// whether the argument was specified and any errors about the argument type.
+// The GetRequired{Type} methods return only two values, the typed value of the arg and any errors, a missing argument is considered an error in this case.
 type Arguments interface {
 	GetString(name string) (string, bool, error)
 	GetInt(name string) (int64, bool, error)
@@ -771,6 +775,7 @@ type Arguments interface {
 	GetRequiredArray(name string, t Type) (Array, error)
 	GetRequiredExpression(name string) (expression.Expression, error)
 
+	// listUnused returns the list of provided arguments that were not used by the function.
 	listUnused() []string
 }
 
