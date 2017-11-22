@@ -19,7 +19,7 @@ func init() {
 	execute.RegisterTransformation(SpreadKind, createSpreadTransformation)
 }
 
-func createSpreadOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createSpreadOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	return new(SpreadOpSpec), nil
 }
 

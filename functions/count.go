@@ -1,8 +1,6 @@
 package functions
 
 import (
-	"fmt"
-
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -20,11 +18,7 @@ func init() {
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)
 }
-func createCountOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`count function requires no arguments`)
-	}
-
+func createCountOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	return new(CountOpSpec), nil
 }
 

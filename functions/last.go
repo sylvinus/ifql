@@ -22,15 +22,13 @@ func init() {
 	execute.RegisterTransformation(LastKind, createLastTransformation)
 }
 
-func createLastOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createLastOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(LastOpSpec)
-	if value, ok := args["useRowTime"]; ok {
-		if value.Type != ifql.TBool {
-			return nil, fmt.Errorf(`last useRowTime argument must be a boolean`)
-		}
-		spec.UseRowTime = value.Value.(bool)
+	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.UseRowTime = useRowTime
 	}
-
 	return spec, nil
 }
 

@@ -23,28 +23,22 @@ func init() {
 	execute.RegisterTransformation(SortKind, createSortTransformation)
 }
 
-func createSortOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createSortOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(SortOpSpec)
 
-	if value, ok := args["cols"]; ok {
-		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("cols argument must be a list of strings got %v", value.Type)
-		}
-		list := value.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("cols argument must be a list of strings, got list of %v", list.Type)
-		}
-		spec.Cols = list.Elements.([]string)
+	if array, ok, err := args.GetArray("cols", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Cols = array.Elements.([]string)
 	} else {
 		//Default behavior to sort by value
 		spec.Cols = []string{execute.ValueColLabel}
 	}
 
-	if value, ok := args["desc"]; ok {
-		if value.Type != ifql.TBool {
-			return nil, fmt.Errorf("desc argument must be a boolean, got %v", value.Type)
-		}
-		spec.Desc = value.Value.(bool)
+	if desc, ok, err := args.GetBool("desc"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Desc = desc
 	}
 
 	return spec, nil

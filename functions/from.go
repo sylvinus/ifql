@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/influxdata/ifql/expression"
@@ -25,26 +24,19 @@ func init() {
 	execute.RegisterSource(FromKind, createFromSource)
 }
 
-func createFromOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	spec := new(FromOpSpec)
-	if value, ok := args["db"]; ok {
-		if value.Type != ifql.TString {
-			return nil, fmt.Errorf(`from function "db" argument must be a string, got %v`, value.Type)
-		}
-		spec.Database = value.Value.(string)
-	} else {
-		return nil, errors.New(`from function requires the "db" argument`)
+func createFromOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+	db, err := args.GetRequiredString("db")
+	if err != nil {
+		return nil, err
+	}
+	spec := &FromOpSpec{
+		Database: db,
 	}
 
-	if value, ok := args["hosts"]; ok {
-		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf(`from function "hosts" argument must be a list of strings, got %v. Example from(hosts:["a:8082", "b:8082"]).`, value.Type)
-		}
-		list := value.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf(`from function "hosts" argument must be a list of strings, got list of %v. Example from(hosts:["a:8082", "b:8082"]).`, list.Type)
-		}
-		spec.Hosts = list.Elements.([]string)
+	if array, ok, err := args.GetArray("hosts", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Hosts = array.Elements.([]string)
 	}
 	return spec, nil
 }

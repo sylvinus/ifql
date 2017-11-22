@@ -2,12 +2,12 @@ package functions
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/pkg/errors"
 )
 
 const WindowKind = "window"
@@ -27,34 +27,35 @@ func init() {
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
 }
 
-func createWindowOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createWindowOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(WindowOpSpec)
-	everyValue, everySet := args["every"]
+	every, everySet, err := args.GetDuration("every")
+	if err != nil {
+		return nil, err
+	}
 	if everySet {
-		if everyValue.Type != ifql.TDuration {
-			return nil, fmt.Errorf(`window every function argument "every" must be a duration, got %v`, everyValue.Type)
-		}
-		spec.Every = query.Duration(everyValue.Value.(time.Duration))
+		spec.Every = query.Duration(every)
 	}
-	periodValue, periodSet := args["period"]
+	period, periodSet, err := args.GetDuration("period")
+	if err != nil {
+		return nil, err
+	}
 	if periodSet {
-		if periodValue.Type != ifql.TDuration {
-			return nil, fmt.Errorf(`window period function argument "period" must be a duration, got %v`, periodValue.Type)
-		}
-		spec.Period = query.Duration(periodValue.Value.(time.Duration))
+		spec.Every = period
 	}
-	if roundValue, ok := args["round"]; ok {
-		if roundValue.Type != ifql.TDuration {
-			return nil, fmt.Errorf(`window round function argument "round" must be a duration, got %v`, roundValue.Type)
-		}
-		spec.Round = query.Duration(roundValue.Value.(time.Duration))
+	if round, ok, err := args.GetDuration("round"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Round = round
 	}
-	if startValue, ok := args["start"]; ok {
-		start, err := ifql.ToQueryTime(startValue)
-		if err != nil {
-			return nil, err
-		}
+	if start, ok, err := args.GetTime("start"); err != nil {
+		return nil, err
+	} else if ok {
 		spec.Start = start
+	}
+
+	if !everySet && !periodSet {
+		return nil, errors.New(`window function requires at least one of "every" or "period" to be set`)
 	}
 	// Apply defaults
 	if !everySet {

@@ -22,13 +22,12 @@ func init() {
 	execute.RegisterTransformation(FirstKind, createFirstTransformation)
 }
 
-func createFirstOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createFirstOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(FirstOpSpec)
-	if value, ok := args["useRowTime"]; ok {
-		if value.Type != ifql.TBool {
-			return nil, fmt.Errorf(`first useRowTime argument must be a boolean`)
-		}
-		spec.UseRowTime = value.Value.(bool)
+	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.UseRowTime = useRowTime
 	}
 
 	return spec, nil
