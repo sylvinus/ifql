@@ -37,7 +37,7 @@ ifqld --verbose --host localhost:8082
 5. To run a query POST an **IFQL** query string to `/query` as the `q` parameter:
 ```sh
 curl -XPOST --data-urlencode \
-'q=select(db:"telegraf")
+'q=from(db:"telegraf")
 .filter(exp:{"_measurement" == "cpu" AND "_field" == "usage_user"})
 .range(start:-170h).sum()' \
 localhost:8093/query
@@ -75,24 +75,24 @@ one server.
 
 ### Supported Functions
 
-Example: `select(db: "telegraf")`
+Example: `from(db: "telegraf")`
 
 ##### options
 * `db` string
-    `select(db: "telegraf")`
+    `from(db: "telegraf")`
 
 * `hosts` array of strings
-    `select(db: "telegraf", hosts:["host1", "host2"])`
+    `from(db: "telegraf", hosts:["host1", "host2"])`
 
 #### count
 Counts the number of results
 
-Example: `select(db:"telegraf").count()`
+Example: `from(db:"telegraf").count()`
 
 #### first
 Returns the first result of the query
 
-Example: `select(db: "telegraf").first()`
+Example: `from(db: "telegraf").first()`
 
 #### group
 Groups results by a user-specified set of tags
@@ -103,17 +103,17 @@ Groups results by a user-specified set of tags
 Group by these specific tag names
 Cannot be used with `except` option
 
-Example: `select(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"])`
+Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"])`
 
 *  `keep` array of strings
 Keep specific tag keys that were not in `by` in the results 
 
-Example: `select(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
+Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
 *  `except` array of strings
 Group by all but these tag keys
 Cannot be used with `by` option
 
-Example: `select(db: "telegraf").range(start: -30m).group(except: ["tag_a"], keep:["tag_b", "tag_c"])`
+Example: `from(db: "telegraf").range(start: -30m).group(except: ["tag_a"], keep:["tag_b", "tag_c"])`
 
 #### join
 Join two time series together on time and the list of `on` keys.
@@ -121,8 +121,8 @@ Join two time series together on time and the list of `on` keys.
 Example:
 
 ```
-var cpu = select(db: "telegraf").filter(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
-select(db: "telegraf").filter(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
+var cpu = from(db: "telegraf").filter(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
+from(db: "telegraf").filter(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
 .join(on:["host"], eval:{$ + cpu})
 ````
 
@@ -141,12 +141,12 @@ Defines the expression that merges the joined results sets together
 #### last
 Returns the last result of the query
 
-Example: `select(db: "telegraf").last()`
+Example: `from(db: "telegraf").last()`
 
 #### limit
 Restricts the number of rows returned in the results.
 
-Example: `select(db: "telegraf").limit(n: 10)`
+Example: `from(db: "telegraf").limit(n: 10)`
 
 #### max
 
@@ -154,7 +154,7 @@ Returns the max value within the results
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system" AND 
                 "service"=="app-server"})
@@ -168,7 +168,7 @@ Returns the mean of the values within the results
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="mem" AND 
                 "_field"=="used_percent"})
     .range(start:-12h)
@@ -181,7 +181,7 @@ Returns the min value within the results
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-12h)
@@ -195,7 +195,7 @@ Filters the results by time boundaries
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-12h, stop: -15m)
@@ -213,7 +213,7 @@ Defaults to "now"
 
 Example to sample every fifth point starting from the second element:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system"})
     .range(start:-1d)
@@ -231,7 +231,7 @@ Default is -1 (random offset)
 
 #### set
 Add tag of key and value to set
-Example: `select(db: "telegraf").set(key: "mykey", value: "myvalue")`
+Example: `from(db: "telegraf").set(key: "mykey", value: "myvalue")`
 ##### options
 * `key` string
 * `value` string
@@ -239,7 +239,7 @@ Example: `select(db: "telegraf").set(key: "mykey", value: "myvalue")`
 #### skew
 Skew of the results
 
-Example: `select(db: "telegraf").range(start: -30m, stop: -15m).skew()`
+Example: `from(db: "telegraf").range(start: -30m, stop: -15m).skew()`
 
 #### sort
 Sorts the results by the specified columns
@@ -247,7 +247,7 @@ Default sort is ascending
 
 Example: 
 ```
-select(db:"telegraf")
+from(db:"telegraf")
     .filter(exp:{"_measurement"=="system" AND 
                 "_field"=="uptime"})
     .range(start:-12h)
@@ -263,7 +263,7 @@ For example, this sorts by uptime descending to find the longest
 running instances.
 
 ```
-select(db:"telegraf")
+from(db:"telegraf")
     .filter(exp:{"_measurement"=="system" AND 
                 "_field"=="uptime"})
     .range(start:-12h)
@@ -276,24 +276,24 @@ Sort results descending
 #### spread
 Difference between min and max values
 
-Example: `select(db: "telegraf").range(start: -30m).spread()`
+Example: `from(db: "telegraf").range(start: -30m).spread()`
 
 #### stddev
 Standard Deviation of the results
 
-Example: `select(db: "telegraf").range(start: -30m, stop: -15m).stddev()`
+Example: `from(db: "telegraf").range(start: -30m, stop: -15m).stddev()`
 
 #### sum
 Sum of the results
 
-Example: `select(db: "telegraf").range(start: -30m, stop: -15m).sum()`
+Example: `from(db: "telegraf").range(start: -30m, stop: -15m).sum()`
 
 #### filter
 Filters the results using an expression
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .filter(exp:{"_measurement"=="cpu" AND 
                 "_field"=="usage_system" AND 
                 "service"=="app-server"})
@@ -310,7 +310,7 @@ Duration of time between windows
 
 Defaults to `period`'s value
 ```
-select(db:"foo")
+from(db:"foo")
     .range(start:-12h)
     .window(every:10m)
     .max()
@@ -319,7 +319,7 @@ select(db:"foo")
 * `period` duration
 Duration of the windowed parition
 ```
-select(db:"foo")
+from(db:"foo")
     .range(start:-12h)
     .window(every:10m)
     .max()
@@ -334,7 +334,7 @@ Rounds a window's bounds to the nearest duration
 
 Example:
 ```
-select(db:"foo")
+from(db:"foo")
     .range(start:-12h)
     .window(every:10m)
     .max()
