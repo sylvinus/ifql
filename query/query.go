@@ -7,8 +7,9 @@ import (
 
 // QuerySpec specifies a query.
 type QuerySpec struct {
-	Operations []*Operation `json:"operations"`
-	Edges      []Edge       `json:"edges"`
+	Operations []*Operation       `json:"operations"`
+	Edges      []Edge             `json:"edges"`
+	Resources  ResourceManagement `json:"resources"`
 
 	sorted   []*Operation
 	children map[OperationID][]*Operation
