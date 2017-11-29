@@ -73,7 +73,7 @@ func main() {
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts
 	}
-	results, querySpec, err := ifql.Query(
+	results, querySpec, err := ifql.ExecuteQuery(
 		ctx,
 		*queryStr,
 		&ifql.Options{

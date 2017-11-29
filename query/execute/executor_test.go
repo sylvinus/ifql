@@ -2,7 +2,6 @@ package execute_test
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
@@ -20,11 +19,13 @@ var epoch = time.Unix(0, 0)
 
 func TestExecutor_Execute(t *testing.T) {
 	testCases := []struct {
+		name string
 		src  []block
 		plan *plan.PlanSpec
 		exp  []blockList
 	}{
 		{
+			name: "simple aggregate",
 			src: []block{
 				{
 					bounds: execute.Bounds{
@@ -50,13 +51,16 @@ func TestExecutor_Execute(t *testing.T) {
 			},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{Absolute: time.Unix(0, 1)},
 					Stop:  query.Time{Absolute: time.Unix(0, 5)},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
@@ -73,7 +77,7 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
 						Spec: &functions.SumProcedureSpec{}, Parents: []plan.ProcedureID{
-							plan.ProcedureIDFromOperationID("select"),
+							plan.ProcedureIDFromOperationID("from"),
 						},
 						Children: nil,
 					},
@@ -103,6 +107,7 @@ func TestExecutor_Execute(t *testing.T) {
 			}},
 		},
 		{
+			name: "simple join",
 			src: []block{{
 				bounds: execute.Bounds{
 					Start: 1,
@@ -126,13 +131,16 @@ func TestExecutor_Execute(t *testing.T) {
 			}},
 			plan: &plan.PlanSpec{
 				Now: epoch.Add(5),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{Absolute: time.Unix(0, 1)},
 					Stop:  query.Time{Absolute: time.Unix(0, 5)},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
@@ -150,7 +158,7 @@ func TestExecutor_Execute(t *testing.T) {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
 						Spec: &functions.SumProcedureSpec{},
 						Parents: []plan.ProcedureID{
-							plan.ProcedureIDFromOperationID("select"),
+							plan.ProcedureIDFromOperationID("from"),
 						},
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
@@ -158,7 +166,7 @@ func TestExecutor_Execute(t *testing.T) {
 						ID:   plan.ProcedureIDFromOperationID("count"),
 						Spec: &functions.CountProcedureSpec{},
 						Parents: []plan.ProcedureID{
-							plan.ProcedureIDFromOperationID("select"),
+							plan.ProcedureIDFromOperationID("from"),
 						},
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
@@ -212,9 +220,9 @@ func TestExecutor_Execute(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		tc := tc
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			c := execute.Config{
 				StorageReader: &storageReader{blocks: tc.src},
 			}
@@ -273,9 +281,12 @@ func (df blockList) Blocks() execute.BlockIterator {
 func convertToBlockList(r execute.Result) blockList {
 	bl := blockList{}
 	blocks := r.Blocks()
-	blocks.Do(func(b execute.Block) {
+	err := blocks.Do(func(b execute.Block) {
 		bl.blocks = append(bl.blocks, convertToTestBlock(b))
 	})
+	if err != nil {
+		panic(err)
+	}
 	return bl
 }
 

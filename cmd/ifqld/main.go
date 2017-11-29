@@ -1,13 +1,13 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -39,9 +39,8 @@ type options struct {
 	Verbose           bool           `short:"v" long:"verbose" description:"Log more verbose debugging output"`
 }
 
-var hosts []string
-var storageReader execute.StorageReader
-var option options
+var opts options
+var controller *ifql.Controller
 
 var functionCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -62,7 +61,7 @@ func init() {
 }
 
 func main() {
-	parser := flags.NewParser(&option, flags.Default)
+	parser := flags.NewParser(&opts, flags.Default)
 	parser.ShortDescription = `IFQLD`
 	parser.LongDescription = `Options for the IFQLD server`
 
@@ -75,12 +74,20 @@ func main() {
 		}
 		os.Exit(code)
 	}
+	c, err := ifql.NewController(ifql.Options{
+		Hosts: opts.Hosts,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	controller = c
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
+	http.Handle("/queries", http.HandlerFunc(HandleQueries))
 
-	if !option.ReportingDisabled {
-		id := ID(string(option.IDFile))
+	if !opts.ReportingDisabled {
+		id := ID(string(opts.IDFile))
 		go reportUsageStats(id)
 	}
 
@@ -88,33 +95,8 @@ func main() {
 		defer tr.Close()
 	}
 
-	hosts = option.Hosts
-	log.Printf("Starting version %s on %s\n", version, option.Addr)
-	log.Fatal(http.ListenAndServe(option.Addr, nil))
-}
-
-func ifqlQuery(ctx context.Context, query string, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
-	return ifql.Query(
-		ctx,
-		query,
-		&ifql.Options{
-			Verbose: verbose,
-			Trace:   trace,
-			Hosts:   hosts,
-		},
-	)
-}
-
-func ifqlSpecQuery(ctx context.Context, spec *query.QuerySpec, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
-	return ifql.QueryWithSpec(
-		ctx,
-		spec,
-		&ifql.Options{
-			Verbose: verbose,
-			Trace:   trace,
-			Hosts:   hosts,
-		},
-	)
+	log.Printf("Starting version %s on %s\n", version, opts.Addr)
+	log.Fatal(http.ListenAndServe(opts.Addr, nil))
 }
 
 // TODO (pauldix): pull all this out into a server object that can
@@ -126,15 +108,11 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	queryCounter.Inc()
 
 	var (
-		results []execute.Result
-		spec    *query.QuerySpec
-		err     error
+		q   *ifql.Query
+		err error
 	)
-	verbose := req.FormValue("verbose") != ""
-	trace := req.FormValue("trace") != ""
-
 	if req.Header.Get("Content-type") == "application/json" {
-		spec = new(query.QuerySpec)
+		spec := new(query.QuerySpec)
 		if err := json.NewDecoder(req.Body).Decode(spec); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
@@ -142,7 +120,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		results, spec, err = ifqlSpecQuery(req.Context(), spec, verbose, trace)
+		q, err = controller.Query(req.Context(), spec)
 	} else {
 		query := req.FormValue("q")
 		if query == "" {
@@ -150,34 +128,34 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte("must pass query in q parameter"))
 			return
 		}
-		if option.Verbose {
+		if opts.Verbose {
 			log.Print(query)
+		}
+
+		spec, err := ifql.QuerySpec(req.Context(), query)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
+			log.Println("Error:", err)
+			return
 		}
 
 		analyze := req.FormValue("analyze") != ""
 		if analyze {
-			spec, err = ifql.QuerySpec(req.Context(), query)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
-				log.Println("Error:", err)
-				return
-			}
-
 			encodeJSON(w, http.StatusOK, spec)
 			return
 		}
-		results, spec, err = ifqlQuery(req.Context(), query, verbose, trace)
+		q, err = controller.Query(req.Context(), spec)
 	}
-
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
+		w.Write([]byte(fmt.Sprintf("Error constructing query %s", err.Error())))
 		log.Println("Error:", err)
 		return
 	}
+	defer q.Done()
 
-	funcs, err := spec.Functions()
+	funcs, err := q.Spec.Functions()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error analyzing query %s", err.Error())))
@@ -185,8 +163,8 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if option.Verbose {
-		if octets, err := json.MarshalIndent(spec, "", "    "); err == nil {
+	if opts.Verbose {
+		if octets, err := json.MarshalIndent(q.Spec, "", "    "); err == nil {
 			log.Print(string(octets))
 		}
 	}
@@ -195,11 +173,45 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		functionCounter.WithLabelValues(f).Inc()
 	}
 
+	results, ok := <-q.Ready
+	if !ok {
+		err := q.Err()
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
+		log.Println("Error:", err)
+		return
+	}
 	switch req.Header.Get("Accept") {
 	case "application/json":
 		writeJSONChunks(results, w)
 	default:
 		writeLineResults(results, w)
+	}
+}
+
+type QueriesResponse struct {
+	Queries []Query
+}
+
+type Query struct {
+	ID    string
+	State string
+}
+
+// HandleQueries returns the running queries
+func HandleQueries(w http.ResponseWriter, req *http.Request) {
+	qs := controller.Queries()
+	var queries QueriesResponse
+	queries.Queries = make([]Query, len(qs))
+	for i, q := range qs {
+		queries.Queries[i] = Query{
+			ID:    strconv.FormatUint(uint64(q.ID()), 10),
+			State: q.State().String(),
+		}
+	}
+	err := json.NewEncoder(w).Encode(queries)
+	if err != nil {
+		log.Println(err)
 	}
 }
 
@@ -353,10 +365,6 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 			log.Println("Error iterating through results:", err)
 		}
 	}
-}
-
-func writeJSONResults(results []execute.Result, w http.ResponseWriter) {
-
 }
 
 func writeLineResults(results []execute.Result, w http.ResponseWriter) {

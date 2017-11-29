@@ -19,7 +19,6 @@ type executor struct {
 }
 
 type Config struct {
-	Trace         bool
 	StorageReader StorageReader
 }
 
@@ -34,10 +33,14 @@ type executionState struct {
 	p *plan.PlanSpec
 	c *Config
 
+	resources query.ResourceManagement
+
 	bounds Bounds
 
 	results []Result
-	runners []Runner
+	sources []Source
+
+	centralTransport *CentralTransport
 }
 
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
@@ -49,11 +52,23 @@ func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, err
 	return es.results, nil
 }
 
+func validatePlan(p *plan.PlanSpec) error {
+	if p.Resources.ConcurrencyQuota == 0 {
+		return errors.New("plan must have a non-zero concurrency quota")
+	}
+	return nil
+}
+
 func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (*executionState, error) {
+	if err := validatePlan(p); err != nil {
+		return nil, errors.Wrap(err, "invalid plan")
+	}
 	es := &executionState{
-		p:       p,
-		c:       &e.c,
-		results: make([]Result, len(p.Results)),
+		p:                p,
+		c:                &e.c,
+		resources:        p.Resources,
+		results:          make([]Result, len(p.Results)),
+		centralTransport: newCentralTransport(),
 		bounds: Bounds{
 			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
 			Stop:  Time(p.Bounds.Stop.Time(p.Now).UnixNano()),
@@ -82,7 +97,7 @@ type triggeringSpec interface {
 func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
 		s := createS(pr.Spec, DatasetID(pr.ID), es.c.StorageReader, es)
-		es.runners = append(es.runners, s)
+		es.sources = append(es.sources, s)
 		return s, nil
 	}
 
@@ -109,9 +124,8 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 		if err != nil {
 			return nil, err
 		}
-		transport := newTransformationTransport(t)
+		transport := es.centralTransport.Wrap(t)
 		parent.AddTransformation(transport)
-		es.runners = append(es.runners, transport)
 		parentIDs[i] = DatasetID(parentID)
 	}
 	t.SetParents(parentIDs)
@@ -125,18 +139,13 @@ func (es *executionState) abort(err error) {
 	}
 }
 
-type Runner interface {
-	Run(ctx context.Context)
-}
-
 func (es *executionState) do(ctx context.Context) {
-	for _, r := range es.runners {
-		go func(r Runner) {
+	for _, src := range es.sources {
+		go func(src Source) {
+			// Setup panic handling on the source goroutines
 			defer func() {
 				if e := recover(); e != nil {
 					// We had a panic, abort the entire execution.
-					//TODO(nathanielc): Only abort results that were effected by the panic?
-					// This requires tracing the Runner through the execution DAG.
 					var err error
 					switch e := e.(type) {
 					case error:
@@ -144,16 +153,19 @@ func (es *executionState) do(ctx context.Context) {
 					default:
 						err = fmt.Errorf("%v", e)
 					}
-					if es.c.Trace {
-						es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
-					} else {
-						es.abort(errors.Wrap(err, "panic"))
-					}
+					es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
 				}
 			}()
-			r.Run(ctx)
-		}(r)
+			src.Run(ctx)
+		}(src)
 	}
+	es.centralTransport.Start(es.resources.ConcurrencyQuota, ctx)
+	go func() {
+		err := es.centralTransport.Err()
+		if err != nil {
+			es.abort(err)
+		}
+	}()
 }
 
 // Satisfy the ExecutionContext interface

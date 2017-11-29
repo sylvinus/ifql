@@ -2,11 +2,218 @@ package execute
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
+	"sync"
+	"sync/atomic"
 )
+
+type CentralTransport struct {
+	buf chan Message
+
+	mu      sync.Mutex
+	closed  bool
+	closing chan struct{}
+	wg      sync.WaitGroup
+	err     error
+
+	transformations map[transformationID]Transformation
+	finishedCount   int32
+}
+
+func newCentralTransport() *CentralTransport {
+	return &CentralTransport{
+		buf:             make(chan Message, 100),
+		closing:         make(chan struct{}),
+		transformations: make(map[transformationID]Transformation),
+	}
+}
+
+type transformationID uint32
+
+func (ct *CentralTransport) Wrap(t Transformation) Transformation {
+	id := transformationID(len(ct.transformations))
+	ct.transformations[id] = t
+	return newTransformationTransport(ct, id)
+}
+
+func (ct *CentralTransport) Start(n int, ctx context.Context) {
+	ct.wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer ct.wg.Done()
+			// Setup panic handling on the worker goroutines
+			defer func() {
+				if e := recover(); e != nil {
+					// We had a panic, abort the entire execution.
+					var err error
+					switch e := e.(type) {
+					case error:
+						err = e
+					default:
+						err = fmt.Errorf("%v", e)
+					}
+					ct.setErr(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
+				}
+			}()
+			ct.run(ctx)
+		}()
+	}
+}
+
+func (ct *CentralTransport) Err() error {
+	ct.wg.Wait()
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	return ct.err
+}
+
+func (ct *CentralTransport) setErr(err error) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	// TODO(nathanielc): Collect all error information.
+	if ct.err == nil {
+		ct.err = err
+	}
+}
+
+func (ct *CentralTransport) stop() {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.closed {
+		return
+	}
+	ct.closed = true
+	close(ct.closing)
+}
+
+func (ct *CentralTransport) incFinished() {
+	atomic.AddInt32(&ct.finishedCount, 1)
+}
+func (ct *CentralTransport) finished() int {
+	return int(atomic.LoadInt32(&ct.finishedCount))
+}
+
+func (ct *CentralTransport) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			// Immediately return, do not process any buffered messages
+			return
+		case <-ct.closing:
+			// We are done, nothing left to do.
+			return
+		case m := <-ct.buf:
+			t := ct.transformations[m.TransformationID()]
+			switch m := m.(type) {
+			case RetractBlockMsg:
+				t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
+			case ProcessMsg:
+				t.Process(m.SrcDatasetID(), m.Block())
+			case UpdateWatermarkMsg:
+				t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
+			case UpdateProcessingTimeMsg:
+				t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
+			case FinishMsg:
+				t.Finish(m.SrcDatasetID(), m.Error())
+				ct.incFinished()
+
+				// Check if all transformations are finished
+				if ct.finished() == len(ct.transformations) {
+					ct.stop()
+					return
+				}
+			}
+		}
+	}
+}
+
+type TransformationTransport struct {
+	ct  *CentralTransport
+	tID transformationID
+}
+
+func newTransformationTransport(ct *CentralTransport, tID transformationID) *TransformationTransport {
+	return &TransformationTransport{
+		ct:  ct,
+		tID: tID,
+	}
+}
+
+func (t *TransformationTransport) RetractBlock(id DatasetID, meta BlockMetadata) {
+	select {
+	case t.ct.buf <- &retractBlockMsg{
+		srcMessage: srcMessage{
+			dsID: id,
+			tID:  t.tID,
+		},
+		blockMetadata: meta,
+	}:
+	case <-t.ct.closing:
+	}
+}
+
+func (t *TransformationTransport) Process(id DatasetID, b Block) {
+	select {
+	case t.ct.buf <- &processMsg{
+		srcMessage: srcMessage{
+			dsID: id,
+			tID:  t.tID,
+		},
+		block: b,
+	}:
+	case <-t.ct.closing:
+	}
+}
+
+func (t *TransformationTransport) UpdateWatermark(id DatasetID, time Time) {
+	select {
+	case t.ct.buf <- &updateWatermarkMsg{
+		srcMessage: srcMessage{
+			dsID: id,
+			tID:  t.tID,
+		},
+		time: time,
+	}:
+	case <-t.ct.closing:
+	}
+}
+
+func (t *TransformationTransport) UpdateProcessingTime(id DatasetID, time Time) {
+	select {
+	case t.ct.buf <- &updateProcessingTimeMsg{
+		srcMessage: srcMessage{
+			dsID: id,
+			tID:  t.tID,
+		},
+		time: time,
+	}:
+	case <-t.ct.closing:
+	}
+}
+
+func (t *TransformationTransport) Finish(id DatasetID, err error) {
+	select {
+	case t.ct.buf <- &finishMsg{
+		srcMessage: srcMessage{
+			dsID: id,
+			tID:  t.tID,
+		},
+		err: err,
+	}:
+	case <-t.ct.closing:
+	}
+}
+
+func (t *TransformationTransport) SetParents(ids []DatasetID) {
+	//TODO(nathanielc): Need a better mechanism to inform transformations of their parent ids.
+	t.ct.transformations[t.tID].SetParents(ids)
+}
 
 type Message interface {
 	Type() MessageType
 	SrcDatasetID() DatasetID
+	TransformationID() transformationID
 }
 
 type MessageType int
@@ -19,10 +226,16 @@ const (
 	FinishType
 )
 
-type srcMessage DatasetID
+type srcMessage struct {
+	dsID DatasetID
+	tID  transformationID
+}
 
 func (m srcMessage) SrcDatasetID() DatasetID {
-	return DatasetID(m)
+	return m.dsID
+}
+func (m srcMessage) TransformationID() transformationID {
+	return m.tID
 }
 
 type RetractBlockMsg interface {
@@ -108,100 +321,4 @@ func (m *finishMsg) Type() MessageType {
 }
 func (m *finishMsg) Error() error {
 	return m.err
-}
-
-type TransformationTransport struct {
-	t Transformation
-
-	buf    chan Message
-	cancel chan struct{}
-}
-
-func newTransformationTransport(t Transformation) *TransformationTransport {
-	return &TransformationTransport{
-		t:      t,
-		buf:    make(chan Message, 100),
-		cancel: make(chan struct{}),
-	}
-}
-
-func (t *TransformationTransport) Run(ctx context.Context) {
-	defer close(t.cancel)
-	for {
-		select {
-		case <-ctx.Done():
-			// Immediately return, do not process any buffered messages
-			return
-		case m := <-t.buf:
-			switch m := m.(type) {
-			case RetractBlockMsg:
-				t.t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
-			case ProcessMsg:
-				t.t.Process(m.SrcDatasetID(), m.Block())
-			case UpdateWatermarkMsg:
-				t.t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
-			case UpdateProcessingTimeMsg:
-				t.t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
-			case FinishMsg:
-				t.t.Finish(m.SrcDatasetID(), m.Error())
-				// Stop processing messages
-				return
-			}
-		}
-	}
-}
-
-func (t *TransformationTransport) RetractBlock(id DatasetID, meta BlockMetadata) {
-	select {
-	case t.buf <- &retractBlockMsg{
-		srcMessage:    srcMessage(id),
-		blockMetadata: meta,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) Process(id DatasetID, b Block) {
-	select {
-	case t.buf <- &processMsg{
-		srcMessage: srcMessage(id),
-		block:      b,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) UpdateWatermark(id DatasetID, time Time) {
-	select {
-	case t.buf <- &updateWatermarkMsg{
-		srcMessage: srcMessage(id),
-		time:       time,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) UpdateProcessingTime(id DatasetID, time Time) {
-	select {
-	case t.buf <- &updateProcessingTimeMsg{
-		srcMessage: srcMessage(id),
-		time:       time,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) Finish(id DatasetID, err error) {
-	select {
-	case t.buf <- &finishMsg{
-		srcMessage: srcMessage(id),
-		err:        err,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) SetParents(ids []DatasetID) {
-	//TODO(nathanielc): Need a better mechanism to inform transformations of their parent ids.
-	t.t.SetParents(ids)
 }

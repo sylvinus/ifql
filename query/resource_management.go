@@ -13,13 +13,13 @@ type ResourceManagement struct {
 	// Queries with a lower value will move to the front of the priority queue.
 	// A zero value indicates the highest priority.
 	Priority Priority `json:"priority"`
-	// MaxCPUCores is the maximum number of cores this query may consume.
+	// ConcurrencyQuota is the number of concurrency workers allowed to process this query.
+	// A zero value indicates the planner can pick the optimal concurrency.
+	ConcurrencyQuota int `json:"concurrency_quota"`
+	// MemoryBytesQuota is the number of bytes of RAM this query may consume.
+	// There is a small amount of overhead memory being consumed by a query that will not be counted towards this limit.
 	// A zero value indicates unlimited.
-	MaxCPUCores int64 `json:"max_cpu_cores"`
-	// MaxRAMBytes is the maximum number of bytes of RAM this query may consume.
-	// There is a small amount of overhead RAM being consumed by a query that will not be counted towards this limit.
-	// A zero value indicates unlimited.
-	MaxRAMBytes int64 `json:"max_ram_bytes"`
+	MemoryBytesQuota int64 `json:"memory_bytes_quota"`
 }
 
 // Priority is an integer that represents the query priority.

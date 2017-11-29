@@ -15,7 +15,7 @@ type Node interface {
 
 type Source interface {
 	Node
-	Runner
+	Run(ctx context.Context)
 }
 
 type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, ctx Context) Source

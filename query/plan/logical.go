@@ -13,6 +13,7 @@ var RootUUID = NilUUID
 type LogicalPlanSpec struct {
 	Procedures map[ProcedureID]*Procedure
 	Order      []ProcedureID
+	Resources  query.ResourceManagement
 }
 
 func (lp *LogicalPlanSpec) Do(f func(pr *Procedure)) {
@@ -42,6 +43,7 @@ func (p *logicalPlanner) Plan(q *query.QuerySpec) (*LogicalPlanSpec, error) {
 	p.q = q
 	p.plan = &LogicalPlanSpec{
 		Procedures: make(map[ProcedureID]*Procedure),
+		Resources:  q.Resources,
 	}
 	err := q.Walk(p.walkQuery)
 	if err != nil {
