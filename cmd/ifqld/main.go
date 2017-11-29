@@ -239,6 +239,12 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 					}
 				}
 
+				if measurement == "" {
+					measurement = "measurement"
+				}
+				if fieldName == "" {
+					fieldName = "value"
+				}
 				f(measurement, fieldName, tags, value, time.Time())
 			}
 		})
