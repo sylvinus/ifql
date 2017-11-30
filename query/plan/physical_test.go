@@ -19,6 +19,9 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 		{
 			name: "single push down",
 			lp: &plan.LogicalPlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("from"): {
 						ID: plan.ProcedureIDFromOperationID("from"),
@@ -60,6 +63,9 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			},
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
 						IsRelative: true,
@@ -120,6 +126,9 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				},
 			},
 			pp: &plan.PlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+				},
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Bounds: plan.BoundsSpec{
 					Start: query.MinTime,
@@ -207,6 +216,9 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			},
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 2,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
 						IsRelative: true,
@@ -298,6 +310,9 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 		Bounds: plan.BoundsSpec{
 			Start: query.MinTime,
 			Stop:  query.Now,
+		},
+		Resources: query.ResourceManagement{
+			ConcurrencyQuota: 2,
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			fromID: {

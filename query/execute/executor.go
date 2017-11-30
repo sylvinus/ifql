@@ -40,7 +40,9 @@ type executionState struct {
 	results []Result
 	sources []Source
 
-	centralTransport *CentralTransport
+	transports []Transport
+
+	dispatcher *poolDispatcher
 }
 
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
@@ -64,11 +66,12 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 		return nil, errors.Wrap(err, "invalid plan")
 	}
 	es := &executionState{
-		p:                p,
-		c:                &e.c,
-		resources:        p.Resources,
-		results:          make([]Result, len(p.Results)),
-		centralTransport: newCentralTransport(),
+		p:         p,
+		c:         &e.c,
+		resources: p.Resources,
+		results:   make([]Result, len(p.Results)),
+		// TODO(nathanielc): Have the planner specify the dispatcher throughput
+		dispatcher: newPoolDispatcher(10),
 		bounds: Bounds{
 			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
 			Stop:  Time(p.Bounds.Stop.Time(p.Now).UnixNano()),
@@ -124,7 +127,8 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 		if err != nil {
 			return nil, err
 		}
-		transport := es.centralTransport.Wrap(t)
+		transport := newConescutiveTransport(es.dispatcher, t)
+		es.transports = append(es.transports, transport)
 		parent.AddTransformation(transport)
 		parentIDs[i] = DatasetID(parentID)
 	}
@@ -159,9 +163,22 @@ func (es *executionState) do(ctx context.Context) {
 			src.Run(ctx)
 		}(src)
 	}
-	es.centralTransport.Start(es.resources.ConcurrencyQuota, ctx)
+	es.dispatcher.Start(es.resources.ConcurrencyQuota, ctx)
 	go func() {
-		err := es.centralTransport.Err()
+		// Wait for all transports to finish
+		for _, t := range es.transports {
+			select {
+			case <-t.Finished():
+			case <-ctx.Done():
+				es.abort(errors.New("context done"))
+			case err := <-es.dispatcher.Err():
+				if err != nil {
+					es.abort(err)
+				}
+			}
+		}
+		// Check for any errors on the dispatcher
+		err := es.dispatcher.Stop()
 		if err != nil {
 			es.abort(err)
 		}
