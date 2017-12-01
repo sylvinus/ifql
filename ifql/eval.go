@@ -31,12 +31,22 @@ type Context interface {
 type CreateOperationSpec func(args map[string]Value, ctx Context) (query.OperationSpec, error)
 
 var functionsMap = make(map[string]CreateOperationSpec)
+var methodMap = make(map[string]CreateOperationSpec)
 
+// RegisterFunction adds a new top level function.
 func RegisterFunction(name string, c CreateOperationSpec) {
 	if functionsMap[name] != nil {
 		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
 	functionsMap[name] = c
+}
+
+// RegisterMethod adds a new chaining method.
+func RegisterMethod(name string, c CreateOperationSpec) {
+	if methodMap[name] != nil {
+		panic(fmt.Errorf("duplicate registration for method %q", name))
+	}
+	methodMap[name] = c
 }
 
 type evaluator struct {
@@ -313,7 +323,7 @@ func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*
 			return nil, err
 		}
 
-		op, parents, err := ev.function(name, call.Arguments)
+		op, parents, err := ev.method(name, call.Arguments)
 		if err != nil {
 			return nil, err
 		}
@@ -371,13 +381,27 @@ func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallCha
 	return chain, member.Property.Name, nil
 }
 
-func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
-	op := &query.Operation{
-		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
+func (ev *evaluator) method(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
+	createOpSpec, ok := methodMap[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("unknown method %q", name)
 	}
+
+	return ev.createOp(name, createOpSpec, args)
+}
+
+func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
 	createOpSpec, ok := functionsMap[name]
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown function %q", name)
+	}
+
+	return ev.createOp(name, createOpSpec, args)
+}
+
+func (ev *evaluator) createOp(name string, createOpSpec CreateOperationSpec, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
+	op := &query.Operation{
+		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
 	}
 	var paramMap map[string]Value
 	if len(args) == 1 {

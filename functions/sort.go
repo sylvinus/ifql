@@ -17,7 +17,7 @@ type SortOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(SortKind, createSortOpSpec)
+	ifql.RegisterMethod(SortKind, createSortOpSpec)
 	query.RegisterOpSpec(SortKind, newSortOp)
 	plan.RegisterProcedureSpec(SortKind, newSortProcedure, SortKind)
 	execute.RegisterTransformation(SortKind, createSortTransformation)

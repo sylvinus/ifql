@@ -31,14 +31,14 @@ func init() {
 }
 
 func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	expValue, ok := args["exp"]
+	evalValue, ok := args["eval"]
 	if !ok {
-		return nil, errors.New(`join function requires an argument "exp"`)
+		return nil, errors.New(`join function requires an argument "eval"`)
 	}
-	if expValue.Type != ifql.TExpression {
-		return nil, fmt.Errorf(`join function argument "exp" must be an expression, got %v`, expValue.Type)
+	if evalValue.Type != ifql.TExpression {
+		return nil, fmt.Errorf(`join function argument "eval" must be an evalression, got %v`, evalValue.Type)
 	}
-	node := expValue.Value.(expression.Node)
+	node := evalValue.Value.(expression.Node)
 	spec := &JoinOpSpec{
 		Eval: expression.Expression{
 			Root: node,
@@ -633,13 +633,9 @@ func NewExpressionSpec(expr expression.Expression) (*expressionSpec, error) {
 	if len(names) != 2 {
 		return nil, fmt.Errorf("join expression can only have two tables, got names: %v", names)
 	}
-	rightName := names[0]
-	if rightName == "$" {
-		rightName = names[1]
-	}
 	return &expressionSpec{
-		leftName:  "$",
-		rightName: rightName,
+		leftName:  names[0],
+		rightName: names[1],
 		expr:      expr,
 		scope:     make(execute.Scope, 2),
 	}, nil

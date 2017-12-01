@@ -16,7 +16,7 @@ type MinOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(MinKind, createMinOpSpec)
+	ifql.RegisterMethod(MinKind, createMinOpSpec)
 	query.RegisterOpSpec(MinKind, newMinOp)
 	plan.RegisterProcedureSpec(MinKind, newMinProcedure, MinKind)
 	execute.RegisterTransformation(MinKind, createMinTransformation)

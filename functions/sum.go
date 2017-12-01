@@ -15,7 +15,7 @@ type SumOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(SumKind, createSumOpSpec)
+	ifql.RegisterMethod(SumKind, createSumOpSpec)
 	query.RegisterOpSpec(SumKind, newSumOp)
 	plan.RegisterProcedureSpec(SumKind, newSumProcedure, SumKind)
 	execute.RegisterTransformation(SumKind, createSumTransformation)

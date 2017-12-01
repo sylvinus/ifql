@@ -20,7 +20,7 @@ type GroupOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(GroupKind, createGroupOpSpec)
+	ifql.RegisterMethod(GroupKind, createGroupOpSpec)
 	query.RegisterOpSpec(GroupKind, newGroupOp)
 	plan.RegisterProcedureSpec(GroupKind, newGroupProcedure, GroupKind)
 	execute.RegisterTransformation(GroupKind, createGroupTransformation)

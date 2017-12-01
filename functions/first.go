@@ -16,7 +16,7 @@ type FirstOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(FirstKind, createFirstOpSpec)
+	ifql.RegisterMethod(FirstKind, createFirstOpSpec)
 	query.RegisterOpSpec(FirstKind, newFirstOp)
 	plan.RegisterProcedureSpec(FirstKind, newFirstProcedure, FirstKind)
 	execute.RegisterTransformation(FirstKind, createFirstTransformation)

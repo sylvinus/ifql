@@ -5,11 +5,59 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/functions"
+	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
 	"github.com/influxdata/ifql/query/plan/plantest"
 	"github.com/influxdata/ifql/query/querytest"
 )
+
+func TestRange_NewQuery(t *testing.T) {
+	tests := []ifqltest.NewQueryTestCase{
+		{
+			Name: "from with database with range",
+			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).sum()`,
+			Want: &query.QuerySpec{
+				Operations: []*query.Operation{
+					{
+						ID: "from0",
+						Spec: &functions.FromOpSpec{
+							Database: "mydb",
+						},
+					},
+					{
+						ID: "range1",
+						Spec: &functions.RangeOpSpec{
+							Start: query.Time{
+								Relative:   -4 * time.Hour,
+								IsRelative: true,
+							},
+							Stop: query.Time{
+								Relative:   -2 * time.Hour,
+								IsRelative: true,
+							},
+						},
+					},
+					{
+						ID:   "sum2",
+						Spec: &functions.SumOpSpec{},
+					},
+				},
+				Edges: []query.Edge{
+					{Parent: "from0", Child: "range1"},
+					{Parent: "range1", Child: "sum2"},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			ifqltest.NewQueryTestHelper(t, tc)
+		})
+	}
+}
 
 func TestRangeOperation_Marshaling(t *testing.T) {
 	data := []byte(`{"id":"range","kind":"range","spec":{"start":"-1h","stop":"2017-10-10T00:00:00Z"}}`)
