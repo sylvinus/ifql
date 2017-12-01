@@ -74,151 +74,59 @@ func BenchmarkLast(b *testing.B) {
 	executetest.RowSelectorFuncBenchmarkHelper(b, new(functions.LastSelector), NormalBlock)
 }
 
-func TestLast_PushDown_Single(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("last")},
-			},
-			plan.ProcedureIDFromOperationID("last"): {
-				ID:   plan.ProcedureIDFromOperationID("last"),
-				Spec: &functions.LastProcedureSpec{},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("from")),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("last"),
-		},
-	}
+func TestLast_PushDown_Match(t *testing.T) {
+	spec := new(functions.LastProcedureSpec)
+	from := new(functions.FromProcedureSpec)
 
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Start: query.MinTime,
-			Stop:  query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Start: query.MinTime,
-						Stop:  query.Now,
-					},
-					LimitSet:      true,
-					PointsLimit:   1,
-					DescendingSet: true,
-					Descending:    true,
-				},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			(plan.ProcedureIDFromOperationID("from")),
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-	}
+	// Should not match when an aggregate is set
+	from.AggregateSet = true
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, false)
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	// Should match when no aggregate is set
+	from.AggregateSet = false
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, true)
 }
 
-func TestLast_PushDown_Branch(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents: nil,
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("first"),
-					plan.ProcedureIDFromOperationID("last"),
-				},
+func TestLast_PushDown(t *testing.T) {
+	spec := new(functions.LastProcedureSpec)
+	root := &plan.Procedure{
+		Spec: new(functions.FromProcedureSpec),
+	}
+	want := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			BoundsSet: true,
+			Bounds: plan.BoundsSpec{
+				Start: query.MinTime,
+				Stop:  query.Now,
 			},
-			plan.ProcedureIDFromOperationID("first"): {
-				ID:       plan.ProcedureIDFromOperationID("first"),
-				Spec:     &functions.FirstProcedureSpec{},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: nil,
-			},
-			plan.ProcedureIDFromOperationID("last"): {
-				ID:       plan.ProcedureIDFromOperationID("last"),
-				Spec:     &functions.LastProcedureSpec{},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("first"),
-			plan.ProcedureIDFromOperationID("last"), // last is last so it will be duplicated
+			LimitSet:      true,
+			PointsLimit:   1,
+			DescendingSet: true,
+			Descending:    true,
 		},
 	}
 
-	fromID := plan.ProcedureIDFromOperationID("from")
-	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Start: query.MinTime,
-			Stop:  query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Start: query.MinTime,
-						Stop:  query.Now,
-					},
-					LimitSet:      true,
-					PointsLimit:   1,
-					DescendingSet: true,
-					Descending:    false, // first
-				},
-				Children: []plan.ProcedureID{},
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
+}
+func TestLast_PushDown_Duplicate(t *testing.T) {
+	spec := new(functions.LastProcedureSpec)
+	root := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			BoundsSet: true,
+			Bounds: plan.BoundsSpec{
+				Start: query.MinTime,
+				Stop:  query.Now,
 			},
-			fromIDDup: {
-				ID: fromIDDup,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Start: query.MinTime,
-						Stop:  query.Now,
-					},
-					LimitSet:      true,
-					PointsLimit:   1,
-					DescendingSet: true,
-					Descending:    true, // last
-				},
-				Parents:  []plan.ProcedureID{},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
-		Order: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
+			LimitSet:      true,
+			PointsLimit:   1,
+			DescendingSet: true,
+			Descending:    true,
 		},
 	}
+	want := &plan.Procedure{
+		// Expect the duplicate has been reset to zero values
+		Spec: new(functions.FromProcedureSpec),
+	}
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
 }

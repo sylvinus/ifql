@@ -2,26 +2,44 @@ package plantest
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query/plan"
 )
 
-func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.PlanSpec) {
+func PhysicalPlan_PushDown_Match_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, matchSpec plan.ProcedureSpec, want bool) {
 	t.Helper()
-	// Setup expected now time
-	now := time.Now()
-	want.Now = now
 
-	planner := plan.NewPlanner()
-	got, err := planner.Plan(lp, nil, now)
-	if err != nil {
-		t.Fatal(err)
+	rule := spec.PushDownRule()
+	got := rule.Match(matchSpec)
+	if got != want {
+		t.Errorf("unexpected push down rule matching: got: %t want: %t", got, want)
+	}
+}
+
+func PhysicalPlan_PushDown_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, root *plan.Procedure, wantDuplicated bool, want *plan.Procedure) {
+	t.Helper()
+
+	var duplicate *plan.Procedure
+	spec.PushDown(root, func() *plan.Procedure {
+		duplicate = root.Copy()
+		return duplicate
+	})
+	got := root
+
+	if wantDuplicated {
+		if duplicate == nil {
+			t.Fatal("expected push down to duplicate")
+		}
+		got = duplicate
+	} else {
+		if duplicate != nil {
+			t.Fatal("unexpected push down duplication")
+		}
 	}
 
-	if !cmp.Equal(got, want) {
-		t.Log(plan.Formatted(got))
-		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got))
+	if !cmp.Equal(got, want, cmpopts.EquateEmpty()) {
+		t.Errorf("unexpected PushDown: -want/+got:\n%s", cmp.Diff(want, got, cmpopts.EquateEmpty()))
 	}
 }

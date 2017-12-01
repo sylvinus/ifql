@@ -148,168 +148,36 @@ func TestLimit_Process(t *testing.T) {
 	}
 }
 
-func TestLimit_PushDown_Single(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("limit")},
-			},
-			plan.ProcedureIDFromOperationID("limit"): {
-				ID: plan.ProcedureIDFromOperationID("limit"),
-				Spec: &functions.LimitProcedureSpec{
-					N: 10,
-				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("limit"),
+func TestLimit_PushDown(t *testing.T) {
+	spec := &functions.LimitProcedureSpec{
+		N: 42,
+	}
+	root := &plan.Procedure{
+		Spec: new(functions.FromProcedureSpec),
+	}
+	want := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			LimitSet:    true,
+			PointsLimit: 42,
 		},
 	}
 
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					LimitSet:    true,
-					PointsLimit: 10,
-				},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-	}
-
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
 }
-
-func TestLimit_PushDown_Branch(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("limitA"),
-					plan.ProcedureIDFromOperationID("limitB"),
-				},
-			},
-			plan.ProcedureIDFromOperationID("limitA"): {
-				ID: plan.ProcedureIDFromOperationID("limitA"),
-				Spec: &functions.LimitProcedureSpec{
-					N: 10,
-				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-				Children: nil,
-			},
-			plan.ProcedureIDFromOperationID("limitB"): {
-				ID: plan.ProcedureIDFromOperationID("limitB"),
-				Spec: &functions.LimitProcedureSpec{
-					N: 55,
-				},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("limitA"),
-			plan.ProcedureIDFromOperationID("limitB"), // limitB is last so it will be duplicated
+func TestLimit_PushDown_Duplicate(t *testing.T) {
+	spec := &functions.LimitProcedureSpec{
+		N: 9,
+	}
+	root := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			LimitSet:    true,
+			PointsLimit: 42,
 		},
 	}
-
-	fromID := plan.ProcedureIDFromOperationID("from")
-	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					LimitSet:    true,
-					PointsLimit: 10,
-				},
-				Children: []plan.ProcedureID{},
-			},
-			fromIDDup: {
-				ID: fromIDDup,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					LimitSet:    true,
-					PointsLimit: 55,
-				},
-				Parents:  []plan.ProcedureID{},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
-		Order: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
+	want := &plan.Procedure{
+		// Expect the duplicate has been reset to zero values
+		Spec: new(functions.FromProcedureSpec),
 	}
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
 }

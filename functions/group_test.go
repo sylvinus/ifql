@@ -441,183 +441,42 @@ func TestGroup_Process(t *testing.T) {
 		})
 	}
 }
-func TestGroup_PushDown_Single(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("group")},
-			},
-			plan.ProcedureIDFromOperationID("group"): {
-				ID: plan.ProcedureIDFromOperationID("group"),
-				Spec: &functions.GroupProcedureSpec{
-					By:     []string{"a", "b"},
-					Keep:   []string{"c", "d"},
-					Except: []string{"e", "f"},
-				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("group"),
+
+func TestGroup_PushDown(t *testing.T) {
+	spec := &functions.GroupProcedureSpec{
+		By:   []string{"t1", "t2"},
+		Keep: []string{"t3"},
+	}
+	root := &plan.Procedure{
+		Spec: new(functions.FromProcedureSpec),
+	}
+	want := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			GroupingSet: true,
+			MergeAll:    false,
+			GroupKeys:   []string{"t1", "t2"},
+			GroupKeep:   []string{"t3"},
 		},
 	}
 
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					GroupingSet: true,
-					GroupKeys:   []string{"a", "b"},
-					GroupKeep:   []string{"c", "d"},
-					GroupExcept: []string{"e", "f"},
-				},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			(plan.ProcedureIDFromOperationID("from")),
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-	}
-
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
 }
-
-func TestGroup_PushDown_Branch(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents: nil,
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("range"),
-				},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("groupA"),
-					plan.ProcedureIDFromOperationID("groupB"),
-				},
-			},
-			plan.ProcedureIDFromOperationID("groupA"): {
-				ID: plan.ProcedureIDFromOperationID("groupA"),
-				Spec: &functions.GroupProcedureSpec{
-					By:     []string{"a", "b"},
-					Keep:   []string{"c", "d"},
-					Except: []string{"e", "f"},
-				},
-				Parents: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("range"),
-				},
-				Children: nil,
-			},
-			plan.ProcedureIDFromOperationID("groupB"): {
-				ID: plan.ProcedureIDFromOperationID("groupB"),
-				Spec: &functions.GroupProcedureSpec{
-					Keep: []string{"C", "D"},
-				},
-				Parents: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("range"),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("groupA"),
-			plan.ProcedureIDFromOperationID("groupB"), // groupB is last so it will be duplicated
+func TestGroup_PushDown_Duplicate(t *testing.T) {
+	spec := &functions.GroupProcedureSpec{
+		By:   []string{"t1", "t2"},
+		Keep: []string{"t3"},
+	}
+	root := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			GroupingSet: true,
+			MergeAll:    true,
+			GroupKeep:   []string{"t4"},
 		},
 	}
-
-	fromID := plan.ProcedureIDFromOperationID("from")
-	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					GroupingSet: true,
-					GroupKeys:   []string{"a", "b"},
-					GroupKeep:   []string{"c", "d"},
-					GroupExcept: []string{"e", "f"},
-				},
-				Children: []plan.ProcedureID{},
-			},
-			fromIDDup: {
-				ID: fromIDDup,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					GroupingSet: true,
-					MergeAll:    true,
-					GroupKeys:   []string{},
-					GroupKeep:   []string{"C", "D"},
-					GroupExcept: []string{},
-				},
-				Parents:  []plan.ProcedureID{},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
-		Order: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
+	want := &plan.Procedure{
+		// Expect the duplicate has been reset to zero values
+		Spec: new(functions.FromProcedureSpec),
 	}
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
 }

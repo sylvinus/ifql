@@ -56,8 +56,8 @@ func (s *SumProcedureSpec) PushDownRule() plan.PushDownRule {
 	return plan.PushDownRule{
 		Root:    FromKind,
 		Through: nil,
-		Match: func(root *plan.Procedure) bool {
-			selectSpec := root.Spec.(*FromProcedureSpec)
+		Match: func(spec plan.ProcedureSpec) bool {
+			selectSpec := spec.(*FromProcedureSpec)
 			return !selectSpec.GroupingSet
 		},
 	}
