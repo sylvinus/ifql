@@ -1,7 +1,11 @@
 VERSION ?= $(shell git describe --always --tags)
 SUBDIRS := ast ifql promql
+GO_ARGS=-tags '$(GO_TAGS)'
+GO_BUILD=go build $(GO_ARGS)
+GO_TEST=go test $(GO_ARGS)
 
 SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
+SOURCES_NO_VENDOR := $(shell find . -path ./vendor -prune -o -name "*.go" -not -name '*_test.go' -print)
 
 all: Gopkg.lock $(SUBDIRS) bin/ifql bin/ifqld
 
@@ -9,10 +13,10 @@ $(SUBDIRS): bin/pigeon bin/cmpgen
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 bin/ifql: $(SOURCES) bin/pigeon bin/cmpgen
-	go build -i -o bin/ifql ./cmd/ifql
+	$(GO_BUILD) -i -o bin/ifql ./cmd/ifql
 
 bin/ifqld: $(SOURCES) bin/pigeon bin/cmpgen
-	go build -i -o bin/ifqld ./cmd/ifqld
+	$(GO_BUILD) -i -o bin/ifqld ./cmd/ifqld
 
 bin/pigeon: ./vendor/github.com/mna/pigeon/main.go
 	go build -i -o bin/pigeon  ./vendor/github.com/mna/pigeon
@@ -26,17 +30,20 @@ Gopkg.lock: Gopkg.toml
 vendor/github.com/mna/pigeon/main.go: Gopkg.lock
 	dep ensure -v
 
+fmt: $(SOURCES_NO_VENDOR)
+	goimports -w $^
+
 update:
 	dep ensure -v -update
 
 test: Gopkg.lock bin/ifql
-	go test ./...
+	$(GO_TEST) ./...
 
 test-race: Gopkg.lock bin/ifql
-	go test -race ./...
+	$(GO_TEST) -race ./...
 
 bench: Gopkg.lock bin/ifql
-	go test -bench=. -run=^$$ ./...
+	$(GO_TEST) -bench=. -run=^$$ ./...
 
 bin/goreleaser:
 	go build -i -o bin/goreleaser ./vendor/github.com/goreleaser/goreleaser
@@ -55,4 +62,4 @@ release-docker:
 clean: $(SUBDIRS)
 	rm -rf bin dist
 
-.PHONY: all clean $(SUBDIRS) update test test-race bench release docker dist
+.PHONY: all clean $(SUBDIRS) update test test-race bench release docker dist fmt
