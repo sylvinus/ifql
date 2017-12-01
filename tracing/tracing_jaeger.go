@@ -1,8 +1,9 @@
-// +build tracing-jaeger
+// +build tracing_jaeger
 
 package tracing
 
 import (
+	"io"
 	"time"
 
 	"github.com/uber/jaeger-client-go/config"

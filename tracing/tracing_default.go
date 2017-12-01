@@ -1,4 +1,4 @@
-// +build !tracing-jaeger
+// +build !tracing_jaeger
 
 package tracing
 
