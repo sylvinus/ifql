@@ -15,6 +15,7 @@ import (
 	"github.com/influxdata/ifql/idfile"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/tracing"
 	"github.com/influxdata/influxdb/models"
 	client "github.com/influxdata/usage-client/v1"
 	"github.com/jessevdk/go-flags"
@@ -81,6 +82,10 @@ func main() {
 	if !option.ReportingDisabled {
 		id := ID(string(option.IDFile))
 		go reportUsageStats(id)
+	}
+
+	if tr := tracing.Open("ifqld"); tr != nil {
+		defer tr.Close()
 	}
 
 	hosts = option.Hosts
