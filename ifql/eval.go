@@ -2,11 +2,13 @@ package ifql
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/query"
+	"github.com/pkg/errors"
 )
 
 // Evaluate validates and converts an ast.Program to a query
@@ -28,7 +30,7 @@ type Context interface {
 	AdditionalParent(id query.OperationID)
 }
 
-type CreateOperationSpec func(args map[string]Value, ctx Context) (query.OperationSpec, error)
+type CreateOperationSpec func(args Arguments, ctx Context) (query.OperationSpec, error)
 
 var functionsMap = make(map[string]CreateOperationSpec)
 var methodMap = make(map[string]CreateOperationSpec)
@@ -144,7 +146,7 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 		// TODO(nathanielc): Attempt to resolve the binary expression
 		return Value{
 			Type:  TExpression,
-			Value: root,
+			Value: expression.Expression{Root: root},
 		}, nil
 	case *ast.LogicalExpression:
 		root, err := ev.logicalExpression(e)
@@ -153,7 +155,7 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 		}
 		return Value{
 			Type:  TExpression,
-			Value: root,
+			Value: expression.Expression{Root: root},
 		}, nil
 	case *ast.FunctionExpression:
 		return ev.doExpression(e.Function)
@@ -238,9 +240,9 @@ func (ev *evaluator) doArray(a *ast.ArrayExpression) (Value, error) {
 		}
 		array.Elements = value
 	case TExpression:
-		value := make([]expression.Node, len(elements))
+		value := make([]expression.Expression, len(elements))
 		for i, el := range elements {
-			value[i] = el.Value.(expression.Node)
+			value[i] = el.Value.(expression.Expression)
 		}
 		array.Elements = value
 	default:
@@ -387,7 +389,11 @@ func (ev *evaluator) method(name string, args []ast.Expression) (*query.Operatio
 		return nil, nil, fmt.Errorf("unknown method %q", name)
 	}
 
-	return ev.createOp(name, createOpSpec, args)
+	op, id, err := ev.createOp(name, createOpSpec, args)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error calling method %q", name)
+	}
+	return op, id, nil
 }
 
 func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
@@ -396,7 +402,11 @@ func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operat
 		return nil, nil, fmt.Errorf("unknown function %q", name)
 	}
 
-	return ev.createOp(name, createOpSpec, args)
+	op, id, err := ev.createOp(name, createOpSpec, args)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error calling function %q", name)
+	}
+	return op, id, nil
 }
 
 func (ev *evaluator) createOp(name string, createOpSpec CreateOperationSpec, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
@@ -415,10 +425,14 @@ func (ev *evaluator) createOp(name string, createOpSpec CreateOperationSpec, arg
 			return nil, nil, err
 		}
 	}
+	arguments := newArguments(paramMap)
 	ctx := &context{scope: ev.scope}
-	spec, err := createOpSpec(paramMap, ctx)
+	spec, err := createOpSpec(arguments, ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	if unused := arguments.listUnused(); len(unused) > 0 {
+		return nil, nil, fmt.Errorf("extra arguments provided: [%s]", strings.Join(unused, ","))
 	}
 	op.Spec = spec
 	return op, ctx.parents, nil
@@ -430,6 +444,9 @@ func (ev *evaluator) resolveParameters(params *ast.ObjectExpression) (map[string
 		value, err := ev.doExpression(p.Value)
 		if err != nil {
 			return nil, err
+		}
+		if _, ok := paramsMap[p.Key.Name]; ok {
+			return nil, fmt.Errorf("duplicate keyword parameter specified: %q", p.Key.Name)
 		}
 		paramsMap[p.Key.Name] = value
 	}
@@ -452,7 +469,7 @@ func ToQueryTime(value Value) (query.Time, error) {
 			Absolute: time.Unix(v, 0),
 		}, nil
 	default:
-		return query.Time{}, fmt.Errorf("unknown time type %t", value.Value)
+		return query.Time{}, fmt.Errorf("value is not a time, got %v", value.Type)
 	}
 }
 
@@ -661,7 +678,7 @@ const (
 	TArray                  // Go type Array
 	TMap                    // Go type Map
 	TChain                  // Go type *CallChain
-	TExpression             // Go type expression.Node
+	TExpression             // Go type expression.Expression
 )
 
 // String converts Type into a string representation of the type's name
@@ -733,4 +750,198 @@ func (c *context) AdditionalParent(id query.OperationID) {
 		}
 	}
 	c.parents = append(c.parents, id)
+}
+
+// Arguments provides access to the keyword arguments passed to a function.
+// The Get{Type} methods return three values: the typed value of the arg,
+// whether the argument was specified and any errors about the argument type.
+// The GetRequired{Type} methods return only two values, the typed value of the arg and any errors, a missing argument is considered an error in this case.
+type Arguments interface {
+	GetString(name string) (string, bool, error)
+	GetInt(name string) (int64, bool, error)
+	GetFloat(name string) (float64, bool, error)
+	GetBool(name string) (bool, bool, error)
+	GetTime(name string) (query.Time, bool, error)
+	GetDuration(name string) (query.Duration, bool, error)
+	GetArray(name string, t Type) (Array, bool, error)
+	GetExpression(name string) (expression.Expression, bool, error)
+
+	GetRequiredString(name string) (string, error)
+	GetRequiredInt(name string) (int64, error)
+	GetRequiredFloat(name string) (float64, error)
+	GetRequiredBool(name string) (bool, error)
+	GetRequiredTime(name string) (query.Time, error)
+	GetRequiredDuration(name string) (query.Duration, error)
+	GetRequiredArray(name string, t Type) (Array, error)
+	GetRequiredExpression(name string) (expression.Expression, error)
+
+	// listUnused returns the list of provided arguments that were not used by the function.
+	listUnused() []string
+}
+
+type arguments struct {
+	params map[string]Value
+	used   map[string]bool
+}
+
+func newArguments(params map[string]Value) *arguments {
+	return &arguments{
+		params: params,
+		used:   make(map[string]bool, len(params)),
+	}
+}
+
+func (a *arguments) GetString(name string) (string, bool, error) {
+	v, ok, err := a.get(name, TString, false)
+	if err != nil || !ok {
+		return "", ok, err
+	}
+	return v.Value.(string), ok, nil
+}
+func (a *arguments) GetRequiredString(name string) (string, error) {
+	v, _, err := a.get(name, TString, true)
+	if err != nil {
+		return "", err
+	}
+	return v.Value.(string), nil
+}
+func (a *arguments) GetInt(name string) (int64, bool, error) {
+	v, ok, err := a.get(name, TInt, false)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	return v.Value.(int64), ok, nil
+}
+func (a *arguments) GetRequiredInt(name string) (int64, error) {
+	v, _, err := a.get(name, TInt, true)
+	if err != nil {
+		return 0, err
+	}
+	return v.Value.(int64), nil
+}
+func (a *arguments) GetFloat(name string) (float64, bool, error) {
+	v, ok, err := a.get(name, TFloat, false)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	return v.Value.(float64), ok, nil
+}
+func (a *arguments) GetRequiredFloat(name string) (float64, error) {
+	v, _, err := a.get(name, TFloat, true)
+	if err != nil {
+		return 0, err
+	}
+	return v.Value.(float64), nil
+}
+func (a *arguments) GetBool(name string) (bool, bool, error) {
+	v, ok, err := a.get(name, TBool, false)
+	if err != nil || !ok {
+		return false, ok, err
+	}
+	return v.Value.(bool), ok, nil
+}
+func (a *arguments) GetRequiredBool(name string) (bool, error) {
+	v, _, err := a.get(name, TBool, true)
+	if err != nil {
+		return false, err
+	}
+	return v.Value.(bool), nil
+}
+func (a *arguments) GetTime(name string) (query.Time, bool, error) {
+	a.used[name] = true
+	v, ok := a.params[name]
+	if !ok {
+		return query.Time{}, false, nil
+	}
+	qt, err := ToQueryTime(v)
+	if err != nil {
+		return query.Time{}, ok, err
+	}
+	return qt, ok, nil
+}
+func (a *arguments) GetRequiredTime(name string) (query.Time, error) {
+	qt, ok, err := a.GetTime(name)
+	if err != nil {
+		return query.Time{}, err
+	}
+	if !ok {
+		return query.Time{}, fmt.Errorf("missing required keyword argument %q", name)
+	}
+	return qt, nil
+}
+func (a *arguments) GetDuration(name string) (query.Duration, bool, error) {
+	v, ok, err := a.get(name, TDuration, false)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	return query.Duration(v.Value.(time.Duration)), ok, nil
+}
+func (a *arguments) GetRequiredDuration(name string) (query.Duration, error) {
+	v, _, err := a.get(name, TDuration, true)
+	if err != nil {
+		return 0, err
+	}
+	return query.Duration(v.Value.(time.Duration)), nil
+}
+func (a *arguments) GetArray(name string, t Type) (Array, bool, error) {
+	v, ok, err := a.get(name, TArray, false)
+	if err != nil || !ok {
+		return Array{}, ok, err
+	}
+	arr := v.Value.(Array)
+	if arr.Type != t {
+		return Array{}, true, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
+	}
+	return v.Value.(Array), ok, nil
+}
+func (a *arguments) GetRequiredArray(name string, t Type) (Array, error) {
+	v, _, err := a.get(name, TArray, true)
+	if err != nil {
+		return Array{}, err
+	}
+	arr := v.Value.(Array)
+	if arr.Type != t {
+		return Array{}, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
+	}
+	return arr, nil
+}
+func (a *arguments) GetExpression(name string) (expression.Expression, bool, error) {
+	v, ok, err := a.get(name, TExpression, false)
+	if err != nil || !ok {
+		return expression.Expression{}, ok, err
+	}
+	return v.Value.(expression.Expression), ok, nil
+}
+func (a *arguments) GetRequiredExpression(name string) (expression.Expression, error) {
+	v, _, err := a.get(name, TExpression, true)
+	if err != nil {
+		return expression.Expression{}, err
+	}
+	return v.Value.(expression.Expression), nil
+}
+
+func (a *arguments) get(name string, typ Type, required bool) (Value, bool, error) {
+	a.used[name] = true
+	v, ok := a.params[name]
+	if !ok {
+		if required {
+			return Value{}, false, fmt.Errorf("missing required keyword argument %q", name)
+		}
+		return Value{}, false, nil
+	}
+	if v.Type != typ {
+		return Value{}, true, fmt.Errorf("keyword argument %q should be of type %v, but got %v", name, typ, v.Type)
+	}
+	return v, true, nil
+}
+
+func (a *arguments) listUnused() []string {
+	var unused []string
+	for k := range a.params {
+		if !a.used[k] {
+			unused = append(unused, k)
+		}
+	}
+
+	return unused
 }

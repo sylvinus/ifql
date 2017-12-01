@@ -23,20 +23,20 @@ func init() {
 	execute.RegisterTransformation(SetKind, createSetTransformation)
 }
 
-func createSetOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createSetOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(SetOpSpec)
-	if value, ok := args["key"]; ok {
-		if value.Type != ifql.TString {
-			return nil, fmt.Errorf(`set function argument "key" must be a string, got %v`, value.Type)
-		}
-		spec.Key = value.Value.(string)
+	key, err := args.GetRequiredString("key")
+	if err != nil {
+		return nil, err
 	}
-	if value, ok := args["value"]; ok {
-		if value.Type != ifql.TString {
-			return nil, fmt.Errorf(`set function argument "value" must be a string, got %v`, value.Type)
-		}
-		spec.Value = value.Value.(string)
+	spec.Key = key
+
+	value, err := args.GetRequiredString("value")
+	if err != nil {
+		return nil, err
 	}
+	spec.Value = value
+
 	return spec, nil
 }
 

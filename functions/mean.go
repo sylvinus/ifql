@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/influxdata/ifql/ifql"
@@ -21,11 +20,7 @@ func init() {
 	plan.RegisterProcedureSpec(MeanKind, newMeanProcedure, MeanKind)
 	execute.RegisterTransformation(MeanKind, createMeanTransformation)
 }
-func createMeanOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`mean function requires no arguments`)
-	}
-
+func createMeanOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	return new(MeanOpSpec), nil
 }
 

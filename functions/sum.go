@@ -1,8 +1,6 @@
 package functions
 
 import (
-	"fmt"
-
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -21,11 +19,7 @@ func init() {
 	execute.RegisterTransformation(SumKind, createSumTransformation)
 }
 
-func createSumOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`sum function requires no arguments`)
-	}
-
+func createSumOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	return new(SumOpSpec), nil
 }
 

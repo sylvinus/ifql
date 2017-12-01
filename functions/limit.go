@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/influxdata/ifql/ifql"
@@ -27,25 +26,14 @@ func init() {
 	execute.RegisterTransformation(LimitKind, createLimitTransformation)
 }
 
-func createLimitOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createLimitOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(LimitOpSpec)
 
-	limitValue, ok := args["n"]
-	if !ok {
-		return nil, errors.New(`limit function requires argument "n"`)
+	n, err := args.GetRequiredInt("n")
+	if err != nil {
+		return nil, err
 	}
-
-	if limitValue.Type != ifql.TInt {
-		return nil, fmt.Errorf(`limit argument "n" must be an integer, got %v`, limitValue.Type)
-	}
-	spec.N = limitValue.Value.(int64)
-
-	//if offsetValue, ok := args["offset"]; ok {
-	//	if offsetValue.Type != ifql.TInt {
-	//		return nil, fmt.Errorf(`limit argument "offset" must be an integer, got %v`, offsetValue.Type)
-	//	}
-	//	spec.Offset = offsetValue.Value.(int64)
-	//}
+	spec.N = n
 
 	return spec, nil
 }

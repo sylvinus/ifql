@@ -25,19 +25,14 @@ func init() {
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
-func createFilterOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	expValue, ok := args["exp"]
-	if !ok {
-		return nil, errors.New(`filter function requires an argument "exp"`)
-	}
-	if expValue.Type != ifql.TExpression {
-		return nil, fmt.Errorf(`filter function argument "exp" must be an expression, got %v`, expValue.Type)
+func createFilterOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+	expr, err := args.GetRequiredExpression("exp")
+	if err != nil {
+		return nil, err
 	}
 
 	return &FilterOpSpec{
-		Expression: expression.Expression{
-			Root: expValue.Value.(expression.Node),
-		},
+		Expression: expr,
 	}, nil
 }
 func newFilterOp() query.OperationSpec {

@@ -26,29 +26,24 @@ func init() {
 	execute.RegisterTransformation(SampleKind, createSampleTransformation)
 }
 
-func createSampleOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createSampleOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(SampleOpSpec)
-	if value, ok := args["useRowTime"]; ok {
-		if value.Type != ifql.TBool {
-			return nil, fmt.Errorf(`sample useRowTime argument must be a boolean`)
-		}
-		spec.UseRowTime = value.Value.(bool)
+	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.UseRowTime = useRowTime
 	}
 
-	if value, ok := args["n"]; ok {
-		if value.Type != ifql.TInt {
-			return nil, fmt.Errorf(`sample n argument must be an integer`)
-		}
-		spec.N = value.Value.(int64)
-	} else {
-		return nil, fmt.Errorf(`n argument is required for sample function`)
+	n, err := args.GetRequiredInt("n")
+	if err != nil {
+		return nil, err
 	}
+	spec.N = n
 
-	if value, ok := args["pos"]; ok {
-		if value.Type != ifql.TInt {
-			return nil, fmt.Errorf(`sample pos argument must be an integer`)
-		}
-		spec.Pos = value.Value.(int64)
+	if pos, ok, err := args.GetInt("pos"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Pos = pos
 	} else {
 		spec.Pos = -1
 	}

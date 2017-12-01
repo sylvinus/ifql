@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/influxdata/ifql/ifql"
@@ -24,24 +23,18 @@ func init() {
 	//execute.RegisterTransformation(RangeKind, createRangeTransformation)
 }
 
-func createRangeOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	startValue, ok := args["start"]
-	if !ok {
-		return nil, errors.New(`range function requires argument "start"`)
-	}
-
-	spec := new(RangeOpSpec)
-	start, err := ifql.ToQueryTime(startValue)
+func createRangeOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+	start, err := args.GetRequiredTime("start")
 	if err != nil {
 		return nil, err
 	}
-	spec.Start = start
+	spec := &RangeOpSpec{
+		Start: start,
+	}
 
-	if stopValue, ok := args["stop"]; ok {
-		stop, err := ifql.ToQueryTime(stopValue)
-		if err != nil {
-			return nil, err
-		}
+	if stop, ok, err := args.GetTime("stop"); err != nil {
+		return nil, err
+	} else if ok {
 		spec.Stop = stop
 	} else {
 		// Make stop time implicit "now"

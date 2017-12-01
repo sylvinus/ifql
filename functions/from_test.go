@@ -18,6 +18,16 @@ func TestFrom_NewQuery(t *testing.T) {
 			WantErr: true,
 		},
 		{
+			Name:    "from",
+			Raw:     `from(db:"telegraf", db:"oops")`,
+			WantErr: true,
+		},
+		{
+			Name:    "from",
+			Raw:     `from(db:"telegraf", chicken:"what is this?")`,
+			WantErr: true,
+		},
+		{
 			Name: "from with database",
 			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).sum()`,
 			Want: &query.QuerySpec{

@@ -26,45 +26,26 @@ func init() {
 	execute.RegisterTransformation(GroupKind, createGroupTransformation)
 }
 
-func createGroupOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
+func createGroupOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	spec := new(GroupOpSpec)
-	if len(args) == 0 {
-		return spec, nil
+	if array, ok, err := args.GetArray("by", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.By = array.Elements.([]string)
+	}
+	if array, ok, err := args.GetArray("keep", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Keep = array.Elements.([]string)
+	}
+	if array, ok, err := args.GetArray("except", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Except = array.Elements.([]string)
 	}
 
-	if value, ok := args["by"]; ok {
-		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("'by' argument must be a list of strings got %v", value.Type)
-		}
-		list := value.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("'by' argument must be a list of strings, got list of %v", list.Type)
-		}
-		spec.By = list.Elements.([]string)
-	}
-
-	if value, ok := args["keep"]; ok {
-		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("keep argument must be a list of strings got %v", value.Type)
-		}
-		list := value.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("keep argument must be a list of strings, got list of %v", list.Type)
-		}
-		spec.Keep = list.Elements.([]string)
-	}
-	if value, ok := args["except"]; ok {
-		if value.Type != ifql.TArray {
-			return nil, fmt.Errorf("except argument must be a list of strings got %v", value.Type)
-		}
-		list := value.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf("except argument must be a list of strings, got list of %v", list.Type)
-		}
-		spec.Except = list.Elements.([]string)
-	}
 	if len(spec.By) > 0 && len(spec.Except) > 0 {
-		return nil, errors.New("cannot specify both by and except keys")
+		return nil, errors.New(`cannot specify both "by" and "except" keyword arguments`)
 	}
 	return spec, nil
 }

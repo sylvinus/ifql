@@ -30,34 +30,23 @@ func init() {
 	execute.RegisterTransformation(MergeJoinKind, createMergeJoinTransformation)
 }
 
-func createJoinOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	evalValue, ok := args["eval"]
-	if !ok {
-		return nil, errors.New(`join function requires an argument "eval"`)
+func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+	eval, err := args.GetRequiredExpression("eval")
+	if err != nil {
+		return nil, err
 	}
-	if evalValue.Type != ifql.TExpression {
-		return nil, fmt.Errorf(`join function argument "eval" must be an evalression, got %v`, evalValue.Type)
-	}
-	node := evalValue.Value.(expression.Node)
 	spec := &JoinOpSpec{
-		Eval: expression.Expression{
-			Root: node,
-		},
+		Eval: eval,
 	}
 
-	if onValue, ok := args["on"]; ok {
-		if onValue.Type != ifql.TArray {
-			return nil, fmt.Errorf(`join argument "on" must be a list, got %v`, onValue.Type)
-		}
-		list := onValue.Value.(ifql.Array)
-		if list.Type != ifql.TString {
-			return nil, fmt.Errorf(`join argument "on" must be a list of strings, got list of %v`, list.Type)
-		}
-		spec.On = list.Elements.([]string)
+	if array, ok, err := args.GetArray("on", ifql.TString); err != nil {
+		return nil, err
+	} else if ok {
+		spec.On = array.Elements.([]string)
 	}
 
 	// Find identifier of parent nodes
-	err := expression.Walk(node, func(n expression.Node) error {
+	err = expression.Walk(spec.Eval.Root, func(n expression.Node) error {
 		if r, ok := n.(*expression.ReferenceNode); ok && r.Kind == "identifier" {
 			id, err := ctx.LookupIDFromIdentifier(r.Name)
 			if err != nil {

@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/influxdata/ifql/ifql"
@@ -21,11 +20,7 @@ func init() {
 	plan.RegisterProcedureSpec(SkewKind, newSkewProcedure, SkewKind)
 	execute.RegisterTransformation(SkewKind, createSkewTransformation)
 }
-func createSkewOpSpec(args map[string]ifql.Value, ctx ifql.Context) (query.OperationSpec, error) {
-	if len(args) != 0 {
-		return nil, fmt.Errorf(`skew function requires no arguments`)
-	}
-
+func createSkewOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
 	return new(SkewOpSpec), nil
 }
 
