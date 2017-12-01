@@ -12,6 +12,8 @@ import (
 
 	"github.com/influxdata/ifql"
 	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/tracing"
+	"github.com/opentracing/opentracing-go"
 )
 
 var version string
@@ -45,6 +47,9 @@ var defaultStorageHosts = []string{"localhost:8082"}
 
 func main() {
 	flag.Parse()
+	if tr := tracing.Open("ifql"); tr != nil {
+		defer tr.Close()
+	}
 
 	// Start cpuprofile
 	if *cpuprofile != "" {
@@ -60,6 +65,10 @@ func main() {
 	}
 
 	ctx := context.Background()
+	span := opentracing.StartSpan("query")
+	defer span.Finish()
+	ctx = opentracing.ContextWithSpan(ctx, span)
+
 	fmt.Println("Running query", *queryStr)
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts

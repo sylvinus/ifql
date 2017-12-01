@@ -14,7 +14,7 @@ import (
 )
 
 type StorageReader interface {
-	Read(rs ReadSpec, start, stop Time) (BlockIterator, error)
+	Read(ctx context.Context, trace map[string]string, rs ReadSpec, start, stop Time) (BlockIterator, error)
 	Close()
 }
 
@@ -76,7 +76,7 @@ type connection struct {
 	client storage.StorageClient
 }
 
-func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
+func (sr *storageReader) Read(ctx context.Context, trace map[string]string, readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
 	var predicate *storage.Predicate
 	if readSpec.Predicate.Root != nil {
 		p, err := ExpressionToStoragePredicate(readSpec.Predicate.Root)
@@ -87,6 +87,8 @@ func (sr *storageReader) Read(readSpec ReadSpec, start, stop Time) (BlockIterato
 	}
 
 	bi := &storageBlockIterator{
+		ctx:   ctx,
+		trace: trace,
 		bounds: Bounds{
 			Start: start,
 			Stop:  stop,
@@ -105,6 +107,8 @@ func (sr *storageReader) Close() {
 }
 
 type storageBlockIterator struct {
+	ctx       context.Context
+	trace     map[string]string
 	bounds    Bounds
 	conns     []connection
 	readSpec  ReadSpec
@@ -124,6 +128,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 	req.SeriesLimit = uint64(bi.readSpec.SeriesLimit)
 	req.PointsLimit = uint64(bi.readSpec.PointsLimit)
 	req.SeriesOffset = uint64(bi.readSpec.SeriesOffset)
+	req.Trace = bi.trace
 
 	if agg, err := determineAggregateType(bi.readSpec.AggregateType); err != nil {
 		return err
@@ -146,7 +151,7 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 				continue
 			}
 		}
-		stream, err := c.client.Read(context.Background(), &req)
+		stream, err := c.client.Read(bi.ctx, &req)
 		if err != nil {
 			return err
 		}

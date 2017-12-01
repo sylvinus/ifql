@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/opentracing/opentracing-go"
 )
 
 type Node interface {
@@ -57,8 +58,15 @@ func (s *storageSource) AddTransformation(t Transformation) {
 }
 
 func (s *storageSource) Run(ctx context.Context) {
+	var trace map[string]string
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		trace = make(map[string]string)
+		span = opentracing.StartSpan("storage_source.run", opentracing.ChildOf(span.Context()))
+		opentracing.GlobalTracer().Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(trace))
+	}
+
 	//TODO(nathanielc): Pass through context to actual network I/O.
-	for blocks, mark, ok := s.Next(); ok; blocks, mark, ok = s.Next() {
+	for blocks, mark, ok := s.Next(ctx, trace); ok; blocks, mark, ok = s.Next(ctx, trace) {
 		blocks.Do(func(b Block) {
 			for _, t := range s.ts {
 				t.Process(s.id, b)
@@ -76,7 +84,7 @@ func (s *storageSource) Run(ctx context.Context) {
 	}
 }
 
-func (s *storageSource) Next() (BlockIterator, Time, bool) {
+func (s *storageSource) Next(ctx context.Context, trace map[string]string) (BlockIterator, Time, bool) {
 	start := s.currentTime - Time(s.window.Period)
 	stop := s.currentTime
 
@@ -85,6 +93,8 @@ func (s *storageSource) Next() (BlockIterator, Time, bool) {
 		return nil, 0, false
 	}
 	bi, err := s.reader.Read(
+		ctx,
+		trace,
 		s.readSpec,
 		start,
 		stop,

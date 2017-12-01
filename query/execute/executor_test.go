@@ -240,7 +240,7 @@ type storageReader struct {
 }
 
 func (s storageReader) Close() {}
-func (s storageReader) Read(execute.ReadSpec, execute.Time, execute.Time) (execute.BlockIterator, error) {
+func (s storageReader) Read(context.Context, map[string]string, execute.ReadSpec, execute.Time, execute.Time) (execute.BlockIterator, error) {
 	return &storageBlockIterator{
 		s: s,
 	}, nil
