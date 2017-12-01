@@ -111,7 +111,7 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 		pp := p.plan.Procedures[parent]
 		pk := pp.Spec.Kind()
 		if pk == rule.Root {
-			if rule.Match == nil || rule.Match(pp) {
+			if rule.Match == nil || rule.Match(pp.Spec) {
 				do(pp, func() *Procedure { return p.duplicate(pp, false) })
 				matched = true
 			}

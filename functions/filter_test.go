@@ -269,238 +269,81 @@ func TestFilter_Process(t *testing.T) {
 	}
 }
 
-func TestFilter_PushDown_Single(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
+func TestFilter_PushDown(t *testing.T) {
+	spec := &functions.FilterProcedureSpec{
+		Expression: expression.Expression{
+			Root: &expression.BinaryNode{
+				Operator: expression.NotEqualOperator,
+				Left: &expression.ReferenceNode{
+					Name: "_measurement",
+					Kind: "tag",
 				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
+				Right: &expression.StringLiteralNode{
+					Value: "mem",
 				},
-				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("filter")},
-			},
-			plan.ProcedureIDFromOperationID("filter"): {
-				ID: plan.ProcedureIDFromOperationID("filter"),
-				Spec: &functions.FilterProcedureSpec{
-					Expression: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "mem",
-							},
-						},
-					},
-				},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
 			},
 		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("filter"),
+	}
+	root := &plan.Procedure{
+		Spec: new(functions.FromProcedureSpec),
+	}
+	want := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			FilterSet: true,
+			Filter: expression.Expression{
+				Root: &expression.BinaryNode{
+					Operator: expression.NotEqualOperator,
+					Left: &expression.ReferenceNode{
+						Name: "_measurement",
+						Kind: "tag",
+					},
+					Right: &expression.StringLiteralNode{
+						Value: "mem",
+					},
+				},
+			},
 		},
 	}
 
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					FilterSet: true,
-					Filter: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "mem",
-							},
-						},
-					},
-				},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			(plan.ProcedureIDFromOperationID("from")),
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-	}
-
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
 }
 
-func TestFilter_PushDown_Branch(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
+func TestFilter_PushDown_Duplicate(t *testing.T) {
+	spec := &functions.FilterProcedureSpec{
+		Expression: expression.Expression{
+			Root: &expression.BinaryNode{
+				Operator: expression.NotEqualOperator,
+				Left: &expression.ReferenceNode{
+					Name: "_measurement",
+					Kind: "tag",
 				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("filterA"),
-					plan.ProcedureIDFromOperationID("filterB"),
+				Right: &expression.StringLiteralNode{
+					Value: "mem",
 				},
 			},
-			plan.ProcedureIDFromOperationID("filterA"): {
-				ID: plan.ProcedureIDFromOperationID("filterA"),
-				Spec: &functions.FilterProcedureSpec{
-					Expression: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "A",
-							},
-						},
-					},
-				},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-			plan.ProcedureIDFromOperationID("filterB"): {
-				ID: plan.ProcedureIDFromOperationID("filterB"),
-				Spec: &functions.FilterProcedureSpec{
-					Expression: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "B",
-							},
-						},
-					},
-				},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("filterA"),
-			plan.ProcedureIDFromOperationID("filterB"), // FilterB is last so it will be duplicated
 		},
 	}
-
-	fromID := plan.ProcedureIDFromOperationID("from")
-	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
+	root := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			FilterSet: true,
+			Filter: expression.Expression{
+				Root: &expression.BinaryNode{
+					Operator: expression.NotEqualOperator,
+					Left: &expression.ReferenceNode{
+						Name: "_measurement",
+						Kind: "tag",
 					},
-					FilterSet: true,
-					Filter: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "A",
-							},
-						},
+					Right: &expression.StringLiteralNode{
+						Value: "cpu",
 					},
 				},
-				Children: []plan.ProcedureID{},
 			},
-			fromIDDup: {
-				ID: fromIDDup,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					FilterSet: true,
-					Filter: expression.Expression{
-						Root: &expression.BinaryNode{
-							Operator: expression.NotEqualOperator,
-							Left: &expression.ReferenceNode{
-								Name: "_measurement",
-								Kind: "tag",
-							},
-							Right: &expression.StringLiteralNode{
-								Value: "B",
-							},
-						},
-					},
-				},
-				Parents:  []plan.ProcedureID{},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
-		Order: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
 		},
 	}
+	want := &plan.Procedure{
+		// Expect the duplicate has been reset to zero values
+		Spec: new(functions.FromProcedureSpec),
+	}
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
 }

@@ -1,26 +1,27 @@
 package plan_test
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
-	"github.com/influxdata/ifql/query/plan/plantest"
 )
 
 func TestPhysicalPlanner_Plan(t *testing.T) {
 	testCases := []struct {
-		lp *plan.LogicalPlanSpec
-		pp *plan.PlanSpec
+		name string
+		lp   *plan.LogicalPlanSpec
+		pp   *plan.PlanSpec
 	}{
 		{
+			name: "single push down",
 			lp: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database: "mydb",
 						},
@@ -38,7 +39,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							},
 						},
 						Parents: []plan.ProcedureID{
-							plan.ProcedureIDFromOperationID("select"),
+							plan.ProcedureIDFromOperationID("from"),
 						},
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
 					},
@@ -52,7 +53,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Order: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"),
 					plan.ProcedureIDFromOperationID("range"),
 					plan.ProcedureIDFromOperationID("count"),
 				},
@@ -66,8 +67,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
@@ -85,18 +86,78 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Results: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"),
 				},
 				Order: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"),
 				},
 			},
 		},
 		{
+			name: "single push down with match",
 			lp: &plan.LogicalPlanSpec{
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database: "mydb",
+						},
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("last")},
+					},
+					plan.ProcedureIDFromOperationID("last"): {
+						ID:   plan.ProcedureIDFromOperationID("last"),
+						Spec: &functions.LastProcedureSpec{},
+						Parents: []plan.ProcedureID{
+							(plan.ProcedureIDFromOperationID("from")),
+						},
+						Children: nil,
+					},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+					plan.ProcedureIDFromOperationID("last"),
+				},
+			},
+			pp: &plan.PlanSpec{
+				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Bounds: plan.BoundsSpec{
+					Start: query.MinTime,
+					Stop:  query.Now,
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database:  "mydb",
+							BoundsSet: true,
+							Bounds: plan.BoundsSpec{
+								Start: query.MinTime,
+								Stop:  query.Now,
+							},
+							LimitSet:      true,
+							PointsLimit:   1,
+							DescendingSet: true,
+							Descending:    true,
+						},
+						Parents:  nil,
+						Children: []plan.ProcedureID{},
+					},
+				},
+				Results: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+				},
+			},
+		},
+		{
+			name: "multiple push down",
+			lp: &plan.LogicalPlanSpec{
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database: "mydb",
 						},
@@ -114,7 +175,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 							},
 						},
 						Parents: []plan.ProcedureID{
-							(plan.ProcedureIDFromOperationID("select")),
+							(plan.ProcedureIDFromOperationID("from")),
 						},
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("limit")},
 					},
@@ -138,7 +199,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Order: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"),
 					plan.ProcedureIDFromOperationID("range"),
 					plan.ProcedureIDFromOperationID("limit"),
 					plan.ProcedureIDFromOperationID("mean"),
@@ -153,8 +214,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					},
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
-					plan.ProcedureIDFromOperationID("select"): {
-						ID: plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
 						Spec: &functions.FromProcedureSpec{
 							Database:  "mydb",
 							BoundsSet: true,
@@ -174,7 +235,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						ID:   plan.ProcedureIDFromOperationID("mean"),
 						Spec: &functions.MeanProcedureSpec{},
 						Parents: []plan.ProcedureID{
-							(plan.ProcedureIDFromOperationID("select")),
+							(plan.ProcedureIDFromOperationID("from")),
 						},
 						Children: nil,
 					},
@@ -183,17 +244,124 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 					(plan.ProcedureIDFromOperationID("mean")),
 				},
 				Order: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("select"),
+					plan.ProcedureIDFromOperationID("from"),
 					plan.ProcedureIDFromOperationID("mean"),
 				},
 			},
 		},
 	}
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		tc := tc
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			plantest.PhysicalPlanTestHelper(t, tc.lp, tc.pp)
+		t.Run(tc.name, func(t *testing.T) {
+			PhysicalPlanTestHelper(t, tc.lp, tc.pp)
 		})
+	}
+}
+
+func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
+	lp := &plan.LogicalPlanSpec{
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
+				Spec: &functions.FromProcedureSpec{
+					Database: "mydb",
+				},
+				Parents: nil,
+				Children: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("first"),
+					plan.ProcedureIDFromOperationID("last"),
+				},
+			},
+			plan.ProcedureIDFromOperationID("first"): {
+				ID:       plan.ProcedureIDFromOperationID("first"),
+				Spec:     &functions.FirstProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+				Children: nil,
+			},
+			plan.ProcedureIDFromOperationID("last"): {
+				ID:       plan.ProcedureIDFromOperationID("last"),
+				Spec:     &functions.LastProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+				Children: nil,
+			},
+		},
+		Order: []plan.ProcedureID{
+			plan.ProcedureIDFromOperationID("from"),
+			plan.ProcedureIDFromOperationID("first"),
+			plan.ProcedureIDFromOperationID("last"), // last is last so it will be duplicated
+		},
+	}
+
+	fromID := plan.ProcedureIDFromOperationID("from")
+	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
+	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Start: query.MinTime,
+			Stop:  query.Now,
+		},
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			fromID: {
+				ID: fromID,
+				Spec: &functions.FromProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.MinTime,
+						Stop:  query.Now,
+					},
+					LimitSet:      true,
+					PointsLimit:   1,
+					DescendingSet: true,
+					Descending:    false, // first
+				},
+				Children: []plan.ProcedureID{},
+			},
+			fromIDDup: {
+				ID: fromIDDup,
+				Spec: &functions.FromProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.MinTime,
+						Stop:  query.Now,
+					},
+					LimitSet:      true,
+					PointsLimit:   1,
+					DescendingSet: true,
+					Descending:    true, // last
+				},
+				Parents:  []plan.ProcedureID{},
+				Children: []plan.ProcedureID{},
+			},
+		},
+		Results: []plan.ProcedureID{
+			fromID,
+			fromIDDup,
+		},
+		Order: []plan.ProcedureID{
+			fromID,
+			fromIDDup,
+		},
+	}
+
+	PhysicalPlanTestHelper(t, lp, want)
+}
+
+func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.PlanSpec) {
+	t.Helper()
+	// Setup expected now time
+	now := time.Now()
+	want.Now = now
+
+	planner := plan.NewPlanner()
+	got, err := planner.Plan(lp, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !cmp.Equal(got, want) {
+		t.Log(plan.Formatted(got))
+		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got))
 	}
 }
 

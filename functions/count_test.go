@@ -38,172 +38,46 @@ func BenchmarkCount(b *testing.B) {
 	)
 }
 
-func TestCount_PushDown_Single(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents:  nil,
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("from"),
-				},
-				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("count")},
-			},
-			plan.ProcedureIDFromOperationID("count"): {
-				ID:   plan.ProcedureIDFromOperationID("count"),
-				Spec: &functions.CountProcedureSpec{},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("count"),
-		},
-	}
+func TestCount_PushDown_Match(t *testing.T) {
+	spec := new(functions.CountProcedureSpec)
+	from := new(functions.FromProcedureSpec)
 
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					AggregateSet:  true,
-					AggregateType: "count",
-				},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-		},
-	}
+	// Should not match when an aggregate is set
+	from.GroupingSet = true
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, false)
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	// Should match when no aggregate is set
+	from.GroupingSet = false
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, true)
 }
 
-func TestCount_PushDown_Branch(t *testing.T) {
-	lp := &plan.LogicalPlanSpec{
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			plan.ProcedureIDFromOperationID("from"): {
-				ID: plan.ProcedureIDFromOperationID("from"),
-				Spec: &functions.FromProcedureSpec{
-					Database: "mydb",
-				},
-				Parents: nil,
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("range"),
-				},
-			},
-			plan.ProcedureIDFromOperationID("range"): {
-				ID: plan.ProcedureIDFromOperationID("range"),
-				Spec: &functions.RangeProcedureSpec{
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-				},
-				Parents: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("from"),
-				},
-				Children: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("sum"),
-					plan.ProcedureIDFromOperationID("count"),
-				},
-			},
-			plan.ProcedureIDFromOperationID("sum"): {
-				ID:   plan.ProcedureIDFromOperationID("sum"),
-				Spec: &functions.SumProcedureSpec{},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-			plan.ProcedureIDFromOperationID("count"): {
-				ID:   plan.ProcedureIDFromOperationID("count"),
-				Spec: &functions.CountProcedureSpec{},
-				Parents: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("range")),
-				},
-				Children: nil,
-			},
-		},
-		Order: []plan.ProcedureID{
-			plan.ProcedureIDFromOperationID("from"),
-			plan.ProcedureIDFromOperationID("range"),
-			plan.ProcedureIDFromOperationID("sum"),
-			plan.ProcedureIDFromOperationID("count"), // Count is last so it will get duplicated
+func TestCount_PushDown(t *testing.T) {
+	spec := new(functions.CountProcedureSpec)
+	root := &plan.Procedure{
+		Spec: new(functions.FromProcedureSpec),
+	}
+	want := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			AggregateSet:  true,
+			AggregateType: functions.CountKind,
 		},
 	}
 
-	fromID := plan.ProcedureIDFromOperationID("from")
-	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	want := &plan.PlanSpec{
-		Bounds: plan.BoundsSpec{
-			Stop: query.Now,
-		},
-		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					AggregateSet:  true,
-					AggregateType: "sum",
-				},
-				Children: []plan.ProcedureID{},
-			},
-			fromIDDup: {
-				ID: fromIDDup,
-				Spec: &functions.FromProcedureSpec{
-					Database:  "mydb",
-					BoundsSet: true,
-					Bounds: plan.BoundsSpec{
-						Stop: query.Now,
-					},
-					AggregateSet:  true,
-					AggregateType: "count",
-				},
-				Parents:  []plan.ProcedureID{},
-				Children: []plan.ProcedureID{},
-			},
-		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
-		},
-		Order: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
+}
+
+func TestCount_PushDown_Duplicate(t *testing.T) {
+	spec := new(functions.CountProcedureSpec)
+	root := &plan.Procedure{
+		Spec: &functions.FromProcedureSpec{
+			AggregateSet:  true,
+			AggregateType: functions.CountKind,
 		},
 	}
+	want := &plan.Procedure{
+		// Expect the duplicate has been reset to zero values
+		Spec: new(functions.FromProcedureSpec),
+	}
 
-	plantest.PhysicalPlanTestHelper(t, lp, want)
+	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
 }
