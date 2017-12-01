@@ -143,7 +143,7 @@ func toComparisonOperator(o expression.Operator) (storage.Node_Comparison, error
 
 func ExpressionNames(n expression.Node) []string {
 	var names []string
-	expression.Walk(n, func(n expression.Node) error {
+	_ = expression.Walk(n, func(n expression.Node) error {
 		if rn, ok := n.(*expression.ReferenceNode); ok {
 			found := false
 			for _, n := range names {

@@ -136,7 +136,7 @@ func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMo
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache()
+	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewGroupTransformation(d, cache, s)
 	return t, d, nil
@@ -169,16 +169,20 @@ func NewGroupTransformation(d execute.Dataset, cache execute.BlockBuilderCache, 
 	return t
 }
 
-func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *groupTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) (err error) {
 	//TODO(nathanielc): Investigate if this can be smarter and not retract all blocks with the same time bounds.
 	t.cache.ForEachBuilder(func(bk execute.BlockKey, builder execute.BlockBuilder) {
+		if err != nil {
+			return
+		}
 		if meta.Bounds().Equal(builder.Bounds()) {
-			t.d.RetractBlock(bk)
+			err = t.d.RetractBlock(bk)
 		}
 	})
+	return
 }
 
-func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	isFanIn := false
 	var tags execute.Tags
 	if t.ignoring {
@@ -209,14 +213,14 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) {
 		tags, isFanIn = b.Tags().Subset(t.keys)
 	}
 	if isFanIn {
-		t.processFanIn(b, tags)
+		return t.processFanIn(b, tags)
 	} else {
-		t.processFanOut(b)
+		return t.processFanOut(b)
 	}
 }
 
 // processFanIn assumes that all rows of b will be placed in the same builder.
-func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) {
+func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) error {
 	builder, new := t.cache.BlockBuilder(blockMetadata{
 		tags:   tags,
 		bounds: b.Bounds(),
@@ -258,6 +262,7 @@ func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) {
 	}
 
 	execute.AppendBlock(b, builder, colMap)
+	return nil
 }
 
 type tagMeta struct {
@@ -266,7 +271,7 @@ type tagMeta struct {
 }
 
 // processFanOut assumes each row of b could end up in a different builder.
-func (t *groupTransformation) processFanOut(b execute.Block) {
+func (t *groupTransformation) processFanOut(b execute.Block) error {
 	cols := b.Cols()
 	tagMap := make(map[string]tagMeta, len(cols))
 	for j, c := range cols {
@@ -345,6 +350,7 @@ func (t *groupTransformation) processFanOut(b execute.Block) {
 			execute.AppendRow(i, rr, builder, colMap)
 		}
 	})
+	return nil
 }
 
 func (t *groupTransformation) determineRowTags(tagMap map[string]tagMeta, i int, rr execute.RowReader) execute.Tags {
@@ -358,11 +364,11 @@ func (t *groupTransformation) determineRowTags(tagMap map[string]tagMeta, i int,
 	return tags
 }
 
-func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
-	t.d.UpdateWatermark(mark)
+func (t *groupTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *groupTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *groupTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *groupTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)

@@ -87,7 +87,7 @@ func createSortTransformation(id execute.DatasetID, mode execute.AccumulationMod
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache()
+	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewSortTransformation(d, cache, s)
 	return t, d, nil
@@ -112,11 +112,11 @@ func NewSortTransformation(d execute.Dataset, cache execute.BlockBuilderCache, s
 	}
 }
 
-func (t *sortTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
-	t.d.RetractBlock(execute.ToBlockKey(meta))
+func (t *sortTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) error {
+	return t.d.RetractBlock(execute.ToBlockKey(meta))
 }
 
-func (t *sortTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *sortTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	builder, new := t.cache.BlockBuilder(b)
 	if new {
 		execute.AddBlockCols(b, builder)
@@ -135,13 +135,14 @@ func (t *sortTransformation) Process(id execute.DatasetID, b execute.Block) {
 	execute.AppendBlock(b, builder, t.colMap)
 
 	builder.Sort(t.cols, t.desc)
+	return nil
 }
 
-func (t *sortTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
-	t.d.UpdateWatermark(mark)
+func (t *sortTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *sortTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *sortTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *sortTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)

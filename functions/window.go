@@ -119,7 +119,7 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache()
+	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewFixedWindowTransformation(d, cache, ctx.Bounds(), execute.Window{
 		Every:  execute.Duration(s.Window.Every),
@@ -156,16 +156,20 @@ func NewFixedWindowTransformation(
 	}
 }
 
-func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *fixedWindowTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) (err error) {
 	tagKey := meta.Tags().Key()
 	t.cache.ForEachBuilder(func(bk execute.BlockKey, bld execute.BlockBuilder) {
+		if err != nil {
+			return
+		}
 		if bld.Bounds().Overlaps(meta.Bounds()) && tagKey == bld.Tags().Key() {
-			t.d.RetractBlock(bk)
+			err = t.d.RetractBlock(bk)
 		}
 	})
+	return
 }
 
-func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	cols := b.Cols()
 	valueIdx := execute.ValueIdx(cols)
 	valueCol := cols[valueIdx]
@@ -189,6 +193,7 @@ func (t *fixedWindowTransformation) Process(id execute.DatasetID, b execute.Bloc
 			}
 		}
 	})
+	return nil
 }
 
 func (t *fixedWindowTransformation) getWindowBounds(now execute.Time) []execute.Bounds {
@@ -228,11 +233,11 @@ func (t *fixedWindowTransformation) getWindowBounds(now execute.Time) []execute.
 	return bounds
 }
 
-func (t *fixedWindowTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
-	t.d.UpdateWatermark(mark)
+func (t *fixedWindowTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *fixedWindowTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *fixedWindowTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *fixedWindowTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)

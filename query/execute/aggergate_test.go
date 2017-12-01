@@ -260,14 +260,16 @@ func TestAggregate_Process(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			c := execute.NewBlockBuilderCache()
+			c := execute.NewBlockBuilderCache(executetest.UnlimitedAllocator)
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 			agg := execute.NewAggregateTransformation(d, c, tc.bounds, new(functions.SumAgg))
 
 			parentID := executetest.RandomDatasetID()
 			for _, b := range tc.data {
-				agg.Process(parentID, b)
+				if err := agg.Process(parentID, b); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			want := tc.want(tc.bounds)

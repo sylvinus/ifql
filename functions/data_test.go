@@ -6,6 +6,7 @@ import (
 
 	"github.com/gonum/stat/distuv"
 	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/query/execute/executetest"
 )
 
 const (
@@ -32,8 +33,7 @@ func init() {
 	for i := range NormalData {
 		NormalData[i] = dist.Rand()
 	}
-
-	normalBlockBuilder := execute.NewColListBlockBuilder()
+	normalBlockBuilder := execute.NewColListBlockBuilder(executetest.UnlimitedAllocator)
 	normalBlockBuilder.SetBounds(execute.Bounds{
 		Start: execute.Time(time.Date(2016, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),
 		Stop:  execute.Time(time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),
@@ -69,5 +69,5 @@ func init() {
 	normalBlockBuilder.SetCommonString(2, t1)
 	normalBlockBuilder.AppendStrings(3, t2)
 
-	NormalBlock = normalBlockBuilder.Block()
+	NormalBlock, _ = normalBlockBuilder.Block()
 }

@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -68,7 +69,7 @@ func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query,
 		now:    time.Now().UTC(),
 		ready:  ready,
 		Ready:  ready,
-		state:  Queued,
+		state:  Queueing,
 		ctx:    cctx,
 		cancel: cancel,
 	}
@@ -106,8 +107,7 @@ func (c *Controller) run() {
 		select {
 		// Wait for resources to free
 		case q := <-c.queryDone:
-			c.availableConcurrency += q.concurrency
-			c.availableMemory += q.memory
+			c.free(q)
 			c.queriesMu.Lock()
 			delete(c.queries, q.id)
 			c.queriesMu.Unlock()
@@ -128,43 +128,65 @@ func (c *Controller) run() {
 		// Peek at head of priority queue
 		q := pq.Peek()
 		if q != nil {
-			if !q.advanceState(Planning) {
-				continue
-			}
-			// Plan query to determine needed resources
-			lp, err := c.lplanner.Plan(&q.Spec)
-			if err != nil {
-				q.SetErr(errors.Wrap(err, "failed to create logical plan"))
-				continue
-			}
+			if q.tryPlan() {
+				// Plan query to determine needed resources
+				lp, err := c.lplanner.Plan(&q.Spec)
+				if err != nil {
+					q.setErr(errors.Wrap(err, "failed to create logical plan"))
+					continue
+				}
 
-			p, err := c.pplanner.Plan(lp, nil, q.now)
-			if err != nil {
-				q.SetErr(errors.Wrap(err, "failed to create physical plan"))
-				continue
+				p, err := c.pplanner.Plan(lp, nil, q.now)
+				if err != nil {
+					q.setErr(errors.Wrap(err, "failed to create physical plan"))
+					continue
+				}
+				q.plan = p
+				q.concurrency = p.Resources.ConcurrencyQuota
+				q.memory = p.Resources.MemoryBytesQuota
 			}
-			q.concurrency = p.Resources.ConcurrencyQuota
-			q.memory = p.Resources.MemoryBytesQuota
 
 			// Check if we have enough resources
-			if c.availableConcurrency >= q.concurrency && c.availableMemory >= q.memory {
-				// Mark resources as consumed
-				c.availableConcurrency -= q.concurrency
-				c.availableMemory -= q.memory
+			if c.check(q) {
+				// Update resource gauges
+				c.consume(q)
+
+				// Remove the query from the queue
 				pq.Pop()
 
 				// Execute query
-				if !q.advanceState(Executing) {
-					continue
+				if q.tryExec() {
+					r, err := c.executor.Execute(q.ctx, q.plan)
+					if err != nil {
+						q.setErr(errors.Wrap(err, "failed to execute query"))
+						continue
+					}
+					q.setResults(r)
 				}
-				r, err := c.executor.Execute(q.ctx, p)
-				if err != nil {
-					q.SetErr(errors.Wrap(err, "failed to execute query"))
-					continue
-				}
-				q.setResults(r)
-			} // else go back to waiting for new queries or new resources
+			} else {
+				// update state to queueing
+				q.tryQueue()
+			}
 		}
+	}
+}
+
+func (c *Controller) check(q *Query) bool {
+	return c.availableConcurrency >= q.concurrency && (q.memory == math.MaxInt64 || c.availableMemory >= q.memory)
+}
+func (c *Controller) consume(q *Query) {
+	c.availableConcurrency -= q.concurrency
+
+	if q.memory != math.MaxInt64 {
+		c.availableMemory -= q.memory
+	}
+}
+
+func (c *Controller) free(q *Query) {
+	c.availableConcurrency += q.concurrency
+
+	if q.memory != math.MaxInt64 {
+		c.availableMemory += q.memory
 	}
 }
 
@@ -185,6 +207,8 @@ type Query struct {
 	mu     sync.Mutex
 	state  State
 	cancel func()
+
+	plan *plan.PlanSpec
 
 	concurrency int
 	memory      int64
@@ -233,7 +257,7 @@ func (q *Query) Err() error {
 	q.mu.Unlock()
 	return err
 }
-func (q *Query) SetErr(err error) {
+func (q *Query) setErr(err error) {
 	q.mu.Lock()
 	q.err = err
 	q.state = Errored
@@ -242,30 +266,52 @@ func (q *Query) SetErr(err error) {
 
 func (q *Query) setResults(r []execute.Result) {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	if q.state == Executing {
 		q.ready <- r
 	}
-}
-func (q *Query) setState(s State) {
-	q.mu.Lock()
-	q.state = s
 	q.mu.Unlock()
 }
-func (q *Query) advanceState(s State) (ok bool) {
+
+// tryQueue attempts to transition the query into the Queueing state.
+func (q *Query) tryQueue() bool {
 	q.mu.Lock()
-	ok = q.state != Canceled && q.state != Errored
-	if ok {
-		q.state = s
+	if q.state == Planning {
+		q.state = Queueing
+		q.mu.Unlock()
+		return true
 	}
 	q.mu.Unlock()
-	return
+	return false
+}
+
+// tryPlan attempts to transition the query into the Planning state.
+func (q *Query) tryPlan() bool {
+	q.mu.Lock()
+	if q.state == Queueing {
+		q.state = Planning
+		q.mu.Unlock()
+		return true
+	}
+	q.mu.Unlock()
+	return false
+}
+
+// tryExec attempts to transition the query into the Executing state.
+func (q *Query) tryExec() bool {
+	q.mu.Lock()
+	if q.state == Queueing || q.state == Planning {
+		q.state = Executing
+		q.mu.Unlock()
+		return true
+	}
+	q.mu.Unlock()
+	return false
 }
 
 type State int
 
 const (
-	Queued State = iota
+	Queueing State = iota
 	Planning
 	Executing
 	Errored
@@ -275,8 +321,8 @@ const (
 
 func (s State) String() string {
 	switch s {
-	case Queued:
-		return "queued"
+	case Queueing:
+		return "queueing"
 	case Planning:
 		return "planning"
 	case Executing:

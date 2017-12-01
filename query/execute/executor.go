@@ -3,6 +3,7 @@ package execute
 import (
 	"context"
 	"fmt"
+	"log"
 	"runtime/debug"
 
 	"github.com/influxdata/ifql/query"
@@ -32,6 +33,8 @@ func NewExecutor(c Config) Executor {
 type executionState struct {
 	p *plan.PlanSpec
 	c *Config
+
+	alloc *Allocator
 
 	resources query.ResourceManagement
 
@@ -66,8 +69,11 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 		return nil, errors.Wrap(err, "invalid plan")
 	}
 	es := &executionState{
-		p:         p,
-		c:         &e.c,
+		p: p,
+		c: &e.c,
+		alloc: &Allocator{
+			Limit: p.Resources.MemoryBytesQuota,
+		},
 		resources: p.Resources,
 		results:   make([]Result, len(p.Results)),
 		// TODO(nathanielc): Have the planner specify the dispatcher throughput
@@ -182,6 +188,7 @@ func (es *executionState) do(ctx context.Context) {
 		if err != nil {
 			es.abort(err)
 		}
+		log.Println("max allocated", es.alloc.Max())
 	}()
 }
 
@@ -192,4 +199,8 @@ func (es *executionState) ResolveTime(qt query.Time) Time {
 }
 func (es *executionState) Bounds() Bounds {
 	return es.bounds
+}
+
+func (es *executionState) Allocator() *Allocator {
+	return es.alloc
 }

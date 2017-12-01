@@ -218,7 +218,7 @@ func HandleQueries(w http.ResponseWriter, req *http.Request) {
 func iterateResults(r execute.Result, f func(measurement, fieldName string, tags map[string]string, value interface{}, t time.Time)) {
 	blocks := r.Blocks()
 
-	err := blocks.Do(func(b execute.Block) {
+	err := blocks.Do(func(b execute.Block) error {
 
 		times := b.Times()
 		times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
@@ -265,6 +265,7 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 				f(measurement, fieldName, tags, value, time.Time())
 			}
 		})
+		return nil
 	})
 	if err != nil {
 		log.Println("Error iterating through results:", err)
@@ -291,24 +292,22 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 	for _, r := range results {
 		blocks := r.Blocks()
 
-		err := blocks.Do(func(b execute.Block) {
+		err := blocks.Do(func(b execute.Block) error {
 			seriesID++
 
 			// output header
 			h := header{SeriesID: seriesID, Tags: b.Tags()}
 			bb, err := json.Marshal(h)
 			if err != nil {
-				log.Println("error marshaling header: ", err.Error())
-				return
+				return err
 			}
 			_, err = w.Write(bb)
 			if err != nil {
-				log.Println("error writing header: ", err.Error())
-				return
+				return err
 			}
 			_, err = w.Write([]byte("\n"))
 			if err != nil {
-				log.Println("error writing newline: ", err.Error())
+				return err
 			}
 
 			times := b.Times()
@@ -360,6 +359,7 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 				}
 				w.(http.Flusher).Flush()
 			})
+			return nil
 		})
 		if err != nil {
 			log.Println("Error iterating through results:", err)

@@ -58,30 +58,45 @@ func (s *storageSource) AddTransformation(t Transformation) {
 }
 
 func (s *storageSource) Run(ctx context.Context) {
+	err := s.run(ctx)
+	for _, t := range s.ts {
+		t.Finish(s.id, err)
+	}
+}
+func (s *storageSource) run(ctx context.Context) error {
+
 	var trace map[string]string
 	if span := opentracing.SpanFromContext(ctx); span != nil {
 		trace = make(map[string]string)
 		span = opentracing.StartSpan("storage_source.run", opentracing.ChildOf(span.Context()))
-		opentracing.GlobalTracer().Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(trace))
+		_ = opentracing.GlobalTracer().Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(trace))
 	}
 
 	//TODO(nathanielc): Pass through context to actual network I/O.
 	for blocks, mark, ok := s.Next(ctx, trace); ok; blocks, mark, ok = s.Next(ctx, trace) {
-		blocks.Do(func(b Block) {
+		err := blocks.Do(func(b Block) error {
 			for _, t := range s.ts {
-				t.Process(s.id, b)
+				if err := t.Process(s.id, b); err != nil {
+					return err
+				}
 				//TODO(nathanielc): Also add mechanism to send UpdateProcessingTime calls, when no data is arriving.
 				// This is probably not needed for this source, but other sources should do so.
-				t.UpdateProcessingTime(s.id, Now())
+				if err := t.UpdateProcessingTime(s.id, Now()); err != nil {
+					return err
+				}
 			}
+			return nil
 		})
+		if err != nil {
+			return err
+		}
 		for _, t := range s.ts {
-			t.UpdateWatermark(s.id, mark)
+			if err := t.UpdateWatermark(s.id, mark); err != nil {
+				return err
+			}
 		}
 	}
-	for _, t := range s.ts {
-		t.Finish(s.id, nil)
-	}
+	return nil
 }
 
 func (s *storageSource) Next(ctx context.Context, trace map[string]string) (BlockIterator, Time, bool) {

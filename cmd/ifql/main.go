@@ -97,8 +97,9 @@ func main() {
 
 	for _, r := range results {
 		blocks := r.Blocks()
-		err := blocks.Do(func(b execute.Block) {
+		err := blocks.Do(func(b execute.Block) error {
 			execute.NewFormatter(b, nil).WriteTo(os.Stdout)
+			return nil
 		})
 		if err != nil {
 			fmt.Println("Error:", err)

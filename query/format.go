@@ -29,7 +29,7 @@ func (f formatter) Format(fs fmt.State, c rune) {
 
 func (f formatter) format(fs fmt.State) {
 	fmt.Fprint(fs, "digraph QuerySpec {\n")
-	f.q.Walk(func(o *Operation) error {
+	_ = f.q.Walk(func(o *Operation) error {
 		fmt.Fprintf(fs, "%s[kind=%q];\n", o.ID, o.Spec.Kind())
 		for _, child := range f.q.Children(o.ID) {
 			fmt.Fprintf(fs, "%s->%s;\n", o.ID, child.ID)

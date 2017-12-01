@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sync/atomic"
 
 	"github.com/influxdata/ifql/query"
 )
@@ -31,6 +32,10 @@ type Block interface {
 	Times() ValueIterator
 	// Values returns an iterator to consume the values for the "value" column.
 	Values() ValueIterator
+
+	// RefCount modifies the reference count on the block by n.
+	// When the RefCount goes to zero, the block is freed.
+	RefCount(n int)
 }
 
 // OneTimeBlock is a Block that permits reading data only once.
@@ -43,17 +48,17 @@ type OneTimeBlock interface {
 // CacheOneTimeBlock returns a block that can be read multiple times.
 // If the block is not a OneTimeBlock it is returned directly.
 // Otherwise its contents are read into a new block.
-func CacheOneTimeBlock(b Block) Block {
+func CacheOneTimeBlock(b Block, a *Allocator) Block {
 	_, ok := b.(OneTimeBlock)
 	if !ok {
 		return b
 	}
-	return CopyBlock(b)
+	return CopyBlock(b, a)
 }
 
 // CopyBlock returns a copy of the block and is OneTimeBlock safe.
-func CopyBlock(b Block) Block {
-	builder := NewColListBlockBuilder()
+func CopyBlock(b Block, a *Allocator) Block {
+	builder := NewColListBlockBuilder(a)
 	builder.SetBounds(b.Bounds())
 
 	cols := b.Cols()
@@ -67,7 +72,9 @@ func CopyBlock(b Block) Block {
 	}
 
 	AppendBlock(b, builder, colMap)
-	return builder.Block()
+	// ColListBlockBuilders do not error
+	nb, _ := builder.Block()
+	return nb
 }
 
 // AddBlockCols adds the columns of b onto builder.
@@ -273,7 +280,7 @@ type BlockBuilder interface {
 
 	// Block returns the block that has been built.
 	// Further modifications of the builder will not effect the returned block.
-	Block() Block
+	Block() (Block, error)
 }
 
 type DataType int
@@ -332,7 +339,7 @@ var (
 )
 
 type BlockIterator interface {
-	Do(f func(Block)) error
+	Do(f func(Block) error) error
 }
 
 type ValueIterator interface {
@@ -465,13 +472,15 @@ func (m blockMetadata) Bounds() Bounds {
 }
 
 type ColListBlockBuilder struct {
-	blk *ColListBlock
-	key BlockKey
+	blk   *ColListBlock
+	key   BlockKey
+	alloc *Allocator
 }
 
-func NewColListBlockBuilder() *ColListBlockBuilder {
+func NewColListBlockBuilder(a *Allocator) *ColListBlockBuilder {
 	return &ColListBlockBuilder{
-		blk: new(ColListBlock),
+		blk:   new(ColListBlock),
+		alloc: a,
 	}
 }
 
@@ -501,18 +510,22 @@ func (b ColListBlockBuilder) AddCol(c ColMeta) int {
 	case TBool:
 		col = &boolColumn{
 			ColMeta: c,
+			alloc:   b.alloc,
 		}
 	case TInt:
 		col = &intColumn{
 			ColMeta: c,
+			alloc:   b.alloc,
 		}
 	case TUInt:
 		col = &uintColumn{
 			ColMeta: c,
+			alloc:   b.alloc,
 		}
 	case TFloat:
 		col = &floatColumn{
 			ColMeta: c,
+			alloc:   b.alloc,
 		}
 	case TString:
 		if c.IsCommon {
@@ -522,11 +535,13 @@ func (b ColListBlockBuilder) AddCol(c ColMeta) int {
 		} else {
 			col = &stringColumn{
 				ColMeta: c,
+				alloc:   b.alloc,
 			}
 		}
 	case TTime:
 		col = &timeColumn{
 			ColMeta: c,
+			alloc:   b.alloc,
 		}
 	default:
 		PanicUnknownType(c.Type)
@@ -543,13 +558,13 @@ func (b ColListBlockBuilder) SetBool(i int, j int, value bool) {
 func (b ColListBlockBuilder) AppendBool(j int, value bool) {
 	b.checkColType(j, TBool)
 	col := b.blk.cols[j].(*boolColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendBools(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendBools(j int, values []bool) {
 	b.checkColType(j, TBool)
 	col := b.blk.cols[j].(*boolColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendBools(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 
@@ -560,13 +575,13 @@ func (b ColListBlockBuilder) SetInt(i int, j int, value int64) {
 func (b ColListBlockBuilder) AppendInt(j int, value int64) {
 	b.checkColType(j, TInt)
 	col := b.blk.cols[j].(*intColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendInts(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendInts(j int, values []int64) {
 	b.checkColType(j, TInt)
 	col := b.blk.cols[j].(*intColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendInts(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 
@@ -577,13 +592,13 @@ func (b ColListBlockBuilder) SetUInt(i int, j int, value uint64) {
 func (b ColListBlockBuilder) AppendUInt(j int, value uint64) {
 	b.checkColType(j, TUInt)
 	col := b.blk.cols[j].(*uintColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendUInts(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendUInts(j int, values []uint64) {
 	b.checkColType(j, TUInt)
 	col := b.blk.cols[j].(*uintColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendUInts(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 
@@ -594,13 +609,13 @@ func (b ColListBlockBuilder) SetFloat(i int, j int, value float64) {
 func (b ColListBlockBuilder) AppendFloat(j int, value float64) {
 	b.checkColType(j, TFloat)
 	col := b.blk.cols[j].(*floatColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendFloats(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendFloats(j int, values []float64) {
 	b.checkColType(j, TFloat)
 	col := b.blk.cols[j].(*floatColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendFloats(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 
@@ -619,13 +634,13 @@ func (b ColListBlockBuilder) AppendString(j int, value string) {
 		return
 	}
 	col := b.blk.cols[j].(*stringColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendStrings(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendStrings(j int, values []string) {
 	b.checkColType(j, TString)
 	col := b.blk.cols[j].(*stringColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendStrings(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) SetCommonString(j int, value string) {
@@ -650,13 +665,13 @@ func (b ColListBlockBuilder) SetTime(i int, j int, value Time) {
 func (b ColListBlockBuilder) AppendTime(j int, value Time) {
 	b.checkColType(j, TTime)
 	col := b.blk.cols[j].(*timeColumn)
-	col.data = append(col.data, value)
+	col.data = b.alloc.AppendTimes(col.data, value)
 	b.blk.nrows = len(col.data)
 }
 func (b ColListBlockBuilder) AppendTimes(j int, values []Time) {
 	b.checkColType(j, TTime)
 	col := b.blk.cols[j].(*timeColumn)
-	col.data = append(col.data, values...)
+	col.data = b.alloc.AppendTimes(col.data, values...)
 	b.blk.nrows = len(col.data)
 }
 
@@ -674,10 +689,9 @@ func PanicUnknownType(typ DataType) {
 	panic(fmt.Errorf("unknown type %v", typ))
 }
 
-func (b ColListBlockBuilder) Block() Block {
+func (b ColListBlockBuilder) Block() (Block, error) {
 	// Create copy in mutable state
-	blk := b.blk.Copy()
-	return blk
+	return b.blk.Copy(), nil
 }
 
 // RawBlock returns the underlying block being constructed.
@@ -718,6 +732,17 @@ type ColListBlock struct {
 	colMeta []ColMeta
 	cols    []column
 	nrows   int
+
+	refCount int32
+}
+
+func (b *ColListBlock) RefCount(n int) {
+	c := atomic.AddInt32(&b.refCount, int32(n))
+	if c == 0 {
+		for _, c := range b.cols {
+			c.Clear()
+		}
+	}
 }
 
 func (b *ColListBlock) Bounds() Bounds {
@@ -851,7 +876,6 @@ func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
 			strs[i] = value
 		}
 		f(strs, itr)
-		return
 	}
 	f(itr.cols[itr.col].(*stringColumn).data, itr)
 }
@@ -928,7 +952,8 @@ type column interface {
 
 type boolColumn struct {
 	ColMeta
-	data []bool
+	data  []bool
+	alloc *Allocator
 }
 
 func (c *boolColumn) Meta() ColMeta {
@@ -936,13 +961,16 @@ func (c *boolColumn) Meta() ColMeta {
 }
 
 func (c *boolColumn) Clear() {
+	c.alloc.Free(len(c.data), boolSize)
 	c.data = c.data[0:0]
 }
 func (c *boolColumn) Copy() column {
 	cpy := &boolColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]bool, len(c.data))
+	l := len(c.data)
+	cpy.data = c.alloc.Bools(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -961,7 +989,8 @@ func (c *boolColumn) Swap(i, j int) {
 
 type intColumn struct {
 	ColMeta
-	data []int64
+	data  []int64
+	alloc *Allocator
 }
 
 func (c *intColumn) Meta() ColMeta {
@@ -969,13 +998,16 @@ func (c *intColumn) Meta() ColMeta {
 }
 
 func (c *intColumn) Clear() {
+	c.alloc.Free(len(c.data), int64Size)
 	c.data = c.data[0:0]
 }
 func (c *intColumn) Copy() column {
 	cpy := &intColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]int64, len(c.data))
+	l := len(c.data)
+	cpy.data = c.alloc.Ints(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -991,7 +1023,8 @@ func (c *intColumn) Swap(i, j int) {
 
 type uintColumn struct {
 	ColMeta
-	data []uint64
+	data  []uint64
+	alloc *Allocator
 }
 
 func (c *uintColumn) Meta() ColMeta {
@@ -999,13 +1032,16 @@ func (c *uintColumn) Meta() ColMeta {
 }
 
 func (c *uintColumn) Clear() {
+	c.alloc.Free(len(c.data), uint64Size)
 	c.data = c.data[0:0]
 }
 func (c *uintColumn) Copy() column {
 	cpy := &uintColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]uint64, len(c.data))
+	l := len(c.data)
+	cpy.data = c.alloc.UInts(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -1021,7 +1057,8 @@ func (c *uintColumn) Swap(i, j int) {
 
 type floatColumn struct {
 	ColMeta
-	data []float64
+	data  []float64
+	alloc *Allocator
 }
 
 func (c *floatColumn) Meta() ColMeta {
@@ -1029,13 +1066,16 @@ func (c *floatColumn) Meta() ColMeta {
 }
 
 func (c *floatColumn) Clear() {
+	c.alloc.Free(len(c.data), float64Size)
 	c.data = c.data[0:0]
 }
 func (c *floatColumn) Copy() column {
 	cpy := &floatColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]float64, len(c.data))
+	l := len(c.data)
+	cpy.data = c.alloc.Floats(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -1051,7 +1091,8 @@ func (c *floatColumn) Swap(i, j int) {
 
 type stringColumn struct {
 	ColMeta
-	data []string
+	data  []string
+	alloc *Allocator
 }
 
 func (c *stringColumn) Meta() ColMeta {
@@ -1059,13 +1100,17 @@ func (c *stringColumn) Meta() ColMeta {
 }
 
 func (c *stringColumn) Clear() {
+	c.alloc.Free(len(c.data), stringSize)
 	c.data = c.data[0:0]
 }
 func (c *stringColumn) Copy() column {
 	cpy := &stringColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]string, len(c.data))
+
+	l := len(c.data)
+	cpy.data = c.alloc.Strings(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -1081,7 +1126,8 @@ func (c *stringColumn) Swap(i, j int) {
 
 type timeColumn struct {
 	ColMeta
-	data []Time
+	data  []Time
+	alloc *Allocator
 }
 
 func (c *timeColumn) Meta() ColMeta {
@@ -1089,13 +1135,16 @@ func (c *timeColumn) Meta() ColMeta {
 }
 
 func (c *timeColumn) Clear() {
+	c.alloc.Free(len(c.data), timeSize)
 	c.data = c.data[0:0]
 }
 func (c *timeColumn) Copy() column {
 	cpy := &timeColumn{
 		ColMeta: c.ColMeta,
+		alloc:   c.alloc,
 	}
-	cpy.data = make([]Time, len(c.data))
+	l := len(c.data)
+	cpy.data = c.alloc.Times(l, l)
 	copy(cpy.data, c.data)
 	return cpy
 }
@@ -1142,13 +1191,15 @@ type BlockBuilderCache interface {
 
 type blockBuilderCache struct {
 	blocks map[BlockKey]blockState
+	alloc  *Allocator
 
 	triggerSpec query.TriggerSpec
 }
 
-func NewBlockBuilderCache() *blockBuilderCache {
+func NewBlockBuilderCache(a *Allocator) *blockBuilderCache {
 	return &blockBuilderCache{
 		blocks: make(map[BlockKey]blockState),
+		alloc:  a,
 	}
 }
 
@@ -1161,7 +1212,7 @@ func (d *blockBuilderCache) SetTriggerSpec(ts query.TriggerSpec) {
 	d.triggerSpec = ts
 }
 
-func (d *blockBuilderCache) Block(key BlockKey) Block {
+func (d *blockBuilderCache) Block(key BlockKey) (Block, error) {
 	return d.blocks[key].builder.Block()
 }
 func (d *blockBuilderCache) BlockMetadata(key BlockKey) BlockMetadata {
@@ -1174,7 +1225,7 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) (BlockBuilder, bool
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
-		builder := NewColListBlockBuilder()
+		builder := NewColListBlockBuilder(d.alloc)
 		builder.SetBounds(meta.Bounds())
 		t := NewTriggerFromSpec(d.triggerSpec)
 		b = blockState{
@@ -1196,6 +1247,7 @@ func (d *blockBuilderCache) DiscardBlock(key BlockKey) {
 	d.blocks[key].builder.ClearData()
 }
 func (d *blockBuilderCache) ExpireBlock(key BlockKey) {
+	d.blocks[key].builder.ClearData()
 	delete(d.blocks, key)
 }
 

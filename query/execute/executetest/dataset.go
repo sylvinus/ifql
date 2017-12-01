@@ -32,16 +32,19 @@ func (d *Dataset) AddTransformation(t execute.Transformation) {
 	panic("not implemented")
 }
 
-func (d *Dataset) RetractBlock(key execute.BlockKey) {
+func (d *Dataset) RetractBlock(key execute.BlockKey) error {
 	d.Retractions = append(d.Retractions, key)
+	return nil
 }
 
-func (d *Dataset) UpdateProcessingTime(t execute.Time) {
+func (d *Dataset) UpdateProcessingTime(t execute.Time) error {
 	d.ProcessingTimeUpdates = append(d.ProcessingTimeUpdates, t)
+	return nil
 }
 
-func (d *Dataset) UpdateWatermark(mark execute.Time) {
+func (d *Dataset) UpdateWatermark(mark execute.Time) error {
 	d.WatermarkUpdates = append(d.WatermarkUpdates, mark)
+	return nil
 }
 
 func (d *Dataset) Finish(err error) {
@@ -63,13 +66,17 @@ func TransformationPassThroughTestHelper(t *testing.T, newTr NewTransformation) 
 
 	now := execute.Now()
 	d := NewDataset(RandomDatasetID())
-	c := execute.NewBlockBuilderCache()
+	c := execute.NewBlockBuilderCache(UnlimitedAllocator)
 	c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 	parentID := RandomDatasetID()
 	tr := newTr(d, c)
-	tr.UpdateWatermark(parentID, now)
-	tr.UpdateProcessingTime(parentID, now)
+	if err := tr.UpdateWatermark(parentID, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.UpdateProcessingTime(parentID, now); err != nil {
+		t.Fatal(err)
+	}
 	tr.Finish(parentID, nil)
 
 	exp := &Dataset{

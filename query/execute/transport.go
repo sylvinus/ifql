@@ -1,6 +1,7 @@
 package execute
 
 import (
+	"sync"
 	"sync/atomic"
 )
 
@@ -18,6 +19,8 @@ type consecutiveTransport struct {
 	messages MessageQueue
 
 	finished chan struct{}
+	errMu    sync.Mutex
+	errValue error
 
 	schedulerState int32
 	inflight       int32
@@ -33,39 +36,80 @@ func newConescutiveTransport(dispatcher Dispatcher, t Transformation) *consecuti
 	}
 }
 
+func (t *consecutiveTransport) setErr(err error) {
+	t.errMu.Lock()
+	t.errValue = err
+	t.errMu.Unlock()
+}
+func (t *consecutiveTransport) err() error {
+	t.errMu.Lock()
+	err := t.errValue
+	t.errMu.Unlock()
+	return err
+}
+
 func (t *consecutiveTransport) Finished() <-chan struct{} {
 	return t.finished
 }
 
-func (t *consecutiveTransport) RetractBlock(id DatasetID, meta BlockMetadata) {
+func (t *consecutiveTransport) RetractBlock(id DatasetID, meta BlockMetadata) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
 	t.pushMsg(&retractBlockMsg{
 		srcMessage:    srcMessage(id),
 		blockMetadata: meta,
 	})
+	return nil
 }
 
-func (t *consecutiveTransport) Process(id DatasetID, b Block) {
+func (t *consecutiveTransport) Process(id DatasetID, b Block) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
 	t.pushMsg(&processMsg{
 		srcMessage: srcMessage(id),
 		block:      b,
 	})
+	return nil
 }
 
-func (t *consecutiveTransport) UpdateWatermark(id DatasetID, time Time) {
+func (t *consecutiveTransport) UpdateWatermark(id DatasetID, time Time) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
 	t.pushMsg(&updateWatermarkMsg{
 		srcMessage: srcMessage(id),
 		time:       time,
 	})
+	return nil
 }
 
-func (t *consecutiveTransport) UpdateProcessingTime(id DatasetID, time Time) {
+func (t *consecutiveTransport) UpdateProcessingTime(id DatasetID, time Time) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
 	t.pushMsg(&updateProcessingTimeMsg{
 		srcMessage: srcMessage(id),
 		time:       time,
 	})
+	return nil
 }
 
 func (t *consecutiveTransport) Finish(id DatasetID, err error) {
+	select {
+	case <-t.finished:
+		return
+	default:
+	}
 	t.pushMsg(&finishMsg{
 		srcMessage: srcMessage(id),
 		err:        err,
@@ -112,7 +156,10 @@ PROCESS:
 	i := 0
 	for m := t.messages.Pop(); m != nil; m = t.messages.Pop() {
 		atomic.AddInt32(&t.inflight, -1)
-		if processMessage(t.t, m) {
+		if f, err := processMessage(t.t, m); err != nil || f {
+			// Set the error if there was any
+			t.setErr(err)
+
 			// Transition to the finished state.
 			if t.tryTransition(running, finished) {
 				// We are finished
@@ -142,21 +189,23 @@ PROCESS:
 
 // processMessage processes the message on t.
 // The return value is true if the message was a FinishMsg.
-func processMessage(t Transformation, m Message) bool {
+func processMessage(t Transformation, m Message) (finished bool, err error) {
 	switch m := m.(type) {
 	case RetractBlockMsg:
-		t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
+		err = t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
 	case ProcessMsg:
-		t.Process(m.SrcDatasetID(), m.Block())
+		b := m.Block()
+		err = t.Process(m.SrcDatasetID(), b)
+		b.RefCount(-1)
 	case UpdateWatermarkMsg:
-		t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
+		err = t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
 	case UpdateProcessingTimeMsg:
-		t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
+		err = t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
 	case FinishMsg:
 		t.Finish(m.SrcDatasetID(), m.Error())
-		return true
+		finished = true
 	}
-	return false
+	return
 }
 
 type Message interface {

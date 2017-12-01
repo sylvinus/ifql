@@ -2,6 +2,7 @@ package plan
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"github.com/influxdata/ifql/query"
@@ -100,6 +101,10 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 	// Update concurrency quota
 	if p.plan.Resources.ConcurrencyQuota == 0 {
 		p.plan.Resources.ConcurrencyQuota = len(p.plan.Procedures)
+	}
+	// Update memory quota
+	if p.plan.Resources.MemoryBytesQuota == 0 {
+		p.plan.Resources.MemoryBytesQuota = math.MaxInt64
 	}
 
 	return p.plan, nil

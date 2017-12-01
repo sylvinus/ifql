@@ -14,6 +14,8 @@ type Block struct {
 	Data [][]interface{}
 }
 
+func (b *Block) RefCount(n int) {}
+
 func (b *Block) Bounds() execute.Bounds {
 	return b.Bnds
 }
@@ -114,7 +116,7 @@ func (v *ValueIterator) AtTime(i int, j int) execute.Time {
 func BlocksFromCache(c execute.DataCache) []*Block {
 	var blocks []*Block
 	c.ForEach(func(key execute.BlockKey) {
-		b := c.Block(key)
+		b, _ := c.Block(key)
 		blocks = append(blocks, ConvertBlock(b))
 	})
 	return blocks

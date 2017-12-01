@@ -92,8 +92,8 @@ func NewController(opts Options) (*Controller, error) {
 		return nil, errors.Wrap(err, "failed to create storage reader")
 	}
 	c := control.Config{
-		ConcurrencyQuota: 20,
-		MemoryBytesQuota: 1e6,
+		ConcurrencyQuota: 10,
+		MemoryBytesQuota: 1e9,
 		ExecutorConfig: execute.Config{
 			StorageReader: s,
 		},

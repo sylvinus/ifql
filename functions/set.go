@@ -79,7 +79,7 @@ func createSetTransformation(id execute.DatasetID, mode execute.AccumulationMode
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache()
+	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewSetTransformation(d, cache, s)
 	return t, d, nil
@@ -106,11 +106,12 @@ func NewSetTransformation(
 	}
 }
 
-func (t *setTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *setTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) error {
 	// TODO
+	return nil
 }
 
-func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	tags := b.Tags()
 	isCommon := false
 	if v, ok := tags[t.key]; ok {
@@ -188,13 +189,14 @@ func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) {
 			}
 		}
 	})
+	return nil
 }
 
-func (t *setTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
-	t.d.UpdateWatermark(mark)
+func (t *setTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *setTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *setTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *setTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)

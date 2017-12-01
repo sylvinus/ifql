@@ -9,9 +9,9 @@ import (
 type Dataset interface {
 	Node
 
-	RetractBlock(key BlockKey)
-	UpdateProcessingTime(t Time)
-	UpdateWatermark(mark Time)
+	RetractBlock(key BlockKey) error
+	UpdateProcessingTime(t Time) error
+	UpdateWatermark(mark Time) error
 	Finish(error)
 
 	SetTriggerSpec(t query.TriggerSpec)
@@ -20,7 +20,7 @@ type Dataset interface {
 // DataCache holds all working data for a transformation.
 type DataCache interface {
 	BlockMetadata(BlockKey) BlockMetadata
-	Block(BlockKey) Block
+	Block(BlockKey) (Block, error)
 
 	ForEach(func(BlockKey))
 	ForEachWithContext(func(BlockKey, Trigger, BlockContext))
@@ -79,24 +79,38 @@ func (d *dataset) SetTriggerSpec(spec query.TriggerSpec) {
 	d.cache.SetTriggerSpec(spec)
 }
 
-func (d *dataset) UpdateWatermark(mark Time) {
+func (d *dataset) UpdateWatermark(mark Time) error {
 	d.watermark = mark
-	d.evalTriggers()
-	for _, t := range d.ts {
-		t.UpdateWatermark(d.id, mark)
+	if err := d.evalTriggers(); err != nil {
+		return err
 	}
+	for _, t := range d.ts {
+		if err := t.UpdateWatermark(d.id, mark); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (d *dataset) UpdateProcessingTime(time Time) {
+func (d *dataset) UpdateProcessingTime(time Time) error {
 	d.processingTime = time
-	d.evalTriggers()
-	for _, t := range d.ts {
-		t.UpdateProcessingTime(d.id, time)
+	if err := d.evalTriggers(); err != nil {
+		return err
 	}
+	for _, t := range d.ts {
+		if err := t.UpdateProcessingTime(d.id, time); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (d *dataset) evalTriggers() {
+func (d *dataset) evalTriggers() (err error) {
 	d.cache.ForEachWithContext(func(bk BlockKey, trigger Trigger, bc BlockContext) {
+		if err != nil {
+			// Skip the rest once we have encountered an error
+			return
+		}
 		c := TriggerContext{
 			Block:                 bc,
 			Watermark:             d.watermark,
@@ -104,50 +118,71 @@ func (d *dataset) evalTriggers() {
 		}
 
 		if trigger.Triggered(c) {
-			d.triggerBlock(bk)
+			err = d.triggerBlock(bk)
 		}
 		if trigger.Finished() {
 			d.expireBlock(bk)
 		}
 	})
+	return err
 }
 
-func (d *dataset) triggerBlock(key BlockKey) {
-	b := d.cache.Block(key)
+func (d *dataset) triggerBlock(key BlockKey) error {
+	b, err := d.cache.Block(key)
+	if err != nil {
+		return err
+	}
+	b.RefCount(len(d.ts))
 	switch d.accMode {
 	case DiscardingMode:
 		for _, t := range d.ts {
-			t.Process(d.id, b)
+			if err := t.Process(d.id, b); err != nil {
+				return err
+			}
 		}
 		d.cache.DiscardBlock(key)
 	case AccumulatingRetractingMode:
 		for _, t := range d.ts {
-			t.RetractBlock(d.id, b)
+			if err := t.RetractBlock(d.id, b); err != nil {
+				return err
+			}
 		}
 		fallthrough
 	case AccumulatingMode:
 		for _, t := range d.ts {
-			t.Process(d.id, b)
+			if err := t.Process(d.id, b); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (d *dataset) expireBlock(key BlockKey) {
 	d.cache.ExpireBlock(key)
 }
 
-func (d *dataset) RetractBlock(key BlockKey) {
+func (d *dataset) RetractBlock(key BlockKey) error {
 	d.cache.DiscardBlock(key)
 	for _, t := range d.ts {
-		t.RetractBlock(d.id, d.cache.BlockMetadata(key))
+		if err := t.RetractBlock(d.id, d.cache.BlockMetadata(key)); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (d *dataset) Finish(err error) {
-	d.cache.ForEach(func(bk BlockKey) {
-		d.triggerBlock(bk)
-		d.cache.ExpireBlock(bk)
-	})
+	if err == nil {
+		// Only trigger blocks we if we not finishing because of an error.
+		d.cache.ForEach(func(bk BlockKey) {
+			if err != nil {
+				return
+			}
+			err = d.triggerBlock(bk)
+			d.cache.ExpireBlock(bk)
+		})
+	}
 	for _, t := range d.ts {
 		t.Finish(d.id, err)
 	}

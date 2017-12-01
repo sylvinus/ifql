@@ -102,7 +102,7 @@ func (sr *storageReader) Read(ctx context.Context, trace map[string]string, read
 
 func (sr *storageReader) Close() {
 	for _, conn := range sr.conns {
-		conn.conn.Close()
+		_ = conn.conn.Close()
 	}
 }
 
@@ -115,7 +115,7 @@ type storageBlockIterator struct {
 	predicate *storage.Predicate
 }
 
-func (bi *storageBlockIterator) Do(f func(Block)) error {
+func (bi *storageBlockIterator) Do(f func(Block) error) error {
 	// Setup read request
 	var req storage.ReadRequest
 	req.Database = bi.readSpec.Database
@@ -175,7 +175,11 @@ func (bi *storageBlockIterator) Do(f func(Block)) error {
 		tags, keptTags := bi.determineBlockTags(s)
 		k := appendSeriesKey(nil, s, &bi.readSpec)
 		block := newStorageBlock(bi.bounds, tags, keptTags, k, ms, &bi.readSpec, typ)
-		f(block)
+
+		if err := f(block); err != nil {
+			// TODO(nathanielc): Close streams since we have abandoned the request
+			return err
+		}
 		// Wait until the block has been read.
 		block.wait()
 	}
@@ -387,6 +391,11 @@ func newStorageBlock(bounds Bounds, tags, keptTags Tags, tagKey key, ms *mergedS
 		ms:       ms,
 		done:     make(chan struct{}),
 	}
+}
+
+func (b *storageBlock) RefCount(n int) {
+	//TODO(nathanielc): Have the storageBlock consume the Allocator,
+	// once we have zero-copy serialization over the network
 }
 
 func (b *storageBlock) wait() {

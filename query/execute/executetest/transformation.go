@@ -17,14 +17,16 @@ func ProcessTestHelper(
 	t.Helper()
 
 	d := NewDataset(RandomDatasetID())
-	c := execute.NewBlockBuilderCache()
+	c := execute.NewBlockBuilderCache(UnlimitedAllocator)
 	c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 	tx := create(d, c)
 
 	parentID := RandomDatasetID()
 	for _, b := range data {
-		tx.Process(parentID, b)
+		if err := tx.Process(parentID, b); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	got := BlocksFromCache(c)

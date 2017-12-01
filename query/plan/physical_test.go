@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			lp: &plan.LogicalPlanSpec{
 				Resources: query.ResourceManagement{
 					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
 				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("from"): {
@@ -65,6 +67,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Resources: query.ResourceManagement{
 					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
 				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
@@ -128,6 +131,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			pp: &plan.PlanSpec{
 				Resources: query.ResourceManagement{
 					ConcurrencyQuota: 1,
+					MemoryBytesQuota: math.MaxInt64,
 				},
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Bounds: plan.BoundsSpec{
@@ -218,6 +222,7 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Resources: query.ResourceManagement{
 					ConcurrencyQuota: 2,
+					MemoryBytesQuota: math.MaxInt64,
 				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
@@ -313,6 +318,7 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 		},
 		Resources: query.ResourceManagement{
 			ConcurrencyQuota: 2,
+			MemoryBytesQuota: math.MaxInt64,
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			fromID: {
