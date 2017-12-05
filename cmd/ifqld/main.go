@@ -38,9 +38,13 @@ type options struct {
 	IDFile            flags.Filename `long:"id-file" description:"Path to file that persists ifqld id" env:"ID_FILE" default:"./ifqld.id"`
 	ReportingDisabled bool           `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
 	Verbose           bool           `short:"v" long:"verbose" description:"Log more verbose debugging output"`
+	ConcurrencyQuota  int            `short:"c" long:"concurrency-quota" description:"Maximum concurrency allowed" env:"CONCURRENCY_QUOTA"`
+	MemoryBytesQuota  int            `short:"m" long:"memory-quota" description:"Approximate maximum memory usage allowed in bytes" env:"MEMORY_BYTES_QUOTA"`
 }
 
-var opts options
+var opts = options{
+	ConcurrencyQuota: runtime.NumCPU() * 2,
+}
 var controller *ifql.Controller
 
 var functionCounter = prometheus.NewCounterVec(
@@ -76,7 +80,9 @@ func main() {
 		os.Exit(code)
 	}
 	c, err := ifql.NewController(ifql.Options{
-		Hosts: opts.Hosts,
+		Hosts:            opts.Hosts,
+		ConcurrencyQuota: opts.ConcurrencyQuota,
+		MemoryBytesQuota: opts.MemoryBytesQuota,
 	})
 	if err != nil {
 		log.Fatal(err)

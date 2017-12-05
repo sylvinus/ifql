@@ -26,6 +26,9 @@ type Options struct {
 	Verbose bool
 	Trace   bool
 	Hosts   []string
+
+	ConcurrencyQuota int
+	MemoryBytesQuota int
 }
 
 var emptyOptions = new(Options)
@@ -92,8 +95,8 @@ func NewController(opts Options) (*Controller, error) {
 		return nil, errors.Wrap(err, "failed to create storage reader")
 	}
 	c := control.Config{
-		ConcurrencyQuota: 10,
-		MemoryBytesQuota: 1e9,
+		ConcurrencyQuota: opts.ConcurrencyQuota,
+		MemoryBytesQuota: int64(opts.MemoryBytesQuota),
 		ExecutorConfig: execute.Config{
 			StorageReader: s,
 		},
