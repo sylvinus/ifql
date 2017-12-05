@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"log"
 	"math"
 	"sync"
 	"time"
@@ -74,7 +73,8 @@ func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query,
 		ctx:    cctx,
 		cancel: cancel,
 	}
-	q.queueSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "queueing")
+	q.queueSpan, q.ctx = StartSpanFromContext(q.ctx, "queueing")
+	queueingGauge.Inc()
 
 	// Add query to the queue
 	c.newQueries <- q
@@ -105,7 +105,6 @@ func (c *Controller) Queries() []*Query {
 func (c *Controller) run() {
 	pq := newPriorityQueue()
 	for {
-		log.Println("Controller", c.availableConcurrency, c.availableMemory)
 		select {
 		// Wait for resources to free
 		case q := <-c.queryDone:
@@ -213,7 +212,7 @@ type Query struct {
 	queueSpan,
 	planSpan,
 	requeueSpan,
-	executeSpan opentracing.Span
+	executeSpan *span
 
 	plan *plan.PlanSpec
 
@@ -231,19 +230,37 @@ func (q *Query) Cancel() {
 	if q.state != Errored {
 		q.state = Canceled
 	}
-	q.c.queryDone <- q
-	close(q.ready)
 }
 
 func (q *Query) Done() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.state == Executing {
+	switch q.state {
+	case Queueing:
+		queueingGauge.Dec()
+	case Planning:
+		planningGauge.Dec()
+	case Requeueing:
+		requeueingGauge.Dec()
+	case Executing:
 		q.executeSpan.Finish()
+		executingGauge.Dec()
+
 		q.state = Finished
-		q.c.queryDone <- q
-		close(q.ready)
+	case Canceled:
 	}
+	q.c.queryDone <- q
+	close(q.ready)
+	q.recordMetrics()
+}
+
+func (q *Query) recordMetrics() {
+	queueingHist.Observe(q.queueSpan.Duration.Seconds())
+	if q.requeueSpan != nil {
+		requeueingHist.Observe(q.requeueSpan.Duration.Seconds())
+	}
+	planningHist.Observe(q.planSpan.Duration.Seconds())
+	executingHist.Observe(q.executeSpan.Duration.Seconds())
 }
 
 func (q *Query) State() State {
@@ -285,7 +302,10 @@ func (q *Query) tryRequeue() bool {
 	q.mu.Lock()
 	if q.state == Planning {
 		q.planSpan.Finish()
-		q.requeueSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "requeueing")
+		planningGauge.Dec()
+
+		q.requeueSpan, q.ctx = StartSpanFromContext(q.ctx, "requeueing")
+		requeueingGauge.Inc()
 
 		q.state = Requeueing
 		q.mu.Unlock()
@@ -300,7 +320,10 @@ func (q *Query) tryPlan() bool {
 	q.mu.Lock()
 	if q.state == Queueing {
 		q.queueSpan.Finish()
-		q.planSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "planning")
+		queueingGauge.Dec()
+
+		q.planSpan, q.ctx = StartSpanFromContext(q.ctx, "planning")
+		planningGauge.Inc()
 
 		q.state = Planning
 		q.mu.Unlock()
@@ -317,10 +340,15 @@ func (q *Query) tryExec() bool {
 		switch q.state {
 		case Requeueing:
 			q.requeueSpan.Finish()
+			requeueingGauge.Dec()
 		case Planning:
 			q.planSpan.Finish()
+			planningGauge.Dec()
 		}
-		q.executeSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "executing")
+
+		q.executeSpan, q.ctx = StartSpanFromContext(q.ctx, "executing")
+		executingGauge.Inc()
+
 		q.state = Executing
 		q.mu.Unlock()
 		return true
@@ -360,4 +388,27 @@ func (s State) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+type span struct {
+	s        opentracing.Span
+	start    time.Time
+	Duration time.Duration
+}
+
+func StartSpanFromContext(ctx context.Context, operationName string) (*span, context.Context) {
+	start := time.Now()
+	s, sctx := opentracing.StartSpanFromContext(ctx, operationName, opentracing.StartTime(start))
+	return &span{
+		s:     s,
+		start: start,
+	}, sctx
+}
+
+func (s *span) Finish() {
+	finish := time.Now()
+	s.Duration = finish.Sub(s.start)
+	s.s.FinishWithOptions(opentracing.FinishOptions{
+		FinishTime: finish,
+	})
 }

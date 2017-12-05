@@ -3,7 +3,6 @@ package execute
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime/debug"
 
 	"github.com/influxdata/ifql/query"
@@ -188,7 +187,6 @@ func (es *executionState) do(ctx context.Context) {
 		if err != nil {
 			es.abort(err)
 		}
-		log.Println("max allocated", es.alloc.Max())
 	}()
 }
 
