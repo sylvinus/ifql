@@ -10,6 +10,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 )
 
@@ -73,6 +74,7 @@ func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query,
 		ctx:    cctx,
 		cancel: cancel,
 	}
+	q.queueSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "queueing")
 
 	// Add query to the queue
 	c.newQueries <- q
@@ -165,7 +167,7 @@ func (c *Controller) run() {
 				}
 			} else {
 				// update state to queueing
-				q.tryQueue()
+				q.tryRequeue()
 			}
 		}
 	}
@@ -208,6 +210,11 @@ type Query struct {
 	state  State
 	cancel func()
 
+	queueSpan,
+	planSpan,
+	requeueSpan,
+	executeSpan opentracing.Span
+
 	plan *plan.PlanSpec
 
 	concurrency int
@@ -231,7 +238,8 @@ func (q *Query) Cancel() {
 func (q *Query) Done() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.state != Canceled && q.state != Errored {
+	if q.state == Executing {
+		q.executeSpan.Finish()
 		q.state = Finished
 		q.c.queryDone <- q
 		close(q.ready)
@@ -272,11 +280,14 @@ func (q *Query) setResults(r []execute.Result) {
 	q.mu.Unlock()
 }
 
-// tryQueue attempts to transition the query into the Queueing state.
-func (q *Query) tryQueue() bool {
+// tryRequeue attempts to transition the query into the Requeueing state.
+func (q *Query) tryRequeue() bool {
 	q.mu.Lock()
 	if q.state == Planning {
-		q.state = Queueing
+		q.planSpan.Finish()
+		q.requeueSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "requeueing")
+
+		q.state = Requeueing
 		q.mu.Unlock()
 		return true
 	}
@@ -288,6 +299,9 @@ func (q *Query) tryQueue() bool {
 func (q *Query) tryPlan() bool {
 	q.mu.Lock()
 	if q.state == Queueing {
+		q.queueSpan.Finish()
+		q.planSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "planning")
+
 		q.state = Planning
 		q.mu.Unlock()
 		return true
@@ -299,7 +313,14 @@ func (q *Query) tryPlan() bool {
 // tryExec attempts to transition the query into the Executing state.
 func (q *Query) tryExec() bool {
 	q.mu.Lock()
-	if q.state == Queueing || q.state == Planning {
+	if q.state == Requeueing || q.state == Planning {
+		switch q.state {
+		case Requeueing:
+			q.requeueSpan.Finish()
+		case Planning:
+			q.planSpan.Finish()
+		}
+		q.executeSpan, q.ctx = opentracing.StartSpanFromContext(q.ctx, "executing")
 		q.state = Executing
 		q.mu.Unlock()
 		return true
@@ -313,6 +334,7 @@ type State int
 const (
 	Queueing State = iota
 	Planning
+	Requeueing
 	Executing
 	Errored
 	Finished
@@ -325,6 +347,8 @@ func (s State) String() string {
 		return "queueing"
 	case Planning:
 		return "planning"
+	case Requeueing:
+		return "requeing"
 	case Executing:
 		return "executing"
 	case Errored:

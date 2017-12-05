@@ -19,6 +19,7 @@ import (
 	"github.com/influxdata/influxdb/models"
 	client "github.com/influxdata/usage-client/v1"
 	"github.com/jessevdk/go-flags"
+	opentracing "github.com/opentracing/opentracing-go"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -104,6 +105,9 @@ func main() {
 
 // HandleQuery interprets and executes ifql syntax and returns results
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
+	span, ctx := opentracing.StartSpanFromContext(req.Context(), "query")
+	defer span.Finish()
+
 	atomic.AddInt64(&queryCount, 1)
 	queryCounter.Inc()
 
@@ -120,7 +124,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		q, err = controller.Query(req.Context(), spec)
+		q, err = controller.Query(ctx, spec)
 	} else {
 		query := req.FormValue("q")
 		if query == "" {
@@ -132,7 +136,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			log.Print(query)
 		}
 
-		spec, err := ifql.QuerySpec(req.Context(), query)
+		spec, err := ifql.QuerySpec(ctx, query)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
@@ -145,7 +149,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			encodeJSON(w, http.StatusOK, spec)
 			return
 		}
-		q, err = controller.Query(req.Context(), spec)
+		q, err = controller.Query(ctx, spec)
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
