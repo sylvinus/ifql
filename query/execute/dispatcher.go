@@ -7,7 +7,9 @@ import (
 	"sync"
 )
 
-// Dispatcher schedules work.
+// Dispatcher schedules work for a query.
+// Each transformation submits work to be done to the dispatcher.
+// Then the dispatcher schedules to work based on the available resources.
 type Dispatcher interface {
 	// Schedule fn to be executed
 	Schedule(fn ScheduleFunc)

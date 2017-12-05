@@ -13,6 +13,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Controller provides a central location to manage all incoming queries.
+// The controller is responsible for queueing, planning, and executing queries.
 type Controller struct {
 	newQueries    chan *Query
 	lastID        QueryID
@@ -92,6 +94,7 @@ func (c *Controller) nextID() QueryID {
 	return c.lastID
 }
 
+// Queries reports the active queries.
 func (c *Controller) Queries() []*Query {
 	c.queriesMu.RLock()
 	defer c.queriesMu.RUnlock()
@@ -191,6 +194,7 @@ func (c *Controller) free(q *Query) {
 	}
 }
 
+// Query represents a single request.
 type Query struct {
 	id QueryID
 	c  *Controller
@@ -201,6 +205,9 @@ type Query struct {
 	err error
 
 	ready chan<- []execute.Result
+	// Ready is a channel that will deliver the query results.
+	// The channel may be closed before any results arrive, in which case the query should be
+	// inspected for an error using Err().
 	Ready <-chan []execute.Result
 
 	ctx context.Context
@@ -220,9 +227,13 @@ type Query struct {
 	memory      int64
 }
 
+// ID reports an ephemeral unique ID for the query.
 func (q *Query) ID() QueryID {
 	return q.id
 }
+
+// Cancel will stop the query execution.
+// Done must still be called to free resources.
 func (q *Query) Cancel() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -230,8 +241,20 @@ func (q *Query) Cancel() {
 	if q.state != Errored {
 		q.state = Canceled
 	}
+	// Finish the query immediately.
+	// This allows for receiving from the Ready channel in the same goroutine
+	// that has called defer q.Done()
+	q.finish()
 }
 
+// finish informs the controller and the Ready channel that the query is finished.
+func (q *Query) finish() {
+	q.c.queryDone <- q
+	close(q.ready)
+	q.recordMetrics()
+}
+
+// Done must always be called to free resources.
 func (q *Query) Done() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -247,11 +270,15 @@ func (q *Query) Done() {
 		executingGauge.Dec()
 
 		q.state = Finished
+	case Errored:
+		// nothing to do, simply finish
 	case Canceled:
+		// The query has already been finished in the call to Cancel.
+		return
+	default:
+		panic("unreachable, all states have been accounted for")
 	}
-	q.c.queryDone <- q
-	close(q.ready)
-	q.recordMetrics()
+	q.finish()
 }
 
 func (q *Query) recordMetrics() {
@@ -263,6 +290,7 @@ func (q *Query) recordMetrics() {
 	executingHist.Observe(q.executeSpan.Duration.Seconds())
 }
 
+// State reports the current state of the query.
 func (q *Query) State() State {
 	q.mu.Lock()
 	s := q.state
@@ -276,6 +304,8 @@ func (q *Query) isOK() bool {
 	q.mu.Unlock()
 	return ok
 }
+
+// Err reports any error the query may have encountered.
 func (q *Query) Err() error {
 	q.mu.Lock()
 	err := q.err
@@ -357,6 +387,7 @@ func (q *Query) tryExec() bool {
 	return false
 }
 
+// State is the query state.
 type State int
 
 const (
@@ -390,6 +421,8 @@ func (s State) String() string {
 	}
 }
 
+// span is a simple wrapper around opentracing.Span in order to
+// get access to the duration of the span for metrics reporting.
 type span struct {
 	s        opentracing.Span
 	start    time.Time
