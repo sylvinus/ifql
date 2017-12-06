@@ -33,24 +33,26 @@ func newResultSink() *resultSink {
 	}
 }
 
-func (s *resultSink) RetractBlock(DatasetID, BlockMetadata) {
+func (s *resultSink) RetractBlock(DatasetID, BlockMetadata) error {
 	//TODO implement
+	return nil
 }
 
-func (s *resultSink) Process(id DatasetID, b Block) {
+func (s *resultSink) Process(id DatasetID, b Block) error {
 	select {
 	case s.blocks <- resultMessage{
 		block: b,
 	}:
 	case <-s.aborted:
 	}
+	return nil
 }
 
 func (s *resultSink) Blocks() BlockIterator {
 	return s
 }
 
-func (s *resultSink) Do(f func(Block)) error {
+func (s *resultSink) Do(f func(Block) error) error {
 	for {
 		select {
 		case err := <-s.abortErr:
@@ -62,16 +64,20 @@ func (s *resultSink) Do(f func(Block)) error {
 			if msg.err != nil {
 				return msg.err
 			}
-			f(msg.block)
+			if err := f(msg.block); err != nil {
+				return err
+			}
 		}
 	}
 }
 
-func (s *resultSink) UpdateWatermark(id DatasetID, mark Time) {
+func (s *resultSink) UpdateWatermark(id DatasetID, mark Time) error {
 	//Nothing to do
+	return nil
 }
-func (s *resultSink) UpdateProcessingTime(id DatasetID, t Time) {
+func (s *resultSink) UpdateProcessingTime(id DatasetID, t Time) error {
 	//Nothing to do
+	return nil
 }
 func (s *resultSink) SetParents(ids []DatasetID) {
 }

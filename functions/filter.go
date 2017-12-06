@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"errors"
 	"fmt"
 	"log"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/pkg/errors"
 )
 
 const FilterKind = "filter"
@@ -92,7 +92,7 @@ func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationM
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache()
+	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewFilterTransformation(d, cache, s)
 	return t, d, nil
@@ -149,11 +149,11 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 	}
 }
 
-func (t *filterTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
-	t.d.RetractBlock(execute.ToBlockKey(meta))
+func (t *filterTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) error {
+	return t.d.RetractBlock(execute.ToBlockKey(meta))
 }
 
-func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	builder, new := t.cache.BlockBuilder(b)
 	if new {
 		execute.AddBlockCols(b, builder)
@@ -188,8 +188,7 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) {
 	valueCol := cols[valueIdx]
 	exprErr := t.ces[valueCol.Type]
 	if exprErr.Err != nil {
-		log.Printf("expression does not support type %v: %v", valueCol.Type, exprErr.Err)
-		return
+		return errors.Wrapf(exprErr.Err, "expression does not support type %v", valueCol.Type)
 	}
 	ce := exprErr.Expr
 
@@ -228,13 +227,14 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) {
 			}
 		}
 	})
+	return nil
 }
 
-func (t *filterTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
-	t.d.UpdateWatermark(mark)
+func (t *filterTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *filterTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *filterTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *filterTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)

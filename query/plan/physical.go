@@ -2,8 +2,10 @@ package plan
 
 import (
 	"errors"
+	"math"
 	"time"
 
+	"github.com/influxdata/ifql/query"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -16,6 +18,8 @@ type PlanSpec struct {
 	Order      []ProcedureID
 	// Results is a list of datasets that are the result of the plan
 	Results []ProcedureID
+
+	Resources query.ResourceManagement
 }
 
 func (p *PlanSpec) Do(f func(pr *Procedure)) {
@@ -47,6 +51,7 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		Now:        now,
 		Procedures: make(map[ProcedureID]*Procedure, len(lp.Procedures)),
 		Order:      make([]ProcedureID, 0, len(lp.Order)),
+		Resources:  lp.Resources,
 	}
 
 	// Find the datasets that are results and populate mappings
@@ -91,6 +96,15 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 
 	if p.plan.Bounds.Start.IsZero() && p.plan.Bounds.Stop.IsZero() {
 		return nil, errors.New("unbounded queries are not supported. Add a '.range' call to bound the query.")
+	}
+
+	// Update concurrency quota
+	if p.plan.Resources.ConcurrencyQuota == 0 {
+		p.plan.Resources.ConcurrencyQuota = len(p.plan.Procedures)
+	}
+	// Update memory quota
+	if p.plan.Resources.MemoryBytesQuota == 0 {
+		p.plan.Resources.MemoryBytesQuota = math.MaxInt64
 	}
 
 	return p.plan, nil

@@ -579,7 +579,7 @@ func TestFixedWindow_Process(t *testing.T) {
 			stop := start + execute.Time(time.Hour)
 
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			c := execute.NewBlockBuilderCache()
+			c := execute.NewBlockBuilderCache(executetest.UnlimitedAllocator)
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 			fw := functions.NewFixedWindowTransformation(
@@ -628,7 +628,9 @@ func TestFixedWindow_Process(t *testing.T) {
 			}
 
 			parentID := executetest.RandomDatasetID()
-			fw.Process(parentID, block0)
+			if err := fw.Process(parentID, block0); err != nil {
+				t.Fatal(err)
+			}
 
 			got := executetest.BlocksFromCache(c)
 

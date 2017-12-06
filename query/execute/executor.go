@@ -19,7 +19,6 @@ type executor struct {
 }
 
 type Config struct {
-	Trace         bool
 	StorageReader StorageReader
 }
 
@@ -34,10 +33,18 @@ type executionState struct {
 	p *plan.PlanSpec
 	c *Config
 
+	alloc *Allocator
+
+	resources query.ResourceManagement
+
 	bounds Bounds
 
 	results []Result
-	runners []Runner
+	sources []Source
+
+	transports []Transport
+
+	dispatcher *poolDispatcher
 }
 
 func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
@@ -49,11 +56,27 @@ func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, err
 	return es.results, nil
 }
 
+func validatePlan(p *plan.PlanSpec) error {
+	if p.Resources.ConcurrencyQuota == 0 {
+		return errors.New("plan must have a non-zero concurrency quota")
+	}
+	return nil
+}
+
 func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (*executionState, error) {
+	if err := validatePlan(p); err != nil {
+		return nil, errors.Wrap(err, "invalid plan")
+	}
 	es := &executionState{
-		p:       p,
-		c:       &e.c,
-		results: make([]Result, len(p.Results)),
+		p: p,
+		c: &e.c,
+		alloc: &Allocator{
+			Limit: p.Resources.MemoryBytesQuota,
+		},
+		resources: p.Resources,
+		results:   make([]Result, len(p.Results)),
+		// TODO(nathanielc): Have the planner specify the dispatcher throughput
+		dispatcher: newPoolDispatcher(10),
 		bounds: Bounds{
 			Start: Time(p.Bounds.Start.Time(p.Now).UnixNano()),
 			Stop:  Time(p.Bounds.Stop.Time(p.Now).UnixNano()),
@@ -82,7 +105,7 @@ type triggeringSpec interface {
 func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (Node, error) {
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
 		s := createS(pr.Spec, DatasetID(pr.ID), es.c.StorageReader, es)
-		es.runners = append(es.runners, s)
+		es.sources = append(es.sources, s)
 		return s, nil
 	}
 
@@ -109,9 +132,9 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 		if err != nil {
 			return nil, err
 		}
-		transport := newTransformationTransport(t)
+		transport := newConescutiveTransport(es.dispatcher, t)
+		es.transports = append(es.transports, transport)
 		parent.AddTransformation(transport)
-		es.runners = append(es.runners, transport)
 		parentIDs[i] = DatasetID(parentID)
 	}
 	t.SetParents(parentIDs)
@@ -125,18 +148,13 @@ func (es *executionState) abort(err error) {
 	}
 }
 
-type Runner interface {
-	Run(ctx context.Context)
-}
-
 func (es *executionState) do(ctx context.Context) {
-	for _, r := range es.runners {
-		go func(r Runner) {
+	for _, src := range es.sources {
+		go func(src Source) {
+			// Setup panic handling on the source goroutines
 			defer func() {
 				if e := recover(); e != nil {
 					// We had a panic, abort the entire execution.
-					//TODO(nathanielc): Only abort results that were effected by the panic?
-					// This requires tracing the Runner through the execution DAG.
 					var err error
 					switch e := e.(type) {
 					case error:
@@ -144,16 +162,32 @@ func (es *executionState) do(ctx context.Context) {
 					default:
 						err = fmt.Errorf("%v", e)
 					}
-					if es.c.Trace {
-						es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
-					} else {
-						es.abort(errors.Wrap(err, "panic"))
-					}
+					es.abort(fmt.Errorf("panic: %v\n%s", err, debug.Stack()))
 				}
 			}()
-			r.Run(ctx)
-		}(r)
+			src.Run(ctx)
+		}(src)
 	}
+	es.dispatcher.Start(es.resources.ConcurrencyQuota, ctx)
+	go func() {
+		// Wait for all transports to finish
+		for _, t := range es.transports {
+			select {
+			case <-t.Finished():
+			case <-ctx.Done():
+				es.abort(errors.New("context done"))
+			case err := <-es.dispatcher.Err():
+				if err != nil {
+					es.abort(err)
+				}
+			}
+		}
+		// Check for any errors on the dispatcher
+		err := es.dispatcher.Stop()
+		if err != nil {
+			es.abort(err)
+		}
+	}()
 }
 
 // Satisfy the ExecutionContext interface
@@ -163,4 +197,8 @@ func (es *executionState) ResolveTime(qt query.Time) Time {
 }
 func (es *executionState) Bounds() Bounds {
 	return es.bounds
+}
+
+func (es *executionState) Allocator() *Allocator {
+	return es.alloc
 }

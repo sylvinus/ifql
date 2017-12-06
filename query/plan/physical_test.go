@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -19,6 +20,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 		{
 			name: "single push down",
 			lp: &plan.LogicalPlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
 				Procedures: map[plan.ProcedureID]*plan.Procedure{
 					plan.ProcedureIDFromOperationID("from"): {
 						ID: plan.ProcedureIDFromOperationID("from"),
@@ -60,6 +65,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			},
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
 						IsRelative: true,
@@ -120,6 +129,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				},
 			},
 			pp: &plan.PlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: math.MaxInt64,
+				},
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
 				Bounds: plan.BoundsSpec{
 					Start: query.MinTime,
@@ -207,6 +220,10 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 			},
 			pp: &plan.PlanSpec{
 				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 2,
+					MemoryBytesQuota: math.MaxInt64,
+				},
 				Bounds: plan.BoundsSpec{
 					Start: query.Time{
 						IsRelative: true,
@@ -298,6 +315,10 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 		Bounds: plan.BoundsSpec{
 			Start: query.MinTime,
 			Stop:  query.Now,
+		},
+		Resources: query.ResourceManagement{
+			ConcurrencyQuota: 2,
+			MemoryBytesQuota: math.MaxInt64,
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
 			fromID: {

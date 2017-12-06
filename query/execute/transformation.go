@@ -8,10 +8,10 @@ import (
 )
 
 type Transformation interface {
-	RetractBlock(id DatasetID, meta BlockMetadata)
-	Process(id DatasetID, b Block)
-	UpdateWatermark(id DatasetID, t Time)
-	UpdateProcessingTime(id DatasetID, t Time)
+	RetractBlock(id DatasetID, meta BlockMetadata) error
+	Process(id DatasetID, b Block) error
+	UpdateWatermark(id DatasetID, t Time) error
+	UpdateProcessingTime(id DatasetID, t Time) error
 	Finish(id DatasetID, err error)
 	SetParents(ids []DatasetID)
 }
@@ -19,6 +19,7 @@ type Transformation interface {
 type Context interface {
 	ResolveTime(qt query.Time) Time
 	Bounds() Bounds
+	Allocator() *Allocator
 }
 
 type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, ctx Context) (Transformation, Dataset, error)

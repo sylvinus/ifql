@@ -95,7 +95,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				0,
 				1,
@@ -134,7 +134,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				0,
 				2,
@@ -168,7 +168,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				1,
 				3,
@@ -202,7 +202,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				0,
 				3,
@@ -235,7 +235,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				1,
 				4,
@@ -267,7 +267,7 @@ func TestSample_Process(t *testing.T) {
 					{execute.Time(80), 3.0, "a", "y"},
 					{execute.Time(90), 10.0, "a", "x"},
 				},
-			}),
+			}, executetest.UnlimitedAllocator),
 			want: [][]int{{
 				2,
 				5,

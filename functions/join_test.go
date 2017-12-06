@@ -738,7 +738,7 @@ func TestMergeJoin_Process(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			c := functions.NewMergeJoinCache(joinExpr)
+			c := functions.NewMergeJoinCache(joinExpr, executetest.UnlimitedAllocator)
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
 			jt := functions.NewMergeJoinTransformation(d, c, tc.spec)
 
@@ -752,10 +752,14 @@ func TestMergeJoin_Process(t *testing.T) {
 			}
 			for i := 0; i < l; i++ {
 				if i < len(tc.data0) {
-					jt.Process(parentID0, tc.data0[i])
+					if err := jt.Process(parentID0, tc.data0[i]); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if i < len(tc.data1) {
-					jt.Process(parentID1, tc.data1[i])
+					if err := jt.Process(parentID1, tc.data1[i]); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 

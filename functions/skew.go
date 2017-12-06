@@ -51,7 +51,7 @@ type SkewAgg struct {
 }
 
 func createSkewTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SkewAgg))
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SkewAgg), ctx.Allocator())
 	return t, d, nil
 }
 

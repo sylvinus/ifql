@@ -15,6 +15,7 @@ import (
 	"github.com/influxdata/ifql/query"
 
 	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/query/control"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
 	"github.com/pkg/errors"
@@ -25,12 +26,15 @@ type Options struct {
 	Verbose bool
 	Trace   bool
 	Hosts   []string
+
+	ConcurrencyQuota int
+	MemoryBytesQuota int
 }
 
 var emptyOptions = new(Options)
 
-// Query parses the queryStr according to opts, plans, and returns results and the query specification
-func Query(ctx context.Context, queryStr string, opts *Options) ([]execute.Result, *query.QuerySpec, error) {
+// ExecuteQuery parses the queryStr according to opts, plans, and returns results and the query specification
+func ExecuteQuery(ctx context.Context, queryStr string, opts *Options) ([]execute.Result, *query.QuerySpec, error) {
 	if opts == nil {
 		opts = new(Options)
 	}
@@ -68,8 +72,6 @@ func QueryWithSpec(ctx context.Context, qSpec *query.QuerySpec, opts *Options) (
 	}
 
 	var c execute.Config
-	c.Trace = opts.Trace
-
 	s, err := execute.NewStorageReader(opts.Hosts)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to create storage reader")
@@ -82,4 +84,22 @@ func QueryWithSpec(ctx context.Context, qSpec *query.QuerySpec, opts *Options) (
 		return nil, nil, errors.Wrap(err, "failed to execute query")
 	}
 	return r, qSpec, nil
+}
+
+type Controller = control.Controller
+type Query = control.Query
+
+func NewController(opts Options) (*Controller, error) {
+	s, err := execute.NewStorageReader(opts.Hosts)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create storage reader")
+	}
+	c := control.Config{
+		ConcurrencyQuota: opts.ConcurrencyQuota,
+		MemoryBytesQuota: int64(opts.MemoryBytesQuota),
+		ExecutorConfig: execute.Config{
+			StorageReader: s,
+		},
+	}
+	return control.New(c), nil
 }

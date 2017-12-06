@@ -1,13 +1,13 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -19,6 +19,7 @@ import (
 	"github.com/influxdata/influxdb/models"
 	client "github.com/influxdata/usage-client/v1"
 	"github.com/jessevdk/go-flags"
+	opentracing "github.com/opentracing/opentracing-go"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -37,11 +38,14 @@ type options struct {
 	IDFile            flags.Filename `long:"id-file" description:"Path to file that persists ifqld id" env:"ID_FILE" default:"./ifqld.id"`
 	ReportingDisabled bool           `short:"r" long:"reporting-disabled" description:"Disable reporting of usage stats (os,arch,version,cluster_id,uptime,queryCount) once every 4hrs" env:"REPORTING_DISABLED"`
 	Verbose           bool           `short:"v" long:"verbose" description:"Log more verbose debugging output"`
+	ConcurrencyQuota  int            `short:"c" long:"concurrency-quota" description:"Maximum concurrency allowed" env:"CONCURRENCY_QUOTA"`
+	MemoryBytesQuota  int            `short:"m" long:"memory-quota" description:"Approximate maximum memory usage allowed in bytes" env:"MEMORY_BYTES_QUOTA"`
 }
 
-var hosts []string
-var storageReader execute.StorageReader
-var option options
+var opts = options{
+	ConcurrencyQuota: runtime.NumCPU() * 2,
+}
+var controller *ifql.Controller
 
 var functionCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -62,7 +66,7 @@ func init() {
 }
 
 func main() {
-	parser := flags.NewParser(&option, flags.Default)
+	parser := flags.NewParser(&opts, flags.Default)
 	parser.ShortDescription = `IFQLD`
 	parser.LongDescription = `Options for the IFQLD server`
 
@@ -75,12 +79,22 @@ func main() {
 		}
 		os.Exit(code)
 	}
+	c, err := ifql.NewController(ifql.Options{
+		Hosts:            opts.Hosts,
+		ConcurrencyQuota: opts.ConcurrencyQuota,
+		MemoryBytesQuota: opts.MemoryBytesQuota,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	controller = c
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
+	http.Handle("/queries", http.HandlerFunc(HandleQueries))
 
-	if !option.ReportingDisabled {
-		id := ID(string(option.IDFile))
+	if !opts.ReportingDisabled {
+		id := ID(string(opts.IDFile))
 		go reportUsageStats(id)
 	}
 
@@ -88,33 +102,8 @@ func main() {
 		defer tr.Close()
 	}
 
-	hosts = option.Hosts
-	log.Printf("Starting version %s on %s\n", version, option.Addr)
-	log.Fatal(http.ListenAndServe(option.Addr, nil))
-}
-
-func ifqlQuery(ctx context.Context, query string, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
-	return ifql.Query(
-		ctx,
-		query,
-		&ifql.Options{
-			Verbose: verbose,
-			Trace:   trace,
-			Hosts:   hosts,
-		},
-	)
-}
-
-func ifqlSpecQuery(ctx context.Context, spec *query.QuerySpec, verbose, trace bool) ([]execute.Result, *query.QuerySpec, error) {
-	return ifql.QueryWithSpec(
-		ctx,
-		spec,
-		&ifql.Options{
-			Verbose: verbose,
-			Trace:   trace,
-			Hosts:   hosts,
-		},
-	)
+	log.Printf("Starting version %s on %s\n", version, opts.Addr)
+	log.Fatal(http.ListenAndServe(opts.Addr, nil))
 }
 
 // TODO (pauldix): pull all this out into a server object that can
@@ -122,19 +111,18 @@ func ifqlSpecQuery(ctx context.Context, spec *query.QuerySpec, verbose, trace bo
 
 // HandleQuery interprets and executes ifql syntax and returns results
 func HandleQuery(w http.ResponseWriter, req *http.Request) {
+	span, ctx := opentracing.StartSpanFromContext(req.Context(), "query")
+	defer span.Finish()
+
 	atomic.AddInt64(&queryCount, 1)
 	queryCounter.Inc()
 
 	var (
-		results []execute.Result
-		spec    *query.QuerySpec
-		err     error
+		q   *ifql.Query
+		err error
 	)
-	verbose := req.FormValue("verbose") != ""
-	trace := req.FormValue("trace") != ""
-
 	if req.Header.Get("Content-type") == "application/json" {
-		spec = new(query.QuerySpec)
+		spec := new(query.QuerySpec)
 		if err := json.NewDecoder(req.Body).Decode(spec); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
@@ -142,7 +130,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		results, spec, err = ifqlSpecQuery(req.Context(), spec, verbose, trace)
+		q, err = controller.Query(ctx, spec)
 	} else {
 		query := req.FormValue("q")
 		if query == "" {
@@ -150,34 +138,34 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte("must pass query in q parameter"))
 			return
 		}
-		if option.Verbose {
+		if opts.Verbose {
 			log.Print(query)
+		}
+
+		spec, err := ifql.QuerySpec(ctx, query)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
+			log.Println("Error:", err)
+			return
 		}
 
 		analyze := req.FormValue("analyze") != ""
 		if analyze {
-			spec, err = ifql.QuerySpec(req.Context(), query)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
-				log.Println("Error:", err)
-				return
-			}
-
 			encodeJSON(w, http.StatusOK, spec)
 			return
 		}
-		results, spec, err = ifqlQuery(req.Context(), query, verbose, trace)
+		q, err = controller.Query(ctx, spec)
 	}
-
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
+		w.Write([]byte(fmt.Sprintf("Error constructing query %s", err.Error())))
 		log.Println("Error:", err)
 		return
 	}
+	defer q.Done()
 
-	funcs, err := spec.Functions()
+	funcs, err := q.Spec.Functions()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error analyzing query %s", err.Error())))
@@ -185,8 +173,8 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if option.Verbose {
-		if octets, err := json.MarshalIndent(spec, "", "    "); err == nil {
+	if opts.Verbose {
+		if octets, err := json.MarshalIndent(q.Spec, "", "    "); err == nil {
 			log.Print(string(octets))
 		}
 	}
@@ -195,6 +183,14 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		functionCounter.WithLabelValues(f).Inc()
 	}
 
+	results, ok := <-q.Ready
+	if !ok {
+		err := q.Err()
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
+		log.Println("Error:", err)
+		return
+	}
 	switch req.Header.Get("Accept") {
 	case "application/json":
 		writeJSONChunks(results, w)
@@ -203,10 +199,36 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+type QueriesResponse struct {
+	Queries []Query
+}
+
+type Query struct {
+	ID    string
+	State string
+}
+
+// HandleQueries returns the running queries
+func HandleQueries(w http.ResponseWriter, req *http.Request) {
+	qs := controller.Queries()
+	var queries QueriesResponse
+	queries.Queries = make([]Query, len(qs))
+	for i, q := range qs {
+		queries.Queries[i] = Query{
+			ID:    strconv.FormatUint(uint64(q.ID()), 10),
+			State: q.State().String(),
+		}
+	}
+	err := json.NewEncoder(w).Encode(queries)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 func iterateResults(r execute.Result, f func(measurement, fieldName string, tags map[string]string, value interface{}, t time.Time)) {
 	blocks := r.Blocks()
 
-	err := blocks.Do(func(b execute.Block) {
+	err := blocks.Do(func(b execute.Block) error {
 
 		times := b.Times()
 		times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
@@ -253,6 +275,7 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 				f(measurement, fieldName, tags, value, time.Time())
 			}
 		})
+		return nil
 	})
 	if err != nil {
 		log.Println("Error iterating through results:", err)
@@ -279,24 +302,22 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 	for _, r := range results {
 		blocks := r.Blocks()
 
-		err := blocks.Do(func(b execute.Block) {
+		err := blocks.Do(func(b execute.Block) error {
 			seriesID++
 
 			// output header
 			h := header{SeriesID: seriesID, Tags: b.Tags()}
 			bb, err := json.Marshal(h)
 			if err != nil {
-				log.Println("error marshaling header: ", err.Error())
-				return
+				return err
 			}
 			_, err = w.Write(bb)
 			if err != nil {
-				log.Println("error writing header: ", err.Error())
-				return
+				return err
 			}
 			_, err = w.Write([]byte("\n"))
 			if err != nil {
-				log.Println("error writing newline: ", err.Error())
+				return err
 			}
 
 			times := b.Times()
@@ -348,15 +369,12 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 				}
 				w.(http.Flusher).Flush()
 			})
+			return nil
 		})
 		if err != nil {
 			log.Println("Error iterating through results:", err)
 		}
 	}
-}
-
-func writeJSONResults(results []execute.Result, w http.ResponseWriter) {
-
 }
 
 func writeLineResults(results []execute.Result, w http.ResponseWriter) {

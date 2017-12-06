@@ -18,8 +18,8 @@ type indexSelectorTransformation struct {
 	selector IndexSelector
 }
 
-func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, useRowTime bool) (*rowSelectorTransformation, Dataset) {
-	cache := NewBlockBuilderCache()
+func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, useRowTime bool, a *Allocator) (*rowSelectorTransformation, Dataset) {
+	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewRowSelectorTransformation(d, cache, bounds, selector, useRowTime), d
 }
@@ -30,8 +30,8 @@ func NewRowSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds,
 	}
 }
 
-func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, useRowTime bool) (*indexSelectorTransformation, Dataset) {
-	cache := NewBlockBuilderCache()
+func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, useRowTime bool, a *Allocator) (*indexSelectorTransformation, Dataset) {
+	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewIndexSelectorTransformation(d, cache, bounds, selector, useRowTime), d
 }
@@ -51,16 +51,16 @@ func newSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, us
 	}
 }
 
-func (t *selectorTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
+func (t *selectorTransformation) RetractBlock(id DatasetID, meta BlockMetadata) error {
 	//TODO(nathanielc): Store intermediate state for retractions
 	key := ToBlockKey(meta)
-	t.d.RetractBlock(key)
+	return t.d.RetractBlock(key)
 }
-func (t *selectorTransformation) UpdateWatermark(id DatasetID, mark Time) {
-	t.d.UpdateWatermark(mark)
+func (t *selectorTransformation) UpdateWatermark(id DatasetID, mark Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *selectorTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *selectorTransformation) UpdateProcessingTime(id DatasetID, pt Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *selectorTransformation) Finish(id DatasetID, err error) {
 	t.d.Finish(err)
@@ -89,7 +89,7 @@ func (t *selectorTransformation) setupBuilder(b Block) (BlockBuilder, []int, Col
 	return builder, colMap, valueCol
 }
 
-func (t *indexSelectorTransformation) Process(id DatasetID, b Block) {
+func (t *indexSelectorTransformation) Process(id DatasetID, b Block) error {
 	builder, colMap, valueCol := t.setupBuilder(b)
 
 	values := b.Values()
@@ -125,9 +125,10 @@ func (t *indexSelectorTransformation) Process(id DatasetID, b Block) {
 			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
 		})
 	}
+	return nil
 }
 
-func (t *rowSelectorTransformation) Process(id DatasetID, b Block) {
+func (t *rowSelectorTransformation) Process(id DatasetID, b Block) error {
 	builder, colMap, valueCol := t.setupBuilder(b)
 
 	values := b.Values()
@@ -157,6 +158,7 @@ func (t *rowSelectorTransformation) Process(id DatasetID, b Block) {
 
 	rows := rower.Rows()
 	t.appendRows(builder, rows, colMap, b.Bounds().Stop)
+	return nil
 }
 
 func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, builder BlockBuilder, rr RowReader, stop Time) {

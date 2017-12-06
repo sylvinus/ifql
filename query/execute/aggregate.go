@@ -18,19 +18,19 @@ func NewAggregateTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, a
 	}
 }
 
-func NewAggregateTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, agg Aggregate) (*aggregateTransformation, Dataset) {
-	cache := NewBlockBuilderCache()
+func NewAggregateTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, agg Aggregate, a *Allocator) (*aggregateTransformation, Dataset) {
+	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewAggregateTransformation(d, cache, bounds, agg), d
 }
 
-func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata) {
+func (t *aggregateTransformation) RetractBlock(id DatasetID, meta BlockMetadata) error {
 	//TODO(nathanielc): Store intermediate state for retractions
 	key := ToBlockKey(meta)
-	t.d.RetractBlock(key)
+	return t.d.RetractBlock(key)
 }
 
-func (t *aggregateTransformation) Process(id DatasetID, b Block) {
+func (t *aggregateTransformation) Process(id DatasetID, b Block) error {
 	cols := b.Cols()
 	valueCol := ValueCol(cols)
 
@@ -100,13 +100,14 @@ func (t *aggregateTransformation) Process(id DatasetID, b Block) {
 		v := vf.(StringValueFunc)
 		builder.AppendString(1, v.ValueString())
 	}
+	return nil
 }
 
-func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) {
-	t.d.UpdateWatermark(mark)
+func (t *aggregateTransformation) UpdateWatermark(id DatasetID, mark Time) error {
+	return t.d.UpdateWatermark(mark)
 }
-func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) {
-	t.d.UpdateProcessingTime(pt)
+func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) error {
+	return t.d.UpdateProcessingTime(pt)
 }
 func (t *aggregateTransformation) Finish(id DatasetID, err error) {
 	t.d.Finish(err)

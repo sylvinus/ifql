@@ -310,14 +310,16 @@ func TestRowSelector_Process(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			c := execute.NewBlockBuilderCache()
+			c := execute.NewBlockBuilderCache(executetest.UnlimitedAllocator)
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 			selector := execute.NewRowSelectorTransformation(d, c, tc.bounds, new(functions.MinSelector), tc.useRowTime)
 
 			parentID := executetest.RandomDatasetID()
 			for _, b := range tc.data {
-				selector.Process(parentID, b)
+				if err := selector.Process(parentID, b); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			want := tc.want(tc.bounds)
@@ -632,14 +634,16 @@ func TestIndexSelector_Process(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			c := execute.NewBlockBuilderCache()
+			c := execute.NewBlockBuilderCache(executetest.UnlimitedAllocator)
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
 
 			selector := execute.NewIndexSelectorTransformation(d, c, tc.bounds, new(functions.FirstSelector), tc.useRowTime)
 
 			parentID := executetest.RandomDatasetID()
 			for _, b := range tc.data {
-				selector.Process(parentID, b)
+				if err := selector.Process(parentID, b); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			want := tc.want(tc.bounds)

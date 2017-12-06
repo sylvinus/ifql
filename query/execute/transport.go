@@ -1,8 +1,212 @@
 package execute
 
 import (
-	"context"
+	"sync"
+	"sync/atomic"
 )
+
+type Transport interface {
+	Transformation
+	// Finished reports when the Transport has completed and there is no more work to do.
+	Finished() <-chan struct{}
+}
+
+// consecutiveTransport implements Transport by transporting data consecutively to the downstream Transformation.
+type consecutiveTransport struct {
+	dispatcher Dispatcher
+
+	t        Transformation
+	messages MessageQueue
+
+	finished chan struct{}
+	errMu    sync.Mutex
+	errValue error
+
+	schedulerState int32
+	inflight       int32
+}
+
+func newConescutiveTransport(dispatcher Dispatcher, t Transformation) *consecutiveTransport {
+	return &consecutiveTransport{
+		dispatcher: dispatcher,
+		t:          t,
+		// TODO(nathanielc): Have planner specify message queue initial buffer size.
+		messages: newMessageQueue(64),
+		finished: make(chan struct{}),
+	}
+}
+
+func (t *consecutiveTransport) setErr(err error) {
+	t.errMu.Lock()
+	t.errValue = err
+	t.errMu.Unlock()
+}
+func (t *consecutiveTransport) err() error {
+	t.errMu.Lock()
+	err := t.errValue
+	t.errMu.Unlock()
+	return err
+}
+
+func (t *consecutiveTransport) Finished() <-chan struct{} {
+	return t.finished
+}
+
+func (t *consecutiveTransport) RetractBlock(id DatasetID, meta BlockMetadata) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
+	t.pushMsg(&retractBlockMsg{
+		srcMessage:    srcMessage(id),
+		blockMetadata: meta,
+	})
+	return nil
+}
+
+func (t *consecutiveTransport) Process(id DatasetID, b Block) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
+	t.pushMsg(&processMsg{
+		srcMessage: srcMessage(id),
+		block:      b,
+	})
+	return nil
+}
+
+func (t *consecutiveTransport) UpdateWatermark(id DatasetID, time Time) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
+	t.pushMsg(&updateWatermarkMsg{
+		srcMessage: srcMessage(id),
+		time:       time,
+	})
+	return nil
+}
+
+func (t *consecutiveTransport) UpdateProcessingTime(id DatasetID, time Time) error {
+	select {
+	case <-t.finished:
+		return t.err()
+	default:
+	}
+	t.pushMsg(&updateProcessingTimeMsg{
+		srcMessage: srcMessage(id),
+		time:       time,
+	})
+	return nil
+}
+
+func (t *consecutiveTransport) Finish(id DatasetID, err error) {
+	select {
+	case <-t.finished:
+		return
+	default:
+	}
+	t.pushMsg(&finishMsg{
+		srcMessage: srcMessage(id),
+		err:        err,
+	})
+}
+
+func (t *consecutiveTransport) SetParents(ids []DatasetID) {
+	//TODO(nathanielc): Need a better mechanism to inform transformations of their parent ids.
+	t.t.SetParents(ids)
+}
+
+func (t *consecutiveTransport) pushMsg(m Message) {
+	t.messages.Push(m)
+	atomic.AddInt32(&t.inflight, 1)
+	t.schedule()
+}
+
+const (
+	// consecutiveTransport schedule states
+	idle int32 = iota
+	running
+	finished
+)
+
+// schedule indicates that there is work available to schedule.
+func (t *consecutiveTransport) schedule() {
+	if t.tryTransition(idle, running) {
+		t.dispatcher.Schedule(t.processMessages)
+	}
+}
+
+// tryTransition attempts to transition into the new state and returns true on success.
+func (t *consecutiveTransport) tryTransition(old, new int32) bool {
+	return atomic.CompareAndSwapInt32(&t.schedulerState, old, new)
+}
+
+// transition sets the new state.
+func (t *consecutiveTransport) transition(new int32) {
+	atomic.StoreInt32(&t.schedulerState, new)
+}
+
+func (t *consecutiveTransport) processMessages(throughput int) {
+PROCESS:
+	i := 0
+	for m := t.messages.Pop(); m != nil; m = t.messages.Pop() {
+		atomic.AddInt32(&t.inflight, -1)
+		if f, err := processMessage(t.t, m); err != nil || f {
+			// Set the error if there was any
+			t.setErr(err)
+
+			// Transition to the finished state.
+			if t.tryTransition(running, finished) {
+				// We are finished
+				close(t.finished)
+				return
+			}
+		}
+		i++
+		if i >= throughput {
+			// We have done enough work.
+			// Transition to the idle state and reschedule for later.
+			t.transition(idle)
+			t.schedule()
+			return
+		}
+	}
+
+	t.transition(idle)
+	// Check if more messages arrived after the above loop finished.
+	// This check must happen in the idle state.
+	if atomic.LoadInt32(&t.inflight) > 0 {
+		if t.tryTransition(idle, running) {
+			goto PROCESS
+		} // else we have already been scheduled again, we can return
+	}
+}
+
+// processMessage processes the message on t.
+// The return value is true if the message was a FinishMsg.
+func processMessage(t Transformation, m Message) (finished bool, err error) {
+	switch m := m.(type) {
+	case RetractBlockMsg:
+		err = t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
+	case ProcessMsg:
+		b := m.Block()
+		err = t.Process(m.SrcDatasetID(), b)
+		b.RefCount(-1)
+	case UpdateWatermarkMsg:
+		err = t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
+	case UpdateProcessingTimeMsg:
+		err = t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
+	case FinishMsg:
+		t.Finish(m.SrcDatasetID(), m.Error())
+		finished = true
+	}
+	return
+}
 
 type Message interface {
 	Type() MessageType
@@ -108,100 +312,4 @@ func (m *finishMsg) Type() MessageType {
 }
 func (m *finishMsg) Error() error {
 	return m.err
-}
-
-type TransformationTransport struct {
-	t Transformation
-
-	buf    chan Message
-	cancel chan struct{}
-}
-
-func newTransformationTransport(t Transformation) *TransformationTransport {
-	return &TransformationTransport{
-		t:      t,
-		buf:    make(chan Message, 100),
-		cancel: make(chan struct{}),
-	}
-}
-
-func (t *TransformationTransport) Run(ctx context.Context) {
-	defer close(t.cancel)
-	for {
-		select {
-		case <-ctx.Done():
-			// Immediately return, do not process any buffered messages
-			return
-		case m := <-t.buf:
-			switch m := m.(type) {
-			case RetractBlockMsg:
-				t.t.RetractBlock(m.SrcDatasetID(), m.BlockMetadata())
-			case ProcessMsg:
-				t.t.Process(m.SrcDatasetID(), m.Block())
-			case UpdateWatermarkMsg:
-				t.t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
-			case UpdateProcessingTimeMsg:
-				t.t.UpdateProcessingTime(m.SrcDatasetID(), m.ProcessingTime())
-			case FinishMsg:
-				t.t.Finish(m.SrcDatasetID(), m.Error())
-				// Stop processing messages
-				return
-			}
-		}
-	}
-}
-
-func (t *TransformationTransport) RetractBlock(id DatasetID, meta BlockMetadata) {
-	select {
-	case t.buf <- &retractBlockMsg{
-		srcMessage:    srcMessage(id),
-		blockMetadata: meta,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) Process(id DatasetID, b Block) {
-	select {
-	case t.buf <- &processMsg{
-		srcMessage: srcMessage(id),
-		block:      b,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) UpdateWatermark(id DatasetID, time Time) {
-	select {
-	case t.buf <- &updateWatermarkMsg{
-		srcMessage: srcMessage(id),
-		time:       time,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) UpdateProcessingTime(id DatasetID, time Time) {
-	select {
-	case t.buf <- &updateProcessingTimeMsg{
-		srcMessage: srcMessage(id),
-		time:       time,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) Finish(id DatasetID, err error) {
-	select {
-	case t.buf <- &finishMsg{
-		srcMessage: srcMessage(id),
-		err:        err,
-	}:
-	case <-t.cancel:
-	}
-}
-
-func (t *TransformationTransport) SetParents(ids []DatasetID) {
-	//TODO(nathanielc): Need a better mechanism to inform transformations of their parent ids.
-	t.t.SetParents(ids)
 }

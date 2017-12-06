@@ -57,7 +57,7 @@ func (s *SpreadProcedureSpec) Copy() plan.ProcedureSpec {
 }
 
 func createSpreadTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SpreadAgg))
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SpreadAgg), ctx.Allocator())
 	return t, d, nil
 }
 

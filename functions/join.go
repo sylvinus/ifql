@@ -114,7 +114,7 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := NewMergeJoinCache(joinEval)
+	cache := NewMergeJoinCache(joinEval, ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewMergeJoinTransformation(d, cache, s)
 	return t, d, nil
@@ -151,7 +151,7 @@ type mergeJoinParentState struct {
 	finished   bool
 }
 
-func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) {
+func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -159,10 +159,10 @@ func (t *mergeJoinTransformation) RetractBlock(id execute.DatasetID, meta execut
 		tags:   meta.Tags().IntersectingSubset(t.keys),
 		bounds: meta.Bounds(),
 	}
-	t.d.RetractBlock(execute.ToBlockKey(bm))
+	return t.d.RetractBlock(execute.ToBlockKey(bm))
 }
 
-func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block) {
+func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -188,6 +188,7 @@ func (t *mergeJoinTransformation) Process(id execute.DatasetID, b execute.Block)
 			execute.AppendRow(i, rr, table, colMap)
 		}
 	})
+	return nil
 }
 
 // addNewCols adds column to builder that exist on b and are part of the join keys.
@@ -233,7 +234,7 @@ func (t *mergeJoinTransformation) addNewCols(b execute.Block, builder execute.Bl
 	return colMap
 }
 
-func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) {
+func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.parentState[id].mark = mark
@@ -245,10 +246,10 @@ func (t *mergeJoinTransformation) UpdateWatermark(id execute.DatasetID, mark exe
 		}
 	}
 
-	t.d.UpdateWatermark(min)
+	return t.d.UpdateWatermark(min)
 }
 
-func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) {
+func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt execute.Time) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.parentState[id].processing = pt
@@ -260,7 +261,7 @@ func (t *mergeJoinTransformation) UpdateProcessingTime(id execute.DatasetID, pt 
 		}
 	}
 
-	t.d.UpdateProcessingTime(min)
+	return t.d.UpdateProcessingTime(min)
 }
 
 func (t *mergeJoinTransformation) Finish(id execute.DatasetID, err error) {
@@ -301,17 +302,19 @@ type MergeJoinCache interface {
 }
 
 type mergeJoinCache struct {
-	data map[execute.BlockKey]*joinTables
+	data  map[execute.BlockKey]*joinTables
+	alloc *execute.Allocator
 
 	triggerSpec query.TriggerSpec
 
 	joinEval *expressionSpec
 }
 
-func NewMergeJoinCache(joinEval *expressionSpec) *mergeJoinCache {
+func NewMergeJoinCache(joinEval *expressionSpec, a *execute.Allocator) *mergeJoinCache {
 	return &mergeJoinCache{
 		data:     make(map[execute.BlockKey]*joinTables),
 		joinEval: joinEval,
+		alloc:    a,
 	}
 }
 
@@ -319,7 +322,7 @@ func (c *mergeJoinCache) BlockMetadata(key execute.BlockKey) execute.BlockMetada
 	return c.data[key]
 }
 
-func (c *mergeJoinCache) Block(key execute.BlockKey) execute.Block {
+func (c *mergeJoinCache) Block(key execute.BlockKey) (execute.Block, error) {
 	return c.data[key].Join()
 }
 
@@ -358,8 +361,9 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 		tables = &joinTables{
 			tags:     bm.Tags(),
 			bounds:   bm.Bounds(),
-			left:     execute.NewColListBlockBuilder(),
-			right:    execute.NewColListBlockBuilder(),
+			alloc:    c.alloc,
+			left:     execute.NewColListBlockBuilder(c.alloc),
+			right:    execute.NewColListBlockBuilder(c.alloc),
 			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
 			joinEval: c.joinEval.Copy(),
 		}
@@ -373,6 +377,8 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 type joinTables struct {
 	tags   execute.Tags
 	bounds execute.Bounds
+
+	alloc *execute.Allocator
 
 	left, right *execute.ColListBlockBuilder
 
@@ -392,23 +398,22 @@ func (t *joinTables) Size() int {
 }
 
 func (t *joinTables) ClearData() {
-	t.left = execute.NewColListBlockBuilder()
-	t.right = execute.NewColListBlockBuilder()
+	t.left = execute.NewColListBlockBuilder(t.alloc)
+	t.right = execute.NewColListBlockBuilder(t.alloc)
 }
 
 // Join performs a sort-merge join
-func (t *joinTables) Join() execute.Block {
+func (t *joinTables) Join() (execute.Block, error) {
 	// First determine new value type
 	newType, err := t.joinEval.Compile(
 		execute.ValueCol(t.left.Cols()).Type,
 		execute.ValueCol(t.right.Cols()).Type,
 	)
 	if err != nil {
-		//TODO add correct error handling here
-		panic(err)
+		return nil, err
 	}
 	// Create a builder to the result of the join
-	builder := execute.NewColListBlockBuilder()
+	builder := execute.NewColListBlockBuilder(t.alloc)
 	builder.SetBounds(t.bounds)
 	builder.AddCol(execute.TimeCol)
 	builder.AddCol(execute.ColMeta{
@@ -470,8 +475,7 @@ func (t *joinTables) Join() execute.Block {
 					rv := readValue(r, srcValueIdx, right)
 					v, err := t.eval(lv, rv)
 					if err != nil {
-						//TODO add correct error handling here
-						panic(err)
+						return nil, err
 					}
 					switch newType {
 					case execute.TBool:
