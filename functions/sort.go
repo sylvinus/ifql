@@ -17,19 +17,19 @@ type SortOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(SortKind, createSortOpSpec)
+	query.RegisterMethod(SortKind, createSortOpSpec)
 	query.RegisterOpSpec(SortKind, newSortOp)
 	plan.RegisterProcedureSpec(SortKind, newSortProcedure, SortKind)
 	execute.RegisterTransformation(SortKind, createSortTransformation)
 }
 
-func createSortOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSortOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(SortOpSpec)
 
 	if array, ok, err := args.GetArray("cols", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.Cols = array.Elements.([]string)
+		spec.Cols = array.AsStrings()
 	} else {
 		//Default behavior to sort by value
 		spec.Cols = []string{execute.ValueColLabel}

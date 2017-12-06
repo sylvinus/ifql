@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"encoding/json"
 	"regexp"
 	"time"
 )
@@ -27,14 +28,17 @@ type Node interface {
 
 func (*BaseNode) node() {}
 
+func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
 func (*VariableDeclaration) node() {}
 func (*VariableDeclarator) node()  {}
+func (*ReturnStatement) node()     {}
 
 func (*CallExpression) node()        {}
 func (*MemberExpression) node()      {}
 func (*SequenceExpression) node()    {}
 func (*BinaryExpression) node()      {}
+func (*UnaryExpression) node()       {}
 func (*LogicalExpression) node()     {}
 func (*ObjectExpression) node()      {}
 func (*ConditionalExpression) node() {}
@@ -49,7 +53,6 @@ func (*NumberLiteral) node()   {}
 func (*RegexpLiteral) node()   {}
 func (*DurationLiteral) node() {}
 func (*DateTimeLiteral) node() {}
-func (*FieldLiteral) node()    {}
 
 // BaseNode holds the attributes every expression or statement should have
 type BaseNode struct {
@@ -76,6 +79,17 @@ type Statement interface {
 
 func (*ExpressionStatement) stmt() {}
 func (*VariableDeclaration) stmt() {}
+func (*BlockStatement) stmt()      {}
+func (*ReturnStatement) stmt()     {}
+
+// BlockStatement is a set of statements
+type BlockStatement struct {
+	*BaseNode
+	Body []Statement
+}
+
+// Type is the abstract type
+func (*BlockStatement) Type() string { return "ReturnStatement" }
 
 // ExpressionStatement may consist of an expression that does not return a value and is executed solely for its side-effects.
 type ExpressionStatement struct {
@@ -113,30 +127,39 @@ type VariableDeclarator struct {
 // Type is the abstract type
 func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
 
+// ReturnStatement defines an Expression to return
+type ReturnStatement struct {
+	*BaseNode
+	Argument Expression
+}
+
+// Type is the abstract type
+func (*ReturnStatement) Type() string { return "ReturnStatement" }
+
 // Expression represents an action that can be performed by InfluxDB that can be evaluated to a value.
 type Expression interface {
 	Node
 	expression()
 }
 
-func (*CallExpression) expression()        {}
-func (*MemberExpression) expression()      {}
-func (*SequenceExpression) expression()    {}
-func (*BinaryExpression) expression()      {}
-func (*LogicalExpression) expression()     {}
-func (*ObjectExpression) expression()      {}
-func (*ConditionalExpression) expression() {}
-func (*ArrayExpression) expression()       {}
-func (*Identifier) expression()            {}
-func (*StringLiteral) expression()         {}
-func (*BooleanLiteral) expression()        {}
-func (*NumberLiteral) expression()         {}
-func (*IntegerLiteral) expression()        {}
-func (*RegexpLiteral) expression()         {}
-func (*DurationLiteral) expression()       {}
-func (*DateTimeLiteral) expression()       {}
-func (*FieldLiteral) expression()          {}
-func (*FunctionExpression) expression()    {}
+func (*CallExpression) expression()          {}
+func (*MemberExpression) expression()        {}
+func (*SequenceExpression) expression()      {}
+func (*BinaryExpression) expression()        {}
+func (*UnaryExpression) expression()         {}
+func (*LogicalExpression) expression()       {}
+func (*ObjectExpression) expression()        {}
+func (*ConditionalExpression) expression()   {}
+func (*ArrayExpression) expression()         {}
+func (*Identifier) expression()              {}
+func (*StringLiteral) expression()           {}
+func (*BooleanLiteral) expression()          {}
+func (*NumberLiteral) expression()           {}
+func (*IntegerLiteral) expression()          {}
+func (*RegexpLiteral) expression()           {}
+func (*DurationLiteral) expression()         {}
+func (*DateTimeLiteral) expression()         {}
+func (*ArrowFunctionExpression) expression() {}
 
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
@@ -151,8 +174,8 @@ func (*CallExpression) Type() string { return "CallExpression" }
 // MemberExpression represents calling a property of a CallExpression
 type MemberExpression struct {
 	*BaseNode
-	Object   Expression  `json:"object"`
-	Property *Identifier `json:"property"`
+	Object   Expression `json:"object"`
+	Property Expression `json:"property"`
 }
 
 // Type is the abstract type
@@ -169,13 +192,14 @@ type SequenceExpression struct {
 // Type is the abstract type
 func (*SequenceExpression) Type() string { return "SequenceExpression" }
 
-type FunctionExpression struct {
+type ArrowFunctionExpression struct {
 	*BaseNode
-	Function Expression `json:"function"`
+	Params []*Identifier `json:"params"`
+	Body   Node          `json:"body"`
 }
 
 // Type is the abstract type
-func (*FunctionExpression) Type() string { return "FunctionExpression" }
+func (*ArrowFunctionExpression) Type() string { return "ArrowFunctionExpression" }
 
 // OperatorKind are Equality and Arithmatic operators.
 // Result of evaluating an equality operator is always of type Boolean based on whether the
@@ -196,6 +220,7 @@ const (
 	GreaterThanOperator
 	StartsWithOperator
 	InOperator
+	NotOperator
 	NotEmptyOperator
 	EmptyOperator
 	EqualOperator
@@ -223,6 +248,16 @@ type BinaryExpression struct {
 
 // Type is the abstract type
 func (*BinaryExpression) Type() string { return "BinaryExpression" }
+
+// UnaryExpression use operators act on a single operand in an expression.
+type UnaryExpression struct {
+	*BaseNode
+	Operator OperatorKind `json:"operator"`
+	Argument Expression   `json:"argument"`
+}
+
+// Type is the abstract type
+func (*UnaryExpression) Type() string { return "UnaryExpression" }
 
 // LogicalOperatorKind are used with boolean (logical) values
 type LogicalOperatorKind int
@@ -320,7 +355,6 @@ func (*IntegerLiteral) literal()  {}
 func (*RegexpLiteral) literal()   {}
 func (*DurationLiteral) literal() {}
 func (*DateTimeLiteral) literal() {}
-func (*FieldLiteral) literal()    {}
 
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {
@@ -360,11 +394,40 @@ func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
-	Value *regexp.Regexp `json:"value"`
+	Value *regexp.Regexp
 }
 
 // Type is the abstract type
 func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
+
+func (r *RegexpLiteral) MarshalJSON() ([]byte, error) {
+	type Alias RegexpLiteral
+	raw := struct {
+		*Alias
+		Value string `json:"value"`
+	}{
+		Alias: (*Alias)(r),
+		Value: r.Value.String(),
+	}
+	return json.Marshal(raw)
+}
+func (r *RegexpLiteral) UnmarshalJSON(data []byte) error {
+	type Alias RegexpLiteral
+	raw := struct {
+		*Alias
+		Value string `json:"value"`
+	}{}
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return err
+	}
+	r.BaseNode = raw.BaseNode
+	r.Value, err = regexp.Compile(raw.Value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // DurationLiteral represents the elapsed time between two instants as an
 // int64 nanosecond count with syntax of golang's time.Duration
@@ -388,16 +451,6 @@ type DateTimeLiteral struct {
 // Type is the abstract type
 func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
 
-// FieldLiteral represents the point at a time and tagset with syntax `$`
-// TODO: Should field literals be an identifier?
-type FieldLiteral struct {
-	*BaseNode
-	Value string `json:"value"`
-}
-
-// Type is the abstract type
-func (*FieldLiteral) Type() string { return "FieldLiteral" }
-
 // OperatorTokens converts OperatorKind to string
 var OperatorTokens = map[OperatorKind]string{
 	MultiplicationOperator:   "*",
@@ -409,6 +462,7 @@ var OperatorTokens = map[OperatorKind]string{
 	GreaterThanOperator:      ">",
 	GreaterThanEqualOperator: ">=",
 	InOperator:               "in",
+	NotOperator:              "not",
 	NotEmptyOperator:         "not empty",
 	EmptyOperator:            "empty",
 	StartsWithOperator:       "startswith",

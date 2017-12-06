@@ -1,6 +1,7 @@
 package ifql
 
 import (
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +26,18 @@ func srcElems(head, tails interface{}) ([]ast.Statement, error) {
 	return elems, nil
 }
 
+func blockstmt(body interface{}, text []byte, pos position) (*ast.BlockStatement, error) {
+	bodySlice := toIfaceSlice(body)
+	statements := make([]ast.Statement, len(bodySlice))
+	for i, s := range bodySlice {
+		statements[i] = s.(ast.Statement)
+	}
+	return &ast.BlockStatement{
+		BaseNode: base(text, pos),
+		Body:     statements,
+	}, nil
+}
+
 func varstmt(declaration interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
 	return &ast.VariableDeclaration{
 		Declarations: []*ast.VariableDeclarator{declaration.(*ast.VariableDeclarator)},
@@ -46,12 +59,19 @@ func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionState
 	}, nil
 }
 
+func returnstmt(argument interface{}, text []byte, pos position) (*ast.ReturnStatement, error) {
+	return &ast.ReturnStatement{
+		BaseNode: base(text, pos),
+		Argument: argument.(ast.Expression),
+	}, nil
+}
+
 func memberexprs(head, tail interface{}, text []byte, pos position) (ast.Expression, error) {
 	res := head.(ast.Expression)
 	for _, prop := range toIfaceSlice(tail) {
 		res = &ast.MemberExpression{
 			Object:   res,
-			Property: prop.(*ast.Identifier),
+			Property: prop.(ast.Expression),
 			BaseNode: base(text, pos),
 		}
 	}
@@ -104,9 +124,16 @@ func callexprs(head, tail interface{}, text []byte, pos position) (ast.Expressio
 	return expr, nil
 }
 
-func function(e interface{}) *ast.FunctionExpression {
-	return &ast.FunctionExpression{
-		Function: e.(ast.Expression),
+func arrowfunc(params interface{}, body interface{}, text []byte, pos position) *ast.ArrowFunctionExpression {
+	paramsSlice := toIfaceSlice(params)
+	idents := make([]*ast.Identifier, len(paramsSlice))
+	for i, p := range paramsSlice {
+		idents[i] = p.(*ast.Identifier)
+	}
+	return &ast.ArrowFunctionExpression{
+		BaseNode: base(text, pos),
+		Params:   idents,
+		Body:     body.(ast.Node),
 	}
 }
 
@@ -187,7 +214,16 @@ func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.E
 	return res, nil
 }
 
-func binaryOp(text []byte) (ast.OperatorKind, error) {
+func unaryExpression(op, argument interface{}, text []byte, pos position) (*ast.UnaryExpression, error) {
+	log.Println(op, argument)
+	return &ast.UnaryExpression{
+		Operator: op.(ast.OperatorKind),
+		Argument: argument.(ast.Expression),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func operator(text []byte) (ast.OperatorKind, error) {
 	return ast.OperatorLookup(strings.ToLower(string(text))), nil
 }
 
@@ -228,13 +264,6 @@ func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
 	return &ast.NumberLiteral{
 		BaseNode: base(text, pos),
 		Value:    n,
-	}, nil
-}
-
-func fieldLiteral(text []byte, pos position) (*ast.FieldLiteral, error) {
-	return &ast.FieldLiteral{
-		BaseNode: base(text, pos),
-		Value:    "$",
 	}, nil
 }
 

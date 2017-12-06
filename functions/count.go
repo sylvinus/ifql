@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -13,12 +12,12 @@ type CountOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(CountKind, createCountOpSpec)
+	query.RegisterMethod(CountKind, createCountOpSpec)
 	query.RegisterOpSpec(CountKind, newCountOp)
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)
 }
-func createCountOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createCountOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(CountOpSpec), nil
 }
 

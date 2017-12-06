@@ -26,11 +26,24 @@ SourceElement
 Statement
   = varstmt:VariableStatement
   / exprstmt:ExpressionStatement
+  / blockstmt:BlockStatement
+  / returnstmt:ReturnStatement
+
+BlockStatement
+  = "{" __ body:Statement* __ "}" {
+    return blockstmt(body, c.text, c.pos)
+  }
 
 VariableStatement
   = VarToken __ declaration:VariableDeclaration {
       return varstmt(declaration, c.text, c.pos)
     }
+
+
+ReturnStatement
+  = "return" __ argument:Expr __  {
+    return returnstmt(argument, c.text, c.pos)
+  }
 
 VarToken = "var"
 
@@ -46,18 +59,17 @@ Initializer
 
 // TODO: Perhaps this should be modeled like an AssignmentExpresssion
 VariableExpression
-  = CallExpression
-  / Primary
+  = Expr
 
 ExpressionStatement
   = call:CallExpression {
         return exprstmt(call, c.text, c.pos)
     }
 
-MemberExpression
+MemberExpressions
   = head:Identifier // TODO: should be primary
     tail:(
-        __ "." __ property:Identifier {
+        property:MemberExpressionProperty {
           return property, nil
         }
     )*
@@ -65,9 +77,17 @@ MemberExpression
       return memberexprs(head, tail, c.text, c.pos)
     }
 
+MemberExpressionProperty
+  = __ "." __ property:Identifier {
+      return property, nil
+    }
+    / __ "[" __ property:Primary __ "]" __ {
+      return property, nil
+    }
+
 CallExpression
   = head:(
-      callee:MemberExpression __ args:Arguments {
+      callee:MemberExpressions __ args:Arguments {
         return callexpr(callee, args, c.text, c.pos)
       }
     )
@@ -75,7 +95,7 @@ CallExpression
         __ args:Arguments {
           return callexpr(nil, args, c.text, c.pos)
         }
-      / __ "." __ property:Identifier {
+      / property:MemberExpressionProperty {
           return memberexpr(nil, property, c.text, c.pos)
         }
     )*
@@ -104,13 +124,39 @@ FunctionArg
     }
 
 FunctionArgValues
-  = LambdaExpression
-  / Primary
+  = Primary
 
-LambdaExpression
-  = "{" __ expr:Expr __  "}" {
-      return function(expr), nil
+ArrowFunctionExpression
+  = __ params:ArrowFunctionParams __ "=>" __ body:ArrowFunctionBody __  {
+      return arrowfunc(params, body, c.text, c.pos), nil
     }
+
+ArrowFunctionParams
+  = "(" first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest+ ","? ")" {
+      return append([]interface{}{first}, toIfaceSlice(rest)...), nil
+    }
+  / first:ArrowFunctionParam {
+      return []interface{}{first}, nil
+    }
+
+ArrowFunctionParamsRest
+  = "," __  arg:ArrowFunctionParam {
+      return arg, nil
+    }
+
+ArrowFunctionParam
+  =  __ key:Identifier __  {
+      return key, nil
+    }
+
+ArrowFunctionBody
+  =  __ body:Expr __  {
+      return body, nil
+    }
+  / __ body:BlockStatement __ {
+    return body, nil
+  }
+
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
@@ -134,7 +180,7 @@ Logical
 
 EqualityOperators
   = ("==" / "!=" ) {
-      return binaryOp(c.text)
+      return operator(c.text)
     }
 
 Equality
@@ -152,7 +198,7 @@ RelationalOperators
       / "NOT EMPTY"i
       / "EMPTY"i
     ) {
-        return binaryOp(c.text)
+        return operator(c.text)
       }
 
 Relational
@@ -162,7 +208,7 @@ Relational
 
 AdditiveOperator
   = ("+" / "-") {
-        return binaryOp(c.text)
+        return operator(c.text)
       }
 
 Additive
@@ -172,7 +218,7 @@ Additive
 
 MultiplicativeOperator
   = ("*" / "/") {
-      return binaryOp(c.text)
+      return operator(c.text)
     }
 
 Multiplicative
@@ -180,10 +226,21 @@ Multiplicative
       return binaryExpression(head, tail, c.text, c.pos)
     }
 
+UnaryOperator
+  = ("-" / "not") {
+      return operator(c.text)
+    }
+
+UnaryExpression
+  =  __ op:UnaryOperator __ argument:Expr {
+      return unaryExpression(op, argument, c.text, c.pos)
+    }
+
 Primary
-  = '(' __ expr:Logical __ ')' {
+  = '(' __ expr:Expr __ ')' {
       return expr, nil
     }
+  / CallExpression
   / Array
   / StringLiteral
   / BooleanLiteral
@@ -192,7 +249,9 @@ Primary
   / DateTime
   / Number
   / Integer
-  / Field
+  / UnaryExpression
+  / ArrowFunctionExpression
+  / MemberExpressions
   / Identifier
 
 
@@ -337,17 +396,11 @@ Integer
       return integerLiteral(c.text, c.pos)
    }
 
-
 NonZeroDigit
   = [1-9]
 
 Digit
   = [0-9]
-
-Field
-  = field:'$' {
-      return fieldLiteral(c.text, c.pos)
-    }
 
 RegularExpressionLiteral "regular expression"
   = "/" pattern:RegularExpressionBody "/" {

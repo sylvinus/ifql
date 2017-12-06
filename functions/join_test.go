@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
-	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
@@ -16,13 +15,13 @@ import (
 )
 
 func TestJoin_NewQuery(t *testing.T) {
-	tests := []ifqltest.NewQueryTestCase{
+	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "basic two-way join",
 			Raw: `
 var a = from(db:"dbA").range(start:-1h)
 var b = from(db:"dbB").range(start:-1h)
-join(on:["host"], eval:{a + b})`,
+join(tables:[a,b], on:["host"], f: (a,b) => a["_value"] + b["_value"])`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -65,16 +64,21 @@ join(on:["host"], eval:{a + b})`,
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							On: []string{"host"},
-							Eval: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.AdditionOperator,
-									Left: &expression.ReferenceNode{
-										Name: "a",
-										Kind: "identifier",
+							Eval: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.AdditionOperator,
+									Left: &ast.MemberExpression{
+										Object: &ast.Identifier{
+											Name: "a",
+										},
+										Property: &ast.StringLiteral{Value: "_value"},
 									},
-									Right: &expression.ReferenceNode{
-										Name: "b",
-										Kind: "identifier",
+									Right: &ast.MemberExpression{
+										Object: &ast.Identifier{
+											Name: "b",
+										},
+										Property: &ast.StringLiteral{Value: "_value"},
 									},
 								},
 							},
@@ -94,16 +98,16 @@ join(on:["host"], eval:{a + b})`,
 			Raw: `
 				var a = from(db:"dbA").range(start:-1h)
 				var b = from(db:"dbB").range(start:-1h)
-				a.join(on:["host"], eval:{a + b})
+				a.join(tables:[a,b], on:["host"], f: r => a["_value"] + b["_value"])
 			`,
 			WantErr: true,
 		},
 		{
-			Name: "from with join with complex expression",
+			Name: "from with join with complex ast",
 			Raw: `
-				var a = from(db:"ifql").filter(exp:{"_measurement" == "a"}).range(start:-1h)
-				var b = from(db:"ifql").filter(exp:{"_measurement" == "b"}).range(start:-1h)
-				join(on:["t1"], eval:{(a-b)/b})
+				var a = from(db:"ifql").range(start:-1h)
+				var b = from(db:"ifql").range(start:-1h)
+				join(tables:[a,b], on:["t1"], f: (a,b) => (a["_value"]-b["_value"])/b["_value"])
 			`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
@@ -114,24 +118,7 @@ join(on:["host"], eval:{a + b})`,
 						},
 					},
 					{
-						ID: "filter1",
-						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "_measurement",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "a",
-									},
-								},
-							},
-						},
-					},
-					{
-						ID: "range2",
+						ID: "range1",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative:   -1 * time.Hour,
@@ -143,30 +130,13 @@ join(on:["host"], eval:{a + b})`,
 						},
 					},
 					{
-						ID: "from3",
+						ID: "from2",
 						Spec: &functions.FromOpSpec{
 							Database: "ifql",
 						},
 					},
 					{
-						ID: "filter4",
-						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.EqualOperator,
-									Left: &expression.ReferenceNode{
-										Name: "_measurement",
-										Kind: "tag",
-									},
-									Right: &expression.StringLiteralNode{
-										Value: "b",
-									},
-								},
-							},
-						},
-					},
-					{
-						ID: "range5",
+						ID: "range3",
 						Spec: &functions.RangeOpSpec{
 							Start: query.Time{
 								Relative:   -1 * time.Hour,
@@ -178,26 +148,33 @@ join(on:["host"], eval:{a + b})`,
 						},
 					},
 					{
-						ID: "join6",
+						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							On: []string{"t1"},
-							Eval: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.DivisionOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.SubtractionOperator,
-										Left: &expression.ReferenceNode{
-											Name: "a",
-											Kind: "identifier",
+							Eval: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.DivisionOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.SubtractionOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "a",
+											},
+											Property: &ast.StringLiteral{Value: "_value"},
 										},
-										Right: &expression.ReferenceNode{
-											Name: "b",
-											Kind: "identifier",
+										Right: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "b",
+											},
+											Property: &ast.StringLiteral{Value: "_value"},
 										},
 									},
-									Right: &expression.ReferenceNode{
-										Name: "b",
-										Kind: "identifier",
+									Right: &ast.MemberExpression{
+										Object: &ast.Identifier{
+											Name: "b",
+										},
+										Property: &ast.StringLiteral{Value: "_value"},
 									},
 								},
 							},
@@ -205,12 +182,10 @@ join(on:["host"], eval:{a + b})`,
 					},
 				},
 				Edges: []query.Edge{
-					{Parent: "from0", Child: "filter1"},
-					{Parent: "filter1", Child: "range2"},
-					{Parent: "from3", Child: "filter4"},
-					{Parent: "filter4", Child: "range5"},
-					{Parent: "range2", Child: "join6"},
-					{Parent: "range5", Child: "join6"},
+					{Parent: "from0", Child: "range1"},
+					{Parent: "from2", Child: "range3"},
+					{Parent: "range1", Child: "join4"},
+					{Parent: "range3", Child: "join4"},
 				},
 			},
 		},
@@ -219,7 +194,7 @@ join(on:["host"], eval:{a + b})`,
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			ifqltest.NewQueryTestHelper(t, tc)
+			querytest.NewQueryTestHelper(t, tc)
 		})
 	}
 }
@@ -231,18 +206,25 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"spec":{
 			"on":["t1","t2"],
 			"eval":{
-				"root":{
-					"type":"binary",
+				"params": [{"type":"Identifier","name":"a"},{"type":"Identifier","name":"b"}],
+				"body":{
+					"type":"BinaryExpression",
 					"operator": "+",
-					"left":{
-						"type":"reference",
-						"name":"a",
-						"kind":"identifier"
+					"left": {
+						"type": "MemberExpression",
+						"object": {
+							"type":"Identifier",
+							"name":"a"
+						},
+						"property": {"type":"StringLiteral","value":"_value"}
 					},
 					"right":{
-						"type":"reference",
-						"name":"b",
-						"kind":"identifier"
+						"type": "MemberExpression",
+						"object": {
+							"type":"Identifier",
+							"name":"b"
+						},
+						"property": {"type":"StringLiteral","value":"_value"}
 					}
 				}
 			}
@@ -252,16 +234,21 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
 			On: []string{"t1", "t2"},
-			Eval: expression.Expression{
-				Root: &expression.BinaryNode{
-					Operator: expression.AdditionOperator,
-					Left: &expression.ReferenceNode{
-						Name: "a",
-						Kind: "identifier",
+			Eval: &ast.ArrowFunctionExpression{
+				Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+				Body: &ast.BinaryExpression{
+					Operator: ast.AdditionOperator,
+					Left: &ast.MemberExpression{
+						Object: &ast.Identifier{
+							Name: "a",
+						},
+						Property: &ast.StringLiteral{Value: "_value"},
 					},
-					Right: &expression.ReferenceNode{
-						Name: "b",
-						Kind: "identifier",
+					Right: &ast.MemberExpression{
+						Object: &ast.Identifier{
+							Name: "b",
+						},
+						Property: &ast.StringLiteral{Value: "_value"},
 					},
 				},
 			},
@@ -271,16 +258,21 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 }
 
 func TestMergeJoin_Process(t *testing.T) {
-	addExpression := expression.Expression{
-		Root: &expression.BinaryNode{
-			Operator: expression.AdditionOperator,
-			Left: &expression.ReferenceNode{
-				Name: "a",
-				Kind: "identifier",
+	addExpression := &ast.ArrowFunctionExpression{
+		Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+		Body: &ast.BinaryExpression{
+			Operator: ast.AdditionOperator,
+			Left: &ast.MemberExpression{
+				Object: &ast.Identifier{
+					Name: "a",
+				},
+				Property: &ast.StringLiteral{Value: "_value"},
 			},
-			Right: &expression.ReferenceNode{
-				Name: "b",
-				Kind: "identifier",
+			Right: &ast.MemberExpression{
+				Object: &ast.Identifier{
+					Name: "b",
+				},
+				Property: &ast.StringLiteral{Value: "_value"},
 			},
 		},
 	}

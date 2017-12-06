@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -16,13 +15,13 @@ type MaxOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(MaxKind, createMaxOpSpec)
+	query.RegisterMethod(MaxKind, createMaxOpSpec)
 	query.RegisterOpSpec(MaxKind, newMaxOp)
 	plan.RegisterProcedureSpec(MaxKind, newMaxProcedure, MaxKind)
 	execute.RegisterTransformation(MaxKind, createMaxTransformation)
 }
 
-func createMaxOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createMaxOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(MaxOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err

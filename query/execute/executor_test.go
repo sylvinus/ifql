@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/influxdata/ifql/expression"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -166,21 +165,25 @@ func TestExecutor_Execute(t *testing.T) {
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
 					plan.ProcedureIDFromOperationID("join"): {
-						ID: plan.ProcedureIDFromOperationID("join"),
+						ID:   plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
-							Eval: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.DivisionOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
-									},
-									Right: &expression.ReferenceNode{
-										Name: "b",
-										Kind: "identifier",
-									},
-								},
-							},
+						//	Eval: expression.Expression{
+						//		Root: &expression.BinaryNode{
+						//			Operator: expression.DivisionOperator,
+						//			Left: &expression.MemberReferenceNode{
+						//				Object: &expression.ReferenceNode{
+						//					Name: "r",
+						//				},
+						//				Property: "_field",
+						//			},
+						//			Right: &expression.MemberReferenceNode{
+						//				Object: &expression.ReferenceNode{
+						//					Name: "b",
+						//				},
+						//				Property: "_field",
+						//			},
+						//		},
+						//	},
 						},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("sum"),

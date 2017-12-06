@@ -5,7 +5,6 @@ import (
 
 	"math/rand"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -20,13 +19,13 @@ type SampleOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(SampleKind, createSampleOpSpec)
+	query.RegisterMethod(SampleKind, createSampleOpSpec)
 	query.RegisterOpSpec(SampleKind, newSampleOp)
 	plan.RegisterProcedureSpec(SampleKind, newSampleProcedure, SampleKind)
 	execute.RegisterTransformation(SampleKind, createSampleTransformation)
 }
 
-func createSampleOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSampleOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(SampleOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err

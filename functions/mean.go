@@ -3,7 +3,6 @@ package functions
 import (
 	"math"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -15,12 +14,12 @@ type MeanOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(MeanKind, createMeanOpSpec)
+	query.RegisterMethod(MeanKind, createMeanOpSpec)
 	query.RegisterOpSpec(MeanKind, newMeanOp)
 	plan.RegisterProcedureSpec(MeanKind, newMeanProcedure, MeanKind)
 	execute.RegisterTransformation(MeanKind, createMeanTransformation)
 }
-func createMeanOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createMeanOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(MeanOpSpec), nil
 }
 

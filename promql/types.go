@@ -209,9 +209,11 @@ var operatorLookup = map[MatchKind]expression.Operator{
 func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operation, error) {
 	node := &expression.BinaryNode{
 		Operator: expression.EqualOperator,
-		Left: &expression.ReferenceNode{
-			Name: "_metric",
-			Kind: "tag",
+		Left: &expression.MemberReferenceNode{
+			Object: &expression.ReferenceNode{
+				Name: "r",
+			},
+			Property: "_metric",
 		},
 		Right: &expression.StringLiteralNode{
 			Value: metricName,
@@ -222,9 +224,11 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 		if !ok {
 			return nil, fmt.Errorf("unknown label match kind %d", label.Kind)
 		}
-		ref := &expression.ReferenceNode{
-			Name: label.Name,
-			Kind: "tag",
+		ref := &expression.MemberReferenceNode{
+			Object: &expression.ReferenceNode{
+				Name: "r",
+			},
+			Property: label.Name,
 		}
 		var value expression.Node
 		if label.Value.Type() == StringKind {
@@ -250,7 +254,10 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.FilterOpSpec{
-			Expression: expression.Expression{Root: node},
+			Expression: expression.Expression{
+				Params: []string{"r"},
+				Root:   node,
+			},
 		},
 	}, nil
 }

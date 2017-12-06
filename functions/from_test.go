@@ -5,13 +5,12 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/functions"
-	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/querytest"
 )
 
 func TestFrom_NewQuery(t *testing.T) {
-	tests := []ifqltest.NewQueryTestCase{
+	tests := []querytest.NewQueryTestCase{
 		{
 			Name:    "from",
 			Raw:     `from()`,
@@ -67,7 +66,7 @@ func TestFrom_NewQuery(t *testing.T) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			ifqltest.NewQueryTestHelper(t, tc)
+			querytest.NewQueryTestHelper(t, tc)
 		})
 	}
 }

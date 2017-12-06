@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/functions"
-	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/plan"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestCount_NewQuery(t *testing.T) {
-	tests := []ifqltest.NewQueryTestCase{
+	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with range and count",
 			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).count()`,
@@ -55,7 +54,7 @@ func TestCount_NewQuery(t *testing.T) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			ifqltest.NewQueryTestHelper(t, tc)
+			querytest.NewQueryTestHelper(t, tc)
 		})
 	}
 }

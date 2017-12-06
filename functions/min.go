@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -16,13 +15,13 @@ type MinOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(MinKind, createMinOpSpec)
+	query.RegisterMethod(MinKind, createMinOpSpec)
 	query.RegisterOpSpec(MinKind, newMinOp)
 	plan.RegisterProcedureSpec(MinKind, newMinProcedure, MinKind)
 	execute.RegisterTransformation(MinKind, createMinTransformation)
 }
 
-func createMinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createMinOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(MinOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err

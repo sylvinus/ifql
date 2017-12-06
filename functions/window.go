@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -21,13 +20,13 @@ type WindowOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(WindowKind, createWindowOpSpec)
+	query.RegisterMethod(WindowKind, createWindowOpSpec)
 	query.RegisterOpSpec(WindowKind, newWindowOp)
 	plan.RegisterProcedureSpec(WindowKind, newWindowProcedure, WindowKind)
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
 }
 
-func createWindowOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createWindowOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(WindowOpSpec)
 	every, everySet, err := args.GetDuration("every")
 	if err != nil {
