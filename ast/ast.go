@@ -49,7 +49,6 @@ func (*NumberLiteral) node()   {}
 func (*RegexpLiteral) node()   {}
 func (*DurationLiteral) node() {}
 func (*DateTimeLiteral) node() {}
-func (*FieldLiteral) node()    {}
 
 // BaseNode holds the attributes every expression or statement should have
 type BaseNode struct {
@@ -119,24 +118,23 @@ type Expression interface {
 	expression()
 }
 
-func (*CallExpression) expression()        {}
-func (*MemberExpression) expression()      {}
-func (*SequenceExpression) expression()    {}
-func (*BinaryExpression) expression()      {}
-func (*LogicalExpression) expression()     {}
-func (*ObjectExpression) expression()      {}
-func (*ConditionalExpression) expression() {}
-func (*ArrayExpression) expression()       {}
-func (*Identifier) expression()            {}
-func (*StringLiteral) expression()         {}
-func (*BooleanLiteral) expression()        {}
-func (*NumberLiteral) expression()         {}
-func (*IntegerLiteral) expression()        {}
-func (*RegexpLiteral) expression()         {}
-func (*DurationLiteral) expression()       {}
-func (*DateTimeLiteral) expression()       {}
-func (*FieldLiteral) expression()          {}
-func (*FunctionExpression) expression()    {}
+func (*CallExpression) expression()          {}
+func (*MemberExpression) expression()        {}
+func (*SequenceExpression) expression()      {}
+func (*BinaryExpression) expression()        {}
+func (*LogicalExpression) expression()       {}
+func (*ObjectExpression) expression()        {}
+func (*ConditionalExpression) expression()   {}
+func (*ArrayExpression) expression()         {}
+func (*Identifier) expression()              {}
+func (*StringLiteral) expression()           {}
+func (*BooleanLiteral) expression()          {}
+func (*NumberLiteral) expression()           {}
+func (*IntegerLiteral) expression()          {}
+func (*RegexpLiteral) expression()           {}
+func (*DurationLiteral) expression()         {}
+func (*DateTimeLiteral) expression()         {}
+func (*ArrowFunctionExpression) expression() {}
 
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
@@ -151,8 +149,8 @@ func (*CallExpression) Type() string { return "CallExpression" }
 // MemberExpression represents calling a property of a CallExpression
 type MemberExpression struct {
 	*BaseNode
-	Object   Expression  `json:"object"`
-	Property *Identifier `json:"property"`
+	Object   Expression `json:"object"`
+	Property Expression `json:"property"`
 }
 
 // Type is the abstract type
@@ -169,13 +167,14 @@ type SequenceExpression struct {
 // Type is the abstract type
 func (*SequenceExpression) Type() string { return "SequenceExpression" }
 
-type FunctionExpression struct {
+type ArrowFunctionExpression struct {
 	*BaseNode
-	Function Expression `json:"function"`
+	Params []*Identifier `json:"params"`
+	Body   Expression    `json:"body"`
 }
 
 // Type is the abstract type
-func (*FunctionExpression) Type() string { return "FunctionExpression" }
+func (*ArrowFunctionExpression) Type() string { return "ArrowFunctionExpression" }
 
 // OperatorKind are Equality and Arithmatic operators.
 // Result of evaluating an equality operator is always of type Boolean based on whether the
@@ -320,7 +319,6 @@ func (*IntegerLiteral) literal()  {}
 func (*RegexpLiteral) literal()   {}
 func (*DurationLiteral) literal() {}
 func (*DateTimeLiteral) literal() {}
-func (*FieldLiteral) literal()    {}
 
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {
@@ -387,16 +385,6 @@ type DateTimeLiteral struct {
 
 // Type is the abstract type
 func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
-
-// FieldLiteral represents the point at a time and tagset with syntax `$`
-// TODO: Should field literals be an identifier?
-type FieldLiteral struct {
-	*BaseNode
-	Value string `json:"value"`
-}
-
-// Type is the abstract type
-func (*FieldLiteral) Type() string { return "FieldLiteral" }
 
 // OperatorTokens converts OperatorKind to string
 var OperatorTokens = map[OperatorKind]string{

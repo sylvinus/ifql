@@ -31,7 +31,7 @@ func init() {
 }
 
 func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
-	eval, err := args.GetRequiredExpression("eval")
+	eval, err := args.GetRequiredExpression("f")
 	if err != nil {
 		return nil, err
 	}
@@ -45,19 +45,13 @@ func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpe
 		spec.On = array.Elements.([]string)
 	}
 
-	// Find identifier of parent nodes
-	err = expression.Walk(spec.Eval.Root, func(n expression.Node) error {
-		if r, ok := n.(*expression.ReferenceNode); ok && r.Kind == "identifier" {
-			id, err := ctx.LookupIDFromIdentifier(r.Name)
-			if err != nil {
-				return err
-			}
-			ctx.AdditionalParent(id)
-		}
-		return nil
-	})
-	if err != nil {
+	if array, ok, err := args.GetArray("tables", ifql.TChain); err != nil {
 		return nil, err
+	} else if ok {
+		tables := array.Elements.([]*ifql.CallChain)
+		for _, t := range tables {
+			ctx.AdditionalParent(t.Parent)
+		}
 	}
 
 	return spec, nil

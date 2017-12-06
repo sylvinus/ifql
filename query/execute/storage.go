@@ -78,8 +78,8 @@ type connection struct {
 
 func (sr *storageReader) Read(ctx context.Context, trace map[string]string, readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
 	var predicate *storage.Predicate
-	if readSpec.Predicate.Root != nil {
-		p, err := ExpressionToStoragePredicate(readSpec.Predicate.Root)
+	if readSpec.Predicate.Root != nil && len(readSpec.Predicate.Params) == 1 {
+		p, err := ExpressionToStoragePredicate(readSpec.Predicate, readSpec.Predicate.Params[0])
 		if err != nil {
 			return nil, err
 		}

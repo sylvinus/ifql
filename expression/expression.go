@@ -20,6 +20,7 @@ const (
 	TimeLiteral
 	RegexpLiteral
 	Reference
+	MemberReference
 )
 
 func (t Type) String() string {
@@ -51,6 +52,8 @@ func (t Type) MarshalText() ([]byte, error) {
 		return []byte("regexpLiteral"), nil
 	case Reference:
 		return []byte("reference"), nil
+	case MemberReference:
+		return []byte("memberReference"), nil
 	default:
 		return nil, fmt.Errorf("unknown type %d", int(t))
 	}
@@ -78,6 +81,8 @@ func (t *Type) UnmarshalText(data []byte) error {
 		*t = RegexpLiteral
 	case "reference":
 		*t = Reference
+	case "memberReference":
+		*t = MemberReference
 	default:
 		return fmt.Errorf("unknown type %q", string(data))
 	}
@@ -98,18 +103,18 @@ func (*BinaryNode) Type() Type {
 	return Binary
 }
 
-type binaryNode BinaryNode
-type binaryNodeJSON struct {
-	Type Type `json:"type"`
-	*binaryNode
+func (n *BinaryNode) MarshalJSON() ([]byte, error) {
+	type Alias BinaryNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
-func (n *BinaryNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(binaryNodeJSON{
-		binaryNode: (*binaryNode)(n),
-		Type:       n.Type(),
-	})
-}
 func (n *BinaryNode) UnmarshalJSON(data []byte) error {
 	type binaryNode struct {
 		Operator Operator         `json:"operator"`
@@ -143,17 +148,16 @@ func (*UnaryNode) Type() Type {
 	return Unary
 }
 
-type unaryNode UnaryNode
-type unaryNodeJSON struct {
-	Type Type `json:"type"`
-	*unaryNode
-}
-
 func (n *UnaryNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(unaryNodeJSON{
-		unaryNode: (*unaryNode)(n),
-		Type:      n.Type(),
-	})
+	type Alias UnaryNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 func (n *UnaryNode) UnmarshalJSON(data []byte) error {
@@ -182,17 +186,16 @@ func (*StringLiteralNode) Type() Type {
 	return StringLiteral
 }
 
-type stringLiteralNode StringLiteralNode
-type stringLiteralNodeJSON struct {
-	Type Type `json:"type"`
-	*stringLiteralNode
-}
-
 func (n *StringLiteralNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(stringLiteralNodeJSON{
-		stringLiteralNode: (*stringLiteralNode)(n),
-		Type:              n.Type(),
-	})
+	type Alias StringLiteralNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 type IntegerLiteralNode struct {
@@ -236,17 +239,16 @@ func (*BooleanLiteralNode) Type() Type {
 	return BooleanLiteral
 }
 
-type booleanLiteralNode BooleanLiteralNode
-type booleanLiteralNodeJSON struct {
-	Type Type `json:"type"`
-	*booleanLiteralNode
-}
-
 func (n *BooleanLiteralNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(booleanLiteralNodeJSON{
-		booleanLiteralNode: (*booleanLiteralNode)(n),
-		Type:               n.Type(),
-	})
+	type Alias BooleanLiteralNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 type FloatLiteralNode struct {
@@ -257,17 +259,16 @@ func (*FloatLiteralNode) Type() Type {
 	return FloatLiteral
 }
 
-type floatLiteralNode FloatLiteralNode
-type floatLiteralNodeJSON struct {
-	Type Type `json:"type"`
-	*floatLiteralNode
-}
-
 func (n *FloatLiteralNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(floatLiteralNodeJSON{
-		floatLiteralNode: (*floatLiteralNode)(n),
-		Type:             n.Type(),
-	})
+	type Alias FloatLiteralNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 type DurationLiteralNode struct {
@@ -310,17 +311,16 @@ func (*TimeLiteralNode) Type() Type {
 	return TimeLiteral
 }
 
-type timeLiteralNode TimeLiteralNode
-type timeLiteralNodeJSON struct {
-	Type Type `json:"type"`
-	*timeLiteralNode
-}
-
 func (n *TimeLiteralNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(timeLiteralNodeJSON{
-		timeLiteralNode: (*timeLiteralNode)(n),
-		Type:            n.Type(),
-	})
+	type Alias TimeLiteralNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 type RegexpLiteralNode struct {
@@ -331,41 +331,79 @@ func (*RegexpLiteralNode) Type() Type {
 	return RegexpLiteral
 }
 
-type regexpLiteralNode RegexpLiteralNode
-type regexpLiteralNodeJSON struct {
-	Type Type `json:"type"`
-	*regexpLiteralNode
-}
-
 func (n *RegexpLiteralNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(regexpLiteralNodeJSON{
-		regexpLiteralNode: (*regexpLiteralNode)(n),
-		Type:              n.Type(),
-	})
+	type Alias RegexpLiteralNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
 type ReferenceNode struct {
-	// Name is the name of the item being referenced
+	// Name is the name of the object being referenced
 	Name string `json:"name"`
-	// Kind is any kind for the reference, can be used to indicate type information about the item being referenced.
-	Kind string `json:"kind"`
 }
 
 func (*ReferenceNode) Type() Type {
 	return Reference
 }
 
-type referenceNode ReferenceNode
-type referenceNodeJSON struct {
-	Type Type `json:"type"`
-	*referenceNode
+func (n *ReferenceNode) MarshalJSON() ([]byte, error) {
+	type Alias ReferenceNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 
-func (n *ReferenceNode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(referenceNodeJSON{
-		referenceNode: (*referenceNode)(n),
-		Type:          n.Type(),
-	})
+type MemberReferenceNode struct {
+	// Object is the object whose property is being referenced.
+	Object Node `json:"object"`
+	// Property is the name of the property of object being referenced
+	Property string `json:"property"`
+}
+
+func (*MemberReferenceNode) Type() Type {
+	return MemberReference
+}
+
+func (n *MemberReferenceNode) MarshalJSON() ([]byte, error) {
+	type Alias MemberReferenceNode
+	var raw = &struct {
+		Type Type `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
+}
+
+func (n *MemberReferenceNode) UnmarshalJSON(data []byte) error {
+	type memberReferenceNode struct {
+		Object   *json.RawMessage `json:"object"`
+		Property string           `json:"property"`
+	}
+	mn := memberReferenceNode{}
+	if err := json.Unmarshal(data, &mn); err != nil {
+		return err
+	}
+	n.Property = mn.Property
+
+	obj, err := unmarshalNode(mn.Object)
+	if err != nil {
+		return err
+	}
+	n.Object = obj
+	return nil
 }
 
 type Operator int
@@ -506,22 +544,31 @@ func Walk(n Node, f func(Node) error) error {
 		if err := Walk(node.Node, f); err != nil {
 			return err
 		}
+	case *MemberReferenceNode:
+		if err := Walk(node.Object, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 type Expression struct {
 	Root Node `json:"root"`
+	// Params is a list of names that are provided as parameters to the expression.
+	Params []string `json:"params"`
 }
 
 func (e *Expression) UnmarshalJSON(data []byte) error {
 	type expression struct {
-		Root *json.RawMessage `json:"root"`
+		Root   *json.RawMessage `json:"root"`
+		Params []string         `json:"params"`
 	}
 	expr := expression{}
 	if err := json.Unmarshal(data, &expr); err != nil {
 		return err
 	}
+	e.Params = expr.Params
+
 	node, err := unmarshalNode(expr.Root)
 	if err != nil {
 		return err
@@ -565,6 +612,8 @@ func unmarshalNode(msg *json.RawMessage) (Node, error) {
 		node = new(RegexpLiteralNode)
 	case Reference:
 		node = new(ReferenceNode)
+	case MemberReference:
+		node = new(MemberReferenceNode)
 	default:
 		return nil, fmt.Errorf("unknown type %v", typ.Type)
 	}

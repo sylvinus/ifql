@@ -171,13 +171,17 @@ func TestExecutor_Execute(t *testing.T) {
 							Eval: expression.Expression{
 								Root: &expression.BinaryNode{
 									Operator: expression.DivisionOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
+									Left: &expression.MemberReferenceNode{
+										Object: &expression.ReferenceNode{
+											Name: "r",
+										},
+										Property: "_field",
 									},
-									Right: &expression.ReferenceNode{
-										Name: "b",
-										Kind: "identifier",
+									Right: &expression.MemberReferenceNode{
+										Object: &expression.ReferenceNode{
+											Name: "b",
+										},
+										Property: "_field",
 									},
 								},
 							},

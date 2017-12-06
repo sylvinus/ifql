@@ -371,15 +371,18 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
+								Params: []string{"r"},
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
 									Left: &expression.BinaryNode{
 										Operator: expression.AndOperator,
 										Left: &expression.BinaryNode{
 											Operator: expression.EqualOperator,
-											Left: &expression.ReferenceNode{
-												Name: "_metric",
-												Kind: "tag",
+											Left: &expression.MemberReferenceNode{
+												Object: &expression.ReferenceNode{
+													Name: "r",
+												},
+												Property: "_metric",
 											},
 											Right: &expression.StringLiteralNode{
 												Value: "node_cpu",
@@ -387,9 +390,11 @@ func TestBuild(t *testing.T) {
 										},
 										Right: &expression.BinaryNode{
 											Operator: expression.EqualOperator,
-											Left: &expression.ReferenceNode{
-												Name: "mode",
-												Kind: "tag",
+											Left: &expression.MemberReferenceNode{
+												Object: &expression.ReferenceNode{
+													Name: "r",
+												},
+												Property: "mode",
 											},
 											Right: &expression.StringLiteralNode{
 												Value: "user",
@@ -398,9 +403,11 @@ func TestBuild(t *testing.T) {
 									},
 									Right: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "cpu",
-											Kind: "tag",
+										Left: &expression.MemberReferenceNode{
+											Object: &expression.ReferenceNode{
+												Name: "r",
+											},
+											Property: "cpu",
 										},
 										Right: &expression.StringLiteralNode{
 											Value: "cpu2",
@@ -445,13 +452,16 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
+								Params: []string{"r"},
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
 									Left: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_metric",
-											Kind: "tag",
+										Left: &expression.MemberReferenceNode{
+											Object: &expression.ReferenceNode{
+												Name: "r",
+											},
+											Property: "_metric",
 										},
 										Right: &expression.StringLiteralNode{
 											Value: "node_cpu",
@@ -459,9 +469,11 @@ func TestBuild(t *testing.T) {
 									},
 									Right: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "mode",
-											Kind: "tag",
+										Left: &expression.MemberReferenceNode{
+											Object: &expression.ReferenceNode{
+												Name: "r",
+											},
+											Property: "mode",
 										},
 										Right: &expression.StringLiteralNode{
 											Value: "user",
@@ -504,13 +516,16 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Expression: expression.Expression{
+								Params: []string{"r"},
 								Root: &expression.BinaryNode{
 									Operator: expression.AndOperator,
 									Left: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_metric",
-											Kind: "tag",
+										Left: &expression.MemberReferenceNode{
+											Object: &expression.ReferenceNode{
+												Name: "r",
+											},
+											Property: "_metric",
 										},
 										Right: &expression.StringLiteralNode{
 											Value: "node_cpu",
@@ -518,9 +533,11 @@ func TestBuild(t *testing.T) {
 									},
 									Right: &expression.BinaryNode{
 										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_measurement",
-											Kind: "tag",
+										Left: &expression.MemberReferenceNode{
+											Object: &expression.ReferenceNode{
+												Name: "r",
+											},
+											Property: "_measurement",
 										},
 										Right: &expression.StringLiteralNode{
 											Value: "m0",

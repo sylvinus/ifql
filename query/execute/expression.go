@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ExpressionToStoragePredicate(e expression.Node) (*storage.Predicate, error) {
-	root, err := doExpression(e)
+func ExpressionToStoragePredicate(e expression.Expression, objectName string) (*storage.Predicate, error) {
+	root, err := doExpression(e.Root, objectName)
 	if err != nil {
 		return nil, err
 	}
@@ -18,14 +18,14 @@ func ExpressionToStoragePredicate(e expression.Node) (*storage.Predicate, error)
 	}, nil
 }
 
-func doExpression(e expression.Node) (*storage.Node, error) {
+func doExpression(e expression.Node, objectName string) (*storage.Node, error) {
 	switch expr := e.(type) {
 	case *expression.BinaryNode:
-		left, err := doExpression(expr.Left)
+		left, err := doExpression(expr.Left, objectName)
 		if err != nil {
 			return nil, errors.Wrap(err, "left hand side")
 		}
-		right, err := doExpression(expr.Right)
+		right, err := doExpression(expr.Right, objectName)
 		if err != nil {
 			return nil, errors.Wrap(err, "right hand side")
 		}
@@ -88,25 +88,24 @@ func doExpression(e expression.Node) (*storage.Node, error) {
 				RegexValue: expr.Value,
 			},
 		}, nil
-	case *expression.ReferenceNode:
-		switch expr.Kind {
-		case "tag":
-			return &storage.Node{
-				NodeType: storage.NodeTypeTagRef,
-				Value: &storage.Node_TagRefValue{
-					TagRefValue: expr.Name,
-				},
-			}, nil
-		case "field":
+	case *expression.MemberReferenceNode:
+		if expr.Property == "_field" {
 			return &storage.Node{
 				NodeType: storage.NodeTypeFieldRef,
 				Value: &storage.Node_FieldRefValue{
 					FieldRefValue: "_field",
 				},
 			}, nil
-		default:
-			return nil, fmt.Errorf("unsupported reference kind %q", expr.Kind)
 		}
+		if rn, ok := expr.Object.(*expression.ReferenceNode); !ok || rn.Name != objectName {
+			return nil, fmt.Errorf("unknown object %q", expr.Object)
+		}
+		return &storage.Node{
+			NodeType: storage.NodeTypeTagRef,
+			Value: &storage.Node_TagRefValue{
+				TagRefValue: expr.Property,
+			},
+		}, nil
 	case *expression.DurationLiteralNode:
 		return nil, errors.New("duration literals not supported in storage predicates")
 	case *expression.TimeLiteralNode:
@@ -267,6 +266,9 @@ func (c compiledExpression) EvalTime(scope Scope) (Time, error) {
 
 func compile(n expression.Node, types map[string]DataType) (DataTypeEvaluator, error) {
 	switch n := n.(type) {
+	case *expression.MemberReferenceNode:
+		// TODO(nathanielc): Consume Property of MemberReferenceNode
+		return compile(n.Object, types)
 	case *expression.ReferenceNode:
 		return &referenceEvaluator{
 			compiledType: compiledType(types[n.Name]),

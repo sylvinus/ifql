@@ -26,7 +26,7 @@ func init() {
 }
 
 func createFilterOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
-	expr, err := args.GetRequiredExpression("exp")
+	expr, err := args.GetRequiredExpression("f")
 	if err != nil {
 		return nil, err
 	}

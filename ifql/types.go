@@ -51,7 +51,7 @@ func memberexprs(head, tail interface{}, text []byte, pos position) (ast.Express
 	for _, prop := range toIfaceSlice(tail) {
 		res = &ast.MemberExpression{
 			Object:   res,
-			Property: prop.(*ast.Identifier),
+			Property: prop.(ast.Expression),
 			BaseNode: base(text, pos),
 		}
 	}
@@ -104,9 +104,16 @@ func callexprs(head, tail interface{}, text []byte, pos position) (ast.Expressio
 	return expr, nil
 }
 
-func function(e interface{}) *ast.FunctionExpression {
-	return &ast.FunctionExpression{
-		Function: e.(ast.Expression),
+func arrowfunc(params interface{}, body interface{}, text []byte, pos position) *ast.ArrowFunctionExpression {
+	paramsSlice := toIfaceSlice(params)
+	idents := make([]*ast.Identifier, len(paramsSlice))
+	for i, p := range paramsSlice {
+		idents[i] = p.(*ast.Identifier)
+	}
+	return &ast.ArrowFunctionExpression{
+		BaseNode: base(text, pos),
+		Params:   idents,
+		Body:     body.(ast.Expression),
 	}
 }
 
@@ -228,13 +235,6 @@ func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
 	return &ast.NumberLiteral{
 		BaseNode: base(text, pos),
 		Value:    n,
-	}, nil
-}
-
-func fieldLiteral(text []byte, pos position) (*ast.FieldLiteral, error) {
-	return &ast.FieldLiteral{
-		BaseNode: base(text, pos),
-		Value:    "$",
 	}, nil
 }
 

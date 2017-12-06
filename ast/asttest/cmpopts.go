@@ -10,6 +10,7 @@ import (
 
 var IgnoreBaseNodeOptions = []cmp.Option{
 	cmpopts.IgnoreFields(ast.ArrayExpression{}, "BaseNode"),
+	cmpopts.IgnoreFields(ast.ArrowFunctionExpression{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.BinaryExpression{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.BooleanLiteral{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.CallExpression{}, "BaseNode"),
@@ -17,8 +18,6 @@ var IgnoreBaseNodeOptions = []cmp.Option{
 	cmpopts.IgnoreFields(ast.DateTimeLiteral{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.DurationLiteral{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.ExpressionStatement{}, "BaseNode"),
-	cmpopts.IgnoreFields(ast.FieldLiteral{}, "BaseNode"),
-	cmpopts.IgnoreFields(ast.FunctionExpression{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.Identifier{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.IntegerLiteral{}, "BaseNode"),
 	cmpopts.IgnoreFields(ast.LogicalExpression{}, "BaseNode"),

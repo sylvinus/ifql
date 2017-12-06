@@ -24,8 +24,6 @@ func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
 }
 
 type Context interface {
-	// LookupIDFromIdentifier returns the operation ID of an existing operation for a given identifier.
-	LookupIDFromIdentifier(string) (query.OperationID, error)
 	// AdditionalParent indicates that additional parents IDs should be added to this operation.
 	AdditionalParent(id query.OperationID)
 }
@@ -157,8 +155,19 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 			Type:  TExpression,
 			Value: expression.Expression{Root: root},
 		}, nil
-	case *ast.FunctionExpression:
-		return ev.doExpression(e.Function)
+	case *ast.ArrowFunctionExpression:
+		v, err := ev.doExpression(e.Body)
+		if err != nil {
+			return Value{}, err
+		}
+		expr := v.Value.(expression.Expression)
+		params := make([]string, len(e.Params))
+		for i, p := range e.Params {
+			params[i] = p.Name
+		}
+		expr.Params = params
+		v.Value = expr
+		return v, nil
 	case *ast.ArrayExpression:
 		return ev.doArray(e)
 	default:
@@ -293,11 +302,11 @@ func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
 
 }
 
-// CallChain is an intermediate structure to build QuerySpecs during recursion through the AST
+// CallChain represents a table created via a call chain.
 type CallChain struct {
+	Parent     query.OperationID
 	Operations []*query.Operation
 	Edges      []query.Edge
-	Parent     query.OperationID
 }
 
 func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
@@ -380,7 +389,9 @@ func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallCha
 		return nil, "", fmt.Errorf("unsupported member expression object type %t", obj)
 	}
 
-	return chain, member.Property.Name, nil
+	property := member.Property.(*ast.Identifier)
+
+	return chain, property.Name, nil
 }
 
 func (ev *evaluator) method(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
@@ -485,12 +496,12 @@ func (ev *evaluator) binaryOperation(expr ast.Expression) (expression.Node, erro
 }
 
 func (ev *evaluator) binaryExpression(expr *ast.BinaryExpression) (expression.Node, error) {
-	lhs, err := ev.primaryNode(expr.Left, true /* isLeft */)
+	lhs, err := ev.primaryNode(expr.Left)
 	if err != nil {
 		return nil, err
 	}
 
-	rhs, err := ev.primaryNode(expr.Right, false /* isLeft */)
+	rhs, err := ev.primaryNode(expr.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -558,23 +569,11 @@ func logicalOperator(op ast.LogicalOperatorKind) (expression.Operator, error) {
 	}
 }
 
-const (
-	tagRefKind   = "tag"
-	fieldRefKind = "field"
-	identRefKind = "identifier"
-)
-
-func (ev *evaluator) primaryNode(expr ast.Expression, isLeft bool) (expression.Node, error) {
+func (ev *evaluator) primaryNode(expr ast.Expression) (expression.Node, error) {
 	switch e := expr.(type) {
 	case *ast.BinaryExpression:
 		return ev.binaryExpression(e)
 	case *ast.StringLiteral:
-		if isLeft {
-			return &expression.ReferenceNode{
-				Name: e.Value,
-				Kind: tagRefKind,
-			}, nil
-		}
 		return &expression.StringLiteralNode{
 			Value: e.Value,
 		}, nil
@@ -602,18 +601,36 @@ func (ev *evaluator) primaryNode(expr ast.Expression, isLeft bool) (expression.N
 		return &expression.RegexpLiteralNode{
 			Value: e.Value.String(),
 		}, nil
-	case *ast.FieldLiteral:
-		return &expression.ReferenceNode{
-			Name: e.Value,
-			Kind: fieldRefKind,
-		}, nil
 	case *ast.Identifier:
 		return &expression.ReferenceNode{
 			Name: e.Name,
-			Kind: identRefKind,
+		}, nil
+	case *ast.MemberExpression:
+		o, err := ev.primaryNode(e.Object)
+		if err != nil {
+			return nil, err
+		}
+		p, err := ev.propertyName(e)
+		if err != nil {
+			return nil, err
+		}
+		return &expression.MemberReferenceNode{
+			Object:   o,
+			Property: p,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown primary type: %T", expr)
+	}
+}
+
+func (ev *evaluator) propertyName(m *ast.MemberExpression) (string, error) {
+	switch p := m.Property.(type) {
+	case *ast.Identifier:
+		return p.Name, nil
+	case *ast.StringLiteral:
+		return p.Value, nil
+	default:
+		return "", fmt.Errorf("unsupported property expression of type %T", m.Property)
 	}
 }
 

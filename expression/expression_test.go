@@ -17,13 +17,17 @@ func TestNodeMarshal(t *testing.T) {
 	}{
 		{
 			json: []byte(`{
+				"params": ["a"],
 				"root":{
 					"type":"binary",
 					"operator": "==",
 					"left":{
-						"type": "reference",
-						"name": "_measurement",
-						"kind": "tag"
+						"type": "memberReference",
+						"object": {
+							"type": "reference",
+							"name": "a"
+						},
+						"property": "_measurement"
 					},
 					"right":{
 						"type": "stringLiteral",
@@ -32,11 +36,14 @@ func TestNodeMarshal(t *testing.T) {
 				}
 			}`),
 			expr: expression.Expression{
+				Params: []string{"a"},
 				Root: &expression.BinaryNode{
 					Operator: expression.EqualOperator,
-					Left: &expression.ReferenceNode{
-						Name: "_measurement",
-						Kind: "tag",
+					Left: &expression.MemberReferenceNode{
+						Object: &expression.ReferenceNode{
+							Name: "a",
+						},
+						Property: "_measurement",
 					},
 					Right: &expression.StringLiteralNode{
 						Value: "abc",
@@ -157,16 +164,38 @@ func TestNodeMarshal(t *testing.T) {
 		},
 		{
 			json: []byte(`{
+				"params": ["b"],
 				"root":{
 					"type": "reference",
-					"name": "t1",
-					"kind": "tag"
+					"name": "b"
 				}
 			}`),
 			expr: expression.Expression{
+				Params: []string{"b"},
 				Root: &expression.ReferenceNode{
-					Name: "t1",
-					Kind: "tag",
+					Name: "b",
+				},
+			},
+		},
+		{
+			json: []byte(`{
+				"params": ["a"],
+				"root":{
+					"type": "memberReference",
+					"object": {
+						"type": "reference",
+						"name": "a"
+					},
+					"property": "t1"
+				}
+			}`),
+			expr: expression.Expression{
+				Params: []string{"a"},
+				Root: &expression.MemberReferenceNode{
+					Object: &expression.ReferenceNode{
+						Name: "a",
+					},
+					Property: "t1",
 				},
 			},
 		},

@@ -54,10 +54,10 @@ ExpressionStatement
         return exprstmt(call, c.text, c.pos)
     }
 
-MemberExpression
+MemberExpressions
   = head:Identifier // TODO: should be primary
     tail:(
-        __ "." __ property:Identifier {
+        property:MemberExpressionProperty {
           return property, nil
         }
     )*
@@ -65,9 +65,17 @@ MemberExpression
       return memberexprs(head, tail, c.text, c.pos)
     }
 
+MemberExpressionProperty
+  = __ "." __ property:Identifier {
+      return property, nil
+    }
+    / __ "[" __ property:Primary __ "]" __ {
+      return property, nil
+    }
+
 CallExpression
   = head:(
-      callee:MemberExpression __ args:Arguments {
+      callee:MemberExpressions __ args:Arguments {
         return callexpr(callee, args, c.text, c.pos)
       }
     )
@@ -75,7 +83,7 @@ CallExpression
         __ args:Arguments {
           return callexpr(nil, args, c.text, c.pos)
         }
-      / __ "." __ property:Identifier {
+      / property:MemberExpressionProperty {
           return memberexpr(nil, property, c.text, c.pos)
         }
     )*
@@ -104,13 +112,36 @@ FunctionArg
     }
 
 FunctionArgValues
-  = LambdaExpression
-  / Primary
+  = Primary
 
-LambdaExpression
-  = "{" __ expr:Expr __  "}" {
-      return function(expr), nil
+ArrowFunctionExpression
+  = __ params:ArrowFunctionParams __ "=>" __ body:ArrowFunctionBody __  {
+      return arrowfunc(params, body, c.text, c.pos), nil
     }
+
+ArrowFunctionParams
+  = "(" first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest+ ","? ")" {
+      return append([]interface{}{first}, toIfaceSlice(rest)...), nil
+    }
+  / first:ArrowFunctionParam {
+      return []interface{}{first}, nil
+    }
+
+ArrowFunctionParamsRest
+  = "," __  arg:ArrowFunctionParam {
+      return arg, nil
+    }
+
+ArrowFunctionParam
+  =  __ key:Identifier __  {
+      return key, nil
+    }
+
+ArrowFunctionBody
+  =  __ body:Expr __  {
+      return body, nil
+    }
+
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
@@ -192,7 +223,8 @@ Primary
   / DateTime
   / Number
   / Integer
-  / Field
+  / ArrowFunctionExpression
+  / MemberExpressions
   / Identifier
 
 
@@ -343,11 +375,6 @@ NonZeroDigit
 
 Digit
   = [0-9]
-
-Field
-  = field:'$' {
-      return fieldLiteral(c.text, c.pos)
-    }
 
 RegularExpressionLiteral "regular expression"
   = "/" pattern:RegularExpressionBody "/" {
