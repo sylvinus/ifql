@@ -50,7 +50,7 @@ func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpe
 	} else if ok {
 		tables := array.Elements.([]*ifql.CallChain)
 		for _, t := range tables {
-			ctx.AdditionalParent(t.Parent)
+			ctx.AddParent(t.ID)
 		}
 	}
 

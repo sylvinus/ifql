@@ -13,10 +13,12 @@ import (
 
 // Evaluate validates and converts an ast.Program to a query
 func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
-	ev := evaluator{
-		scope: newScope(),
-	}
-	err := ev.eval(program)
+	ev := evaluator{}
+
+	// Create top-level builtin scope
+	scope := newBuiltInScope()
+
+	err := ev.eval(program, scope.Nest())
 	if err != nil {
 		return nil, err
 	}
@@ -24,77 +26,62 @@ func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
 }
 
 type Context interface {
-	// AdditionalParent indicates that additional parents IDs should be added to this operation.
-	AdditionalParent(id query.OperationID)
+	// AddParent instructs the evaluation context that a new edge should be created from the parent to the current operation.
+	// Duplicate parents will be removed, so the caller need not concern itself with which parents have already been added.
+	AddParent(id query.OperationID)
+	// SetSpec instructs the evaluation to set the specified spec for the current operation.
+	setSpec(spec query.OperationSpec)
 }
 
 type CreateOperationSpec func(args Arguments, ctx Context) (query.OperationSpec, error)
 
-var functionsMap = make(map[string]CreateOperationSpec)
-var methodMap = make(map[string]CreateOperationSpec)
+var functionsMap = make(map[string]*Function)
 
-// RegisterFunction adds a new top level function.
+// RegisterFunction adds a new top level builtin function.
 func RegisterFunction(name string, c CreateOperationSpec) {
-	if functionsMap[name] != nil {
-		panic(fmt.Errorf("duplicate registration for function %q", name))
-	}
-	functionsMap[name] = c
+	registerFunction(name, c, false)
 }
 
-// RegisterMethod adds a new chaining method.
+// RegisterMethod adds a new builtin method.
 func RegisterMethod(name string, c CreateOperationSpec) {
-	if methodMap[name] != nil {
-		panic(fmt.Errorf("duplicate registration for method %q", name))
+	registerFunction(name, c, true)
+}
+
+func registerFunction(name string, c CreateOperationSpec, chainable bool) {
+	if _, ok := functionsMap[name]; ok {
+		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
-	methodMap[name] = c
+	functionsMap[name] = &Function{
+		call: func(args Arguments, ctx Context) error {
+			spec, err := c(args, ctx)
+			if err != nil {
+				return err
+			}
+			ctx.setSpec(spec)
+			return nil
+		},
+		Chainable: chainable,
+	}
 }
 
 type evaluator struct {
-	id    int
-	scope *scope
+	id int
 
 	operations []*query.Operation
 	edges      []query.Edge
 }
 
-func (ev *evaluator) eval(program *ast.Program) error {
-	// TODO: There are other possible expression/variable statements
-	for _, stmt := range program.Body {
-		switch s := stmt.(type) {
-		case *ast.VariableDeclaration:
-			if err := ev.doVariableDeclaration(s); err != nil {
-				return err
-			}
-		case *ast.ExpressionStatement:
-			value, err := ev.doExpression(s.Expression)
-			if err != nil {
-				return err
-			}
-			if value.Type == TChain {
-				chain := value.Value.(*CallChain)
-				ev.addChain(chain)
-			}
-		default:
-			return fmt.Errorf("unsupported program statement expression type %t", s)
-		}
-	}
-	return nil
-}
-
-// TODO: There are other possible expression/variable statements
 func (ev *evaluator) spec() *query.QuerySpec {
 	return &query.QuerySpec{
 		Operations: ev.operations,
 		Edges:      ev.edges,
 	}
 }
-
 func (ev *evaluator) nextID() int {
 	id := ev.id
 	ev.id++
 	return id
 }
-
 func (ev *evaluator) addChain(chain *CallChain) {
 	ev.operations = append(ev.operations, chain.Operations...)
 	ev.edges = append(ev.edges, chain.Edges...)
@@ -102,13 +89,50 @@ func (ev *evaluator) addChain(chain *CallChain) {
 	chain.Edges = chain.Edges[0:0]
 }
 
-func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration) error {
-	for _, vd := range declarations.Declarations {
-		value, err := ev.doExpression(vd.Init)
+func (ev *evaluator) eval(program *ast.Program, scope *evalScope) error {
+	for _, stmt := range program.Body {
+		if err := ev.evalStmt(stmt, scope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ev *evaluator) evalStmt(stmt ast.Statement, scope *evalScope) error {
+	switch s := stmt.(type) {
+	case *ast.VariableDeclaration:
+		if err := ev.doVariableDeclaration(s, scope); err != nil {
+			return err
+		}
+	case *ast.ExpressionStatement:
+		value, err := ev.doExpression(s.Expression, scope)
 		if err != nil {
 			return err
 		}
-		ev.scope.Set(vd.ID.Name, value)
+		if value.Type == TChain {
+			chain := value.Value.(*CallChain)
+			ev.addChain(chain)
+		}
+	case *ast.BlockStatement:
+		scope = scope.Nest()
+		for _, stmt := range s.Body {
+			if err := ev.evalStmt(stmt, scope); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported statement type %T", stmt)
+	}
+	return nil
+}
+
+func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *evalScope) error {
+	for _, vd := range declarations.Declarations {
+		value, err := ev.doExpression(vd.Init, scope)
+		if err != nil {
+			return err
+		}
+		scope.Set(vd.ID.Name, value)
 		if value.Type == TChain {
 			chain := value.Value.(*CallChain)
 			ev.addChain(chain)
@@ -117,18 +141,18 @@ func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration
 	return nil
 }
 
-func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
+func (ev *evaluator) doExpression(expr ast.Expression, scope *evalScope) (Value, error) {
 	switch e := expr.(type) {
 	case ast.Literal:
 		return ev.doLiteral(e)
 	case *ast.Identifier:
-		value, ok := ev.scope.Get(e.Name)
+		value, ok := scope.Lookup(e.Name)
 		if !ok {
 			return Value{}, fmt.Errorf("undefined identifier %q", e.Name)
 		}
 		return value, nil
 	case *ast.CallExpression:
-		chain, err := ev.callFunction(e, nil)
+		chain, err := ev.callFunction(e, nil, scope)
 		if err != nil {
 			return Value{}, err
 		}
@@ -156,7 +180,8 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 			Value: expression.Expression{Root: root},
 		}, nil
 	case *ast.ArrowFunctionExpression:
-		v, err := ev.doExpression(e.Body)
+		// TODO(nathanielc): Figure out how to resolve ArrowFunction body.
+		v, err := ev.doExpression(e.Body.(ast.Expression), scope)
 		if err != nil {
 			return Value{}, err
 		}
@@ -169,19 +194,19 @@ func (ev *evaluator) doExpression(expr ast.Expression) (Value, error) {
 		v.Value = expr
 		return v, nil
 	case *ast.ArrayExpression:
-		return ev.doArray(e)
+		return ev.doArray(e, scope)
 	default:
 		return Value{}, fmt.Errorf("unsupported expression %T", expr)
 	}
 }
 
-func (ev *evaluator) doArray(a *ast.ArrayExpression) (Value, error) {
+func (ev *evaluator) doArray(a *ast.ArrayExpression, scope *evalScope) (Value, error) {
 	array := Array{
 		Type: TInvalid,
 	}
 	elements := make([]Value, len(a.Elements))
 	for i, el := range a.Elements {
-		v, err := ev.doExpression(el)
+		v, err := ev.doExpression(el, scope)
 		if err != nil {
 			return Value{}, err
 		}
@@ -304,21 +329,21 @@ func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
 
 // CallChain represents a table created via a call chain.
 type CallChain struct {
-	Parent     query.OperationID
+	ID         query.OperationID
 	Operations []*query.Operation
 	Edges      []query.Edge
 }
 
-func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*CallChain, error) {
+func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain, scope *evalScope) (*CallChain, error) {
 	switch callee := call.Callee.(type) {
 	case *ast.Identifier:
-		op, parents, err := ev.function(callee.Name, call.Arguments)
+		op, parents, err := ev.function(callee.Name, call.Arguments, scope)
 		if err != nil {
 			return nil, err
 		}
 		chain := &CallChain{
 			Operations: []*query.Operation{op},
-			Parent:     op.ID,
+			ID:         op.ID,
 		}
 		// Add any additional parents
 		for _, p := range parents {
@@ -329,12 +354,12 @@ func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*
 		}
 		return chain, nil
 	case *ast.MemberExpression:
-		chain, name, err := ev.memberFunction(callee, chain)
+		chain, name, err := ev.memberFunction(callee, chain, scope)
 		if err != nil {
 			return nil, err
 		}
 
-		op, parents, err := ev.method(name, call.Arguments)
+		op, parents, err := ev.method(name, call.Arguments, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -342,13 +367,13 @@ func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*
 		// Update chain
 		chain.Operations = append(chain.Operations, op)
 		chain.Edges = append(chain.Edges, query.Edge{
-			Parent: chain.Parent,
+			Parent: chain.ID,
 			Child:  op.ID,
 		})
 
 		// Add any additional parents
 		for _, p := range parents {
-			if p != chain.Parent {
+			if p != chain.ID {
 				chain.Edges = append(chain.Edges, query.Edge{
 					Parent: p,
 					Child:  op.ID,
@@ -356,24 +381,24 @@ func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain) (*
 			}
 		}
 
-		// Update ParentID
-		chain.Parent = op.ID
+		// Update ID
+		chain.ID = op.ID
 		return chain, nil
 	default:
 		return nil, fmt.Errorf("Unsupported callee expression type %t", callee)
 	}
 }
 
-func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallChain) (*CallChain, string, error) {
+func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallChain, scope *evalScope) (*CallChain, string, error) {
 	switch obj := member.Object.(type) {
 	case *ast.CallExpression:
 		var err error
-		chain, err = ev.callFunction(obj, chain)
+		chain, err = ev.callFunction(obj, chain, scope)
 		if err != nil {
 			return nil, "", err
 		}
 	case *ast.Identifier:
-		value, ok := ev.scope.Get(obj.Name)
+		value, ok := scope.Lookup(obj.Name)
 		if !ok {
 			return nil, "", fmt.Errorf("undefined identifier %q", obj.Name)
 		}
@@ -394,65 +419,82 @@ func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallCha
 	return chain, property.Name, nil
 }
 
-func (ev *evaluator) method(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
-	createOpSpec, ok := methodMap[name]
-	if !ok {
-		return nil, nil, fmt.Errorf("unknown method %q", name)
-	}
-
-	op, id, err := ev.createOp(name, createOpSpec, args)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error calling method %q", name)
-	}
-	return op, id, nil
-}
-
-func (ev *evaluator) function(name string, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
-	createOpSpec, ok := functionsMap[name]
+func (ev *evaluator) function(name string, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
+	v, ok := scope.Lookup(name)
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown function %q", name)
 	}
+	if v.Type != TFunction {
+		return nil, nil, fmt.Errorf("var %q is not a function", name)
+	}
+	f := v.Value.(*Function)
 
-	op, id, err := ev.createOp(name, createOpSpec, args)
+	op, id, err := ev.createOp(name, f.call, args, scope)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error calling function %q", name)
+	}
+	return op, id, nil
+}
+func (ev *evaluator) method(name string, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
+	v, ok := scope.Lookup(name)
+	if !ok {
+		return nil, nil, fmt.Errorf("unknown method %q", name)
+	}
+	if v.Type != TFunction {
+		return nil, nil, fmt.Errorf("var %q is not a method", name)
+	}
+	f := v.Value.(*Function)
+	if !f.Chainable {
+		return nil, nil, fmt.Errorf("cannot call %q as a chaining method, %s is a global function.", name, name)
+	}
+
+	op, id, err := ev.createOp(name, f.call, args, scope)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "error calling function %q", name)
 	}
 	return op, id, nil
 }
 
-func (ev *evaluator) createOp(name string, createOpSpec CreateOperationSpec, args []ast.Expression) (*query.Operation, []query.OperationID, error) {
+func (ev *evaluator) createOp(name string, createOpSpec func(Arguments, Context) error, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
 	op := &query.Operation{
 		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
 	}
-	var paramMap map[string]Value
-	if len(args) == 1 {
-		params, ok := args[0].(*ast.ObjectExpression)
-		if !ok {
-			return nil, nil, fmt.Errorf("arguments not a valid object expression")
-		}
-		var err error
-		paramMap, err = ev.resolveParameters(params)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	arguments := newArguments(paramMap)
-	ctx := &context{scope: ev.scope}
-	spec, err := createOpSpec(arguments, ctx)
+	arguments, err := ev.resolveArguments(args, scope)
 	if err != nil {
+		return nil, nil, err
+	}
+	ctx := new(context)
+	if err := createOpSpec(arguments, ctx); err != nil {
 		return nil, nil, err
 	}
 	if unused := arguments.listUnused(); len(unused) > 0 {
 		return nil, nil, fmt.Errorf("extra arguments provided: [%s]", strings.Join(unused, ","))
 	}
-	op.Spec = spec
+	op.Spec = ctx.spec
 	return op, ctx.parents, nil
 }
 
-func (ev *evaluator) resolveParameters(params *ast.ObjectExpression) (map[string]Value, error) {
+func (ev *evaluator) resolveArguments(args []ast.Expression, scope *evalScope) (Arguments, error) {
+	if l := len(args); l > 1 {
+		return nil, fmt.Errorf("arguments not a single object expression %v", args)
+	} else if l == 0 {
+		return newArguments(nil), nil
+	}
+	params, ok := args[0].(*ast.ObjectExpression)
+	if !ok {
+		return nil, fmt.Errorf("arguments not a valid object expression")
+	}
+	paramMap, err := ev.resolveParameters(params, scope)
+	if err != nil {
+		return nil, err
+	}
+	return newArguments(paramMap), nil
+}
+
+func (ev *evaluator) resolveParameters(params *ast.ObjectExpression, scope *evalScope) (map[string]Value, error) {
 	paramsMap := make(map[string]Value, len(params.Properties))
 	for _, p := range params.Properties {
-		value, err := ev.doExpression(p.Value)
+		value, err := ev.doExpression(p.Value, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -656,22 +698,50 @@ func (ev *evaluator) logicalExpression(expr *ast.LogicalExpression) (expression.
 	}, nil
 }
 
-type scope struct {
-	vars map[string]Value
+type evalScope struct {
+	parent *evalScope
+	values map[string]Value
 }
 
-func newScope() *scope {
-	return &scope{
-		vars: make(map[string]Value),
+func newScope() *evalScope {
+	return &evalScope{
+		values: make(map[string]Value),
 	}
 }
 
-func (s *scope) Get(name string) (Value, bool) {
-	v, ok := s.vars[name]
+// newBuiltInScope returns a scope populated with the builtin values.
+func newBuiltInScope() *evalScope {
+	s := &evalScope{
+		values: make(map[string]Value, len(functionsMap)),
+	}
+	for n, f := range functionsMap {
+		s.values[n] = Value{
+			Type:  TFunction,
+			Value: f,
+		}
+	}
+	return s
+}
+
+func (s *evalScope) Lookup(name string) (Value, bool) {
+	if s == nil {
+		return Value{}, false
+	}
+	v, ok := s.values[name]
+	if !ok {
+		return s.parent.Lookup(name)
+	}
 	return v, ok
 }
-func (s *scope) Set(name string, value Value) {
-	s.vars[name] = value
+func (s *evalScope) Set(name string, value Value) {
+	s.values[name] = value
+}
+
+// Nest returns a new nested scope.
+func (s *evalScope) Nest() *evalScope {
+	c := newScope()
+	c.parent = s
+	return c
 }
 
 // TODO(nathanielc): Maybe we want Value to be an interface instead of a struct?
@@ -696,6 +766,7 @@ const (
 	TMap                    // Go type Map
 	TChain                  // Go type *CallChain
 	TExpression             // Go type expression.Expression
+	TFunction               // Go type *Function
 )
 
 // String converts Type into a string representation of the type's name
@@ -742,31 +813,29 @@ type Map struct {
 	Elements interface{}
 }
 
-type context struct {
-	scope   *scope
-	parents []query.OperationID
+type Function struct {
+	Chainable bool
+
+	// call is the implementation of the function
+	call func(Arguments, Context) error
 }
 
-func (c *context) LookupIDFromIdentifier(ident string) (id query.OperationID, err error) {
-	v, ok := c.scope.Get(ident)
-	if !ok {
-		err = fmt.Errorf("unknown identifier %q", ident)
-		return
-	}
-	if v.Type != TChain {
-		err = fmt.Errorf("identifier not a function chain %q, got %v", ident, v.Type)
-		return
-	}
-	id = v.Value.(*CallChain).Parent
-	return
+type context struct {
+	parents []query.OperationID
+	spec    query.OperationSpec
 }
-func (c *context) AdditionalParent(id query.OperationID) {
+
+func (c *context) AddParent(id query.OperationID) {
+	// Check for duplicates
 	for _, p := range c.parents {
 		if p == id {
 			return
 		}
 	}
 	c.parents = append(c.parents, id)
+}
+func (c *context) setSpec(spec query.OperationSpec) {
+	c.spec = spec
 }
 
 // Arguments provides access to the keyword arguments passed to a function.

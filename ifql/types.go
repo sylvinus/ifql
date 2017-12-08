@@ -25,6 +25,18 @@ func srcElems(head, tails interface{}) ([]ast.Statement, error) {
 	return elems, nil
 }
 
+func blockstmt(body interface{}, text []byte, pos position) (*ast.BlockStatement, error) {
+	bodySlice := toIfaceSlice(body)
+	statements := make([]ast.Statement, len(bodySlice))
+	for i, s := range bodySlice {
+		statements[i] = s.(ast.Statement)
+	}
+	return &ast.BlockStatement{
+		BaseNode: base(text, pos),
+		Body:     statements,
+	}, nil
+}
+
 func varstmt(declaration interface{}, text []byte, pos position) (*ast.VariableDeclaration, error) {
 	return &ast.VariableDeclaration{
 		Declarations: []*ast.VariableDeclarator{declaration.(*ast.VariableDeclarator)},
@@ -43,6 +55,13 @@ func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionState
 	return &ast.ExpressionStatement{
 		Expression: call.(ast.Expression),
 		BaseNode:   base(text, pos),
+	}, nil
+}
+
+func returnstmt(argument interface{}, text []byte, pos position) (*ast.ReturnStatement, error) {
+	return &ast.ReturnStatement{
+		BaseNode: base(text, pos),
+		Argument: argument.(ast.Expression),
 	}, nil
 }
 
@@ -113,7 +132,7 @@ func arrowfunc(params interface{}, body interface{}, text []byte, pos position) 
 	return &ast.ArrowFunctionExpression{
 		BaseNode: base(text, pos),
 		Params:   idents,
-		Body:     body.(ast.Expression),
+		Body:     body.(ast.Node),
 	}
 }
 

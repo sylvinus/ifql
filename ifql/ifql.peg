@@ -26,11 +26,25 @@ SourceElement
 Statement
   = varstmt:VariableStatement
   / exprstmt:ExpressionStatement
+  / blockstmt:BlockStatement
+  / returnstmt:ReturnStatement
+
+BlockStatement
+  = "{" __ body:Statement* __ "}" {
+    return blockstmt(body, c.text, c.pos)
+  }
+  
 
 VariableStatement
   = VarToken __ declaration:VariableDeclaration {
       return varstmt(declaration, c.text, c.pos)
     }
+
+
+ReturnStatement
+  = "return" __ argument:Expr __  {
+    return returnstmt(argument, c.text, c.pos)
+  }
 
 VarToken = "var"
 
@@ -141,6 +155,9 @@ ArrowFunctionBody
   =  __ body:Expr __  {
       return body, nil
     }
+  / __ body:BlockStatement __ {
+    return body, nil
+  }
 
 
 // + -

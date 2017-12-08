@@ -27,9 +27,11 @@ type Node interface {
 
 func (*BaseNode) node() {}
 
+func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
 func (*VariableDeclaration) node() {}
 func (*VariableDeclarator) node()  {}
+func (*ReturnStatement) node()     {}
 
 func (*CallExpression) node()        {}
 func (*MemberExpression) node()      {}
@@ -75,6 +77,17 @@ type Statement interface {
 
 func (*ExpressionStatement) stmt() {}
 func (*VariableDeclaration) stmt() {}
+func (*BlockStatement) stmt()      {}
+func (*ReturnStatement) stmt()     {}
+
+// BlockStatement is a set of statements
+type BlockStatement struct {
+	*BaseNode
+	Body []Statement
+}
+
+// Type is the abstract type
+func (*BlockStatement) Type() string { return "ReturnStatement" }
 
 // ExpressionStatement may consist of an expression that does not return a value and is executed solely for its side-effects.
 type ExpressionStatement struct {
@@ -111,6 +124,15 @@ type VariableDeclarator struct {
 
 // Type is the abstract type
 func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
+
+// ReturnStatement defines an Expression to return
+type ReturnStatement struct {
+	*BaseNode
+	Argument Expression
+}
+
+// Type is the abstract type
+func (*ReturnStatement) Type() string { return "ReturnStatement" }
 
 // Expression represents an action that can be performed by InfluxDB that can be evaluated to a value.
 type Expression interface {
@@ -170,7 +192,7 @@ func (*SequenceExpression) Type() string { return "SequenceExpression" }
 type ArrowFunctionExpression struct {
 	*BaseNode
 	Params []*Identifier `json:"params"`
-	Body   Expression    `json:"body"`
+	Body   Node          `json:"body"`
 }
 
 // Type is the abstract type

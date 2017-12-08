@@ -225,6 +225,75 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "arrow function as single expression",
+			raw:  `var f = r => r["_measurement"] == "cpu"`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "f",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.EqualOperator,
+									Left: &ast.MemberExpression{
+										Object:   &ast.Identifier{Name: "r"},
+										Property: &ast.StringLiteral{Value: "_measurement"},
+									},
+									Right: &ast.StringLiteral{Value: "cpu"},
+								},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "arrow function as block",
+			raw: `var f = r => { 
+                var m = r["_measurement"]
+                return m == "cpu"
+            }`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "f",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.BlockStatement{
+									Body: []ast.Statement{
+										&ast.VariableDeclaration{
+											Declarations: []*ast.VariableDeclarator{{
+												ID: &ast.Identifier{
+													Name: "m",
+												},
+												Init: &ast.MemberExpression{
+													Object:   &ast.Identifier{Name: "r"},
+													Property: &ast.StringLiteral{Value: "_measurement"},
+												},
+											}},
+										},
+										&ast.ReturnStatement{
+											Argument: &ast.BinaryExpression{
+												Operator: ast.EqualOperator,
+												Left:     &ast.Identifier{Name: "m"},
+												Right:    &ast.StringLiteral{Value: "cpu"},
+											},
+										},
+									},
+								},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
 			name: "from with filter with no parens",
 			raw:  `from(db:"telegraf").filter(f: r => r["other"]=="mem" and r["this"]=="that" or r["these"]!="those")`,
 			want: &ast.Program{

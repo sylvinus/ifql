@@ -99,7 +99,7 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 			Raw: `
 				var a = from(db:"dbA").range(start:-1h)
 				var b = from(db:"dbB").range(start:-1h)
-				a.join(tables:[a,b], on:["host"], f: a["_field"] + b["_field"]})
+				a.join(tables:[a,b], on:["host"], f: r => a["_field"] + b["_field"])
 			`,
 			WantErr: true,
 		},
