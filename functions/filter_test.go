@@ -502,21 +502,22 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 		"id":"filter",
 		"kind":"filter",
 		"spec":{
-			"ast":{
-				"params": [{"name":"r"}],
+			"f":{
+				"type": "ArrowFunctionExpression",
+				"params": [{"type":"Identifier","name":"r"}],
 				"body":{
-					"type":"binary",
+					"type":"BinaryExpression",
 					"operator": "!=",
 					"left":{
-						"type":"memberReference",
+						"type":"MemberExpression",
 						"object": {
-							"type": "reference",
+							"type": "Identifier",
 							"name":"r"
 						},
-						"property": "_measurement"
+						"property": {"type":"StringLiteral","value":"_measurement"}
 					},
 					"right":{
-						"type":"stringLiteral",
+						"type":"StringLiteral",
 						"value":"mem"
 					}
 				}

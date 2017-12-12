@@ -206,25 +206,25 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"spec":{
 			"on":["t1","t2"],
 			"eval":{
-				"params": [{"name":"a"},{"name":"b"}],
+				"params": [{"type":"Identifier","name":"a"},{"type":"Identifier","name":"b"}],
 				"body":{
-					"type":"binary",
+					"type":"BinaryExpression",
 					"operator": "+",
 					"left": {
-						"type": "memberReference",
+						"type": "MemberExpression",
 						"object": {
-							"type":"reference",
+							"type":"Identifier",
 							"name":"a"
 						},
-						"property": "_value"
+						"property": {"type":"StringLiteral","value":"_value"}
 					},
 					"right":{
-						"type": "memberReference",
+						"type": "MemberExpression",
 						"object": {
-							"type":"reference",
+							"type":"Identifier",
 							"name":"b"
 						},
-						"property": "_value"
+						"property": {"type":"StringLiteral","value":"_value"}
 					}
 				}
 			}
