@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -18,20 +18,24 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	On   []string              `json:"on"`
-	Eval expression.Expression `json:"eval"`
+	On   []string                     `json:"on"`
+	Eval *ast.ArrowFunctionExpression `json:"eval"`
 }
 
 func init() {
-	ifql.RegisterFunction(JoinKind, createJoinOpSpec)
+	query.RegisterFunction(JoinKind, createJoinOpSpec)
 	query.RegisterOpSpec(JoinKind, newJoinOp)
 	//TODO(nathanielc): Allow for other types of join implementations
 	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)
 	execute.RegisterTransformation(MergeJoinKind, createMergeJoinTransformation)
 }
 
-func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
-	eval, err := args.GetRequiredExpression("f")
+func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+	f, err := args.GetRequiredFunction("f")
+	if err != nil {
+		return nil, err
+	}
+	eval, err := f.Resolve()
 	if err != nil {
 		return nil, err
 	}
@@ -42,15 +46,14 @@ func createJoinOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpe
 	if array, ok, err := args.GetArray("on", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.On = array.Elements.([]string)
+		spec.On = array.AsStrings()
 	}
 
-	if array, ok, err := args.GetArray("tables", ifql.TChain); err != nil {
+	if array, ok, err := args.GetArray("tables", query.TTable); err != nil {
 		return nil, err
 	} else if ok {
-		tables := array.Elements.([]*ifql.CallChain)
-		for _, t := range tables {
-			ctx.AddParent(t.ID)
+		for _, t := range array.Elements {
+			ctx.AddParent(t.Value().(query.Table).ID)
 		}
 	}
 
@@ -66,8 +69,8 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On   []string              `json:"keys"`
-	Eval expression.Expression `json:"eval"`
+	On   []string                     `json:"keys"`
+	Eval *ast.ArrowFunctionExpression `json:"eval"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -104,10 +107,12 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinEval, err := NewExpressionSpec(s.Eval)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "invalid expression")
-	}
+	//joinEval, err := NewExpressionSpec(s.Eval)
+	//if err != nil {
+	//	return nil, nil, errors.Wrap(err, "invalid expression")
+	//}
+	// TODO(nathanielc): !!!!
+	var joinEval *expressionSpec
 	cache := NewMergeJoinCache(joinEval, ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewMergeJoinTransformation(d, cache, s)
@@ -606,8 +611,8 @@ func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
 }
 
 type expressionSpec struct {
-	expr                expression.Expression
-	leftName, rightName string
+	f               *ast.ArrowFunctionExpression
+	leftOP, rightOP execute.ObjectProperty
 
 	scope execute.Scope
 
@@ -615,16 +620,25 @@ type expressionSpec struct {
 	ce                  execute.CompiledExpression
 }
 
-func NewExpressionSpec(expr expression.Expression) (*expressionSpec, error) {
-	names := execute.ExpressionNames(expr.Root)
-	if len(names) != 2 {
-		return nil, fmt.Errorf("join expression can only have two tables, got names: %v", names)
+func NewExpressionSpec(f *ast.ArrowFunctionExpression) (*expressionSpec, error) {
+	if len(f.Params) != 2 {
+		names := make([]string, len(f.Params))
+		for i := range f.Params {
+			names[i] = f.Params[i].Name
+		}
+		return nil, fmt.Errorf("join expression can only have two tables, got tables: %v", names)
 	}
 	return &expressionSpec{
-		leftName:  names[0],
-		rightName: names[1],
-		expr:      expr,
-		scope:     make(execute.Scope, 2),
+		leftOP: execute.ObjectProperty{
+			Object:   f.Params[0].Name,
+			Property: "_value",
+		},
+		rightOP: execute.ObjectProperty{
+			Object:   f.Params[1].Name,
+			Property: "_value",
+		},
+		f:     f,
+		scope: make(execute.Scope, 2),
 	}, nil
 }
 
@@ -640,7 +654,7 @@ func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error
 		// Nothing to do, we already have a compiled expression
 		return execute.TInvalid, nil
 	}
-	ce, err := execute.CompileExpression(s.expr, map[string]execute.DataType{s.leftName: l, s.rightName: r})
+	ce, err := execute.CompileExpression(s.f, map[execute.ObjectProperty]execute.DataType{s.leftOP: l, s.rightOP: r})
 	if err != nil {
 		s.ce = nil
 		return execute.TInvalid, err
@@ -655,7 +669,7 @@ func (s *expressionSpec) Eval(l, r execute.Value) (execute.Value, error) {
 	if s.ce == nil {
 		return execute.Value{}, errors.New("expression has not been compiled")
 	}
-	s.scope[s.leftName] = l
-	s.scope[s.rightName] = r
+	s.scope[s.leftOP] = l
+	s.scope[s.rightOP] = r
 	return s.ce.Eval(s.scope)
 }

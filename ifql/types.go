@@ -1,6 +1,7 @@
 package ifql
 
 import (
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -213,7 +214,16 @@ func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.E
 	return res, nil
 }
 
-func binaryOp(text []byte) (ast.OperatorKind, error) {
+func unaryExpression(op, argument interface{}, text []byte, pos position) (*ast.UnaryExpression, error) {
+	log.Println(op, argument)
+	return &ast.UnaryExpression{
+		Operator: op.(ast.OperatorKind),
+		Argument: argument.(ast.Expression),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func operator(text []byte) (ast.OperatorKind, error) {
 	return ast.OperatorLookup(strings.ToLower(string(text))), nil
 }
 

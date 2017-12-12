@@ -1,95 +1,27 @@
 package ifql
 
 import (
+	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/expression"
-	"github.com/influxdata/ifql/query"
-	"github.com/pkg/errors"
 )
 
-// Evaluate validates and converts an ast.Program to a query
-func Evaluate(program *ast.Program) (*query.QuerySpec, error) {
-	ev := evaluator{}
-
-	// Create top-level builtin scope
-	scope := newBuiltInScope()
-
-	err := ev.eval(program, scope.Nest())
-	if err != nil {
-		return nil, err
+func Eval(program *ast.Program, scope *Scope, d Domain) error {
+	ev := evaluator{
+		d: d,
 	}
-	return ev.spec(), nil
+	return ev.eval(program, scope.Nest())
 }
 
-type Context interface {
-	// AddParent instructs the evaluation context that a new edge should be created from the parent to the current operation.
-	// Duplicate parents will be removed, so the caller need not concern itself with which parents have already been added.
-	AddParent(id query.OperationID)
-	// SetSpec instructs the evaluation to set the specified spec for the current operation.
-	setSpec(spec query.OperationSpec)
-}
-
-type CreateOperationSpec func(args Arguments, ctx Context) (query.OperationSpec, error)
-
-var functionsMap = make(map[string]*Function)
-
-// RegisterFunction adds a new top level builtin function.
-func RegisterFunction(name string, c CreateOperationSpec) {
-	registerFunction(name, c, false)
-}
-
-// RegisterMethod adds a new builtin method.
-func RegisterMethod(name string, c CreateOperationSpec) {
-	registerFunction(name, c, true)
-}
-
-func registerFunction(name string, c CreateOperationSpec, chainable bool) {
-	if _, ok := functionsMap[name]; ok {
-		panic(fmt.Errorf("duplicate registration for function %q", name))
-	}
-	functionsMap[name] = &Function{
-		call: func(args Arguments, ctx Context) error {
-			spec, err := c(args, ctx)
-			if err != nil {
-				return err
-			}
-			ctx.setSpec(spec)
-			return nil
-		},
-		Chainable: chainable,
-	}
-}
+// Domain represents any specific domain being used during evaluation.
+type Domain interface{}
 
 type evaluator struct {
-	id int
-
-	operations []*query.Operation
-	edges      []query.Edge
+	d Domain
 }
 
-func (ev *evaluator) spec() *query.QuerySpec {
-	return &query.QuerySpec{
-		Operations: ev.operations,
-		Edges:      ev.edges,
-	}
-}
-func (ev *evaluator) nextID() int {
-	id := ev.id
-	ev.id++
-	return id
-}
-func (ev *evaluator) addChain(chain *CallChain) {
-	ev.operations = append(ev.operations, chain.Operations...)
-	ev.edges = append(ev.edges, chain.Edges...)
-	chain.Operations = chain.Operations[0:0]
-	chain.Edges = chain.Edges[0:0]
-}
-
-func (ev *evaluator) eval(program *ast.Program, scope *evalScope) error {
+func (ev evaluator) eval(program *ast.Program, scope *Scope) error {
 	for _, stmt := range program.Body {
 		if err := ev.evalStmt(stmt, scope); err != nil {
 			return err
@@ -98,20 +30,16 @@ func (ev *evaluator) eval(program *ast.Program, scope *evalScope) error {
 	return nil
 }
 
-func (ev *evaluator) evalStmt(stmt ast.Statement, scope *evalScope) error {
+func (ev evaluator) evalStmt(stmt ast.Statement, scope *Scope) error {
 	switch s := stmt.(type) {
 	case *ast.VariableDeclaration:
 		if err := ev.doVariableDeclaration(s, scope); err != nil {
 			return err
 		}
 	case *ast.ExpressionStatement:
-		value, err := ev.doExpression(s.Expression, scope)
+		_, err := ev.doExpression(s.Expression, scope)
 		if err != nil {
 			return err
-		}
-		if value.Type == TChain {
-			chain := value.Value.(*CallChain)
-			ev.addChain(chain)
 		}
 	case *ast.BlockStatement:
 		scope = scope.Nest()
@@ -126,355 +54,157 @@ func (ev *evaluator) evalStmt(stmt ast.Statement, scope *evalScope) error {
 	return nil
 }
 
-func (ev *evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *evalScope) error {
+func (ev evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *Scope) error {
 	for _, vd := range declarations.Declarations {
 		value, err := ev.doExpression(vd.Init, scope)
 		if err != nil {
 			return err
 		}
 		scope.Set(vd.ID.Name, value)
-		if value.Type == TChain {
-			chain := value.Value.(*CallChain)
-			ev.addChain(chain)
-		}
 	}
 	return nil
 }
 
-func (ev *evaluator) doExpression(expr ast.Expression, scope *evalScope) (Value, error) {
+func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, error) {
 	switch e := expr.(type) {
 	case ast.Literal:
 		return ev.doLiteral(e)
+	case *ast.ArrayExpression:
+		return ev.doArray(e, scope)
 	case *ast.Identifier:
 		value, ok := scope.Lookup(e.Name)
 		if !ok {
-			return Value{}, fmt.Errorf("undefined identifier %q", e.Name)
+			return nil, fmt.Errorf("undefined identifier %q", e.Name)
 		}
 		return value, nil
 	case *ast.CallExpression:
-		chain, err := ev.callFunction(e, nil, scope)
+		return ev.callFunction(e, scope)
+	case *ast.MemberExpression:
+		obj, err := ev.doExpression(e.Object, scope)
 		if err != nil {
-			return Value{}, err
+			return nil, err
 		}
-		return Value{
-			Type:  TChain,
-			Value: chain,
-		}, nil
+		p, err := propertyName(e)
+		if err != nil {
+			return nil, err
+		}
+		return obj.Property(p)
 	case *ast.BinaryExpression:
-		root, err := ev.binaryExpression(e)
-		if err != nil {
-			return Value{}, err
-		}
-		// TODO(nathanielc): Attempt to resolve the binary expression
-		return Value{
-			Type:  TExpression,
-			Value: expression.Expression{Root: root},
-		}, nil
+		//TODO
+		return nil, errors.New("not implemented")
 	case *ast.LogicalExpression:
-		root, err := ev.logicalExpression(e)
-		if err != nil {
-			return Value{}, err
-		}
-		return Value{
-			Type:  TExpression,
-			Value: expression.Expression{Root: root},
-		}, nil
+		return nil, errors.New("not implemented")
 	case *ast.ArrowFunctionExpression:
-		// TODO(nathanielc): Figure out how to resolve ArrowFunction body.
-		v, err := ev.doExpression(e.Body.(ast.Expression), scope)
-		if err != nil {
-			return Value{}, err
-		}
-		expr := v.Value.(expression.Expression)
-		params := make([]string, len(e.Params))
-		for i, p := range e.Params {
-			params[i] = p.Name
-		}
-		expr.Params = params
-		v.Value = expr
-		return v, nil
-	case *ast.ArrayExpression:
-		return ev.doArray(e, scope)
+		nested := scope.Nest()
+		return value{
+			t: TFunction,
+			v: &arrowFunc{
+				e: e,
+				call: func(args Arguments, d Domain) (Value, error) {
+					for _, p := range e.Params {
+						v, err := args.GetRequired(p.Name)
+						if err != nil {
+							return nil, err
+						}
+						nested.Set(p.Name, v)
+					}
+					// TODO(nathanielc): How to handle function body that is a statement?
+					return ev.doExpression(e.Body.(ast.Expression), nested)
+				},
+			},
+		}, nil
 	default:
-		return Value{}, fmt.Errorf("unsupported expression %T", expr)
+		return nil, fmt.Errorf("unsupported expression %T", expr)
 	}
 }
 
-func (ev *evaluator) doArray(a *ast.ArrayExpression, scope *evalScope) (Value, error) {
+func (ev evaluator) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
 		Type: TInvalid,
 	}
-	elements := make([]Value, len(a.Elements))
+	array.Elements = make([]Value, len(a.Elements))
 	for i, el := range a.Elements {
 		v, err := ev.doExpression(el, scope)
 		if err != nil {
-			return Value{}, err
+			return nil, err
 		}
 		if array.Type == TInvalid {
-			array.Type = v.Type
+			array.Type = v.Type()
 		}
-		if array.Type != v.Type {
-			return Value{}, fmt.Errorf("cannot mix types in an array, found both %v and %v", array.Type, v.Type)
+		if array.Type != v.Type() {
+			return nil, fmt.Errorf("cannot mix types in an array, found both %v and %v", array.Type, v.Type())
 		}
-		elements[i] = v
+		array.Elements[i] = v
 	}
-	switch array.Type {
-	case TString:
-		value := make([]string, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(string)
-		}
-		array.Elements = value
-	case TInt:
-		value := make([]int64, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(int64)
-		}
-		array.Elements = value
-	case TFloat:
-		value := make([]float64, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(float64)
-		}
-		array.Elements = value
-	case TBool:
-		value := make([]bool, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(bool)
-		}
-		array.Elements = value
-	case TTime:
-		value := make([]time.Time, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(time.Time)
-		}
-		array.Elements = value
-	case TDuration:
-		value := make([]time.Duration, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(time.Duration)
-		}
-		array.Elements = value
-	case TArray:
-		value := make([]Array, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(Array)
-		}
-		array.Elements = value
-	case TMap:
-		value := make([]Map, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(Map)
-		}
-		array.Elements = value
-	case TChain:
-		value := make([]*CallChain, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(*CallChain)
-		}
-		array.Elements = value
-	case TExpression:
-		value := make([]expression.Expression, len(elements))
-		for i, el := range elements {
-			value[i] = el.Value.(expression.Expression)
-		}
-		array.Elements = value
-	default:
-		return Value{}, fmt.Errorf("cannot define an array with elements of type %v", array.Type)
-	}
-	return Value{
-		Type:  TArray,
-		Value: array,
+	return value{
+		t: TArray,
+		v: array,
 	}, nil
 }
 
-func (ev *evaluator) doLiteral(lit ast.Literal) (Value, error) {
+func (ev evaluator) doLiteral(lit ast.Literal) (Value, error) {
 	switch l := lit.(type) {
 	case *ast.DateTimeLiteral:
-		return Value{
-			Type:  TTime,
-			Value: l.Value,
+		return value{
+			t: TTime,
+			v: l.Value,
 		}, nil
 	case *ast.DurationLiteral:
-		return Value{
-			Type:  TDuration,
-			Value: l.Value,
+		return value{
+			t: TDuration,
+			v: l.Value,
 		}, nil
 	case *ast.NumberLiteral:
-		return Value{
-			Type:  TFloat,
-			Value: l.Value,
+		return value{
+			t: TFloat,
+			v: l.Value,
 		}, nil
 	case *ast.IntegerLiteral:
-		return Value{
-			Type:  TInt,
-			Value: l.Value,
+		return value{
+			t: TInt,
+			v: l.Value,
 		}, nil
 	case *ast.StringLiteral:
-		return Value{
-			Type:  TString,
-			Value: l.Value,
+		return value{
+			t: TString,
+			v: l.Value,
 		}, nil
 	case *ast.BooleanLiteral:
-		return Value{
-			Type:  TBool,
-			Value: l.Value,
+		return value{
+			t: TBool,
+			v: l.Value,
 		}, nil
 	// TODO(nathanielc): Support lists and maps
 	default:
-		return Value{}, fmt.Errorf("unknown literal type %T", lit)
+		return nil, fmt.Errorf("unknown literal type %T", lit)
 	}
 
 }
 
-// CallChain represents a table created via a call chain.
-type CallChain struct {
-	ID         query.OperationID
-	Operations []*query.Operation
-	Edges      []query.Edge
-}
-
-func (ev *evaluator) callFunction(call *ast.CallExpression, chain *CallChain, scope *evalScope) (*CallChain, error) {
-	switch callee := call.Callee.(type) {
-	case *ast.Identifier:
-		op, parents, err := ev.function(callee.Name, call.Arguments, scope)
-		if err != nil {
-			return nil, err
-		}
-		chain := &CallChain{
-			Operations: []*query.Operation{op},
-			ID:         op.ID,
-		}
-		// Add any additional parents
-		for _, p := range parents {
-			chain.Edges = append(chain.Edges, query.Edge{
-				Parent: p,
-				Child:  op.ID,
-			})
-		}
-		return chain, nil
-	case *ast.MemberExpression:
-		chain, name, err := ev.memberFunction(callee, chain, scope)
-		if err != nil {
-			return nil, err
-		}
-
-		op, parents, err := ev.method(name, call.Arguments, scope)
-		if err != nil {
-			return nil, err
-		}
-
-		// Update chain
-		chain.Operations = append(chain.Operations, op)
-		chain.Edges = append(chain.Edges, query.Edge{
-			Parent: chain.ID,
-			Child:  op.ID,
-		})
-
-		// Add any additional parents
-		for _, p := range parents {
-			if p != chain.ID {
-				chain.Edges = append(chain.Edges, query.Edge{
-					Parent: p,
-					Child:  op.ID,
-				})
-			}
-		}
-
-		// Update ID
-		chain.ID = op.ID
-		return chain, nil
-	default:
-		return nil, fmt.Errorf("Unsupported callee expression type %t", callee)
-	}
-}
-
-func (ev *evaluator) memberFunction(member *ast.MemberExpression, chain *CallChain, scope *evalScope) (*CallChain, string, error) {
-	switch obj := member.Object.(type) {
-	case *ast.CallExpression:
-		var err error
-		chain, err = ev.callFunction(obj, chain, scope)
-		if err != nil {
-			return nil, "", err
-		}
-	case *ast.Identifier:
-		value, ok := scope.Lookup(obj.Name)
-		if !ok {
-			return nil, "", fmt.Errorf("undefined identifier %q", obj.Name)
-		}
-		if value.Type != TChain {
-			return nil, "", fmt.Errorf("variable %q is not a function chain", obj.Name)
-		}
-		// Create a copy of the chain since we do not want to mutate the version stored in the scope.
-		if chain == nil {
-			chain = new(CallChain)
-		}
-		*chain = *(value.Value.(*CallChain))
-	default:
-		return nil, "", fmt.Errorf("unsupported member expression object type %t", obj)
-	}
-
-	property := member.Property.(*ast.Identifier)
-
-	return chain, property.Name, nil
-}
-
-func (ev *evaluator) function(name string, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
-	v, ok := scope.Lookup(name)
-	if !ok {
-		return nil, nil, fmt.Errorf("unknown function %q", name)
-	}
-	if v.Type != TFunction {
-		return nil, nil, fmt.Errorf("var %q is not a function", name)
-	}
-	f := v.Value.(*Function)
-
-	op, id, err := ev.createOp(name, f.call, args, scope)
+func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value, error) {
+	callee, err := ev.doExpression(call.Callee, scope)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error calling function %q", name)
+		return nil, err
 	}
-	return op, id, nil
-}
-func (ev *evaluator) method(name string, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
-	v, ok := scope.Lookup(name)
-	if !ok {
-		return nil, nil, fmt.Errorf("unknown method %q", name)
+	if callee.Type() != TFunction {
+		return nil, fmt.Errorf("cannot call function, value is of type %v", callee.Type())
 	}
-	if v.Type != TFunction {
-		return nil, nil, fmt.Errorf("var %q is not a method", name)
-	}
-	f := v.Value.(*Function)
-	if !f.Chainable {
-		return nil, nil, fmt.Errorf("cannot call %q as a chaining method, %s is a global function.", name, name)
-	}
-
-	op, id, err := ev.createOp(name, f.call, args, scope)
+	f := callee.Value().(Function)
+	arguments, err := ev.doArguments(call.Arguments, scope)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error calling function %q", name)
+		return nil, err
 	}
-	return op, id, nil
-}
-
-func (ev *evaluator) createOp(name string, createOpSpec func(Arguments, Context) error, args []ast.Expression, scope *evalScope) (*query.Operation, []query.OperationID, error) {
-	op := &query.Operation{
-		ID: query.OperationID(fmt.Sprintf("%s%d", name, ev.nextID())),
-	}
-	arguments, err := ev.resolveArguments(args, scope)
+	v, err := f.Call(arguments, ev.d)
 	if err != nil {
-		return nil, nil, err
-	}
-	ctx := new(context)
-	if err := createOpSpec(arguments, ctx); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if unused := arguments.listUnused(); len(unused) > 0 {
-		return nil, nil, fmt.Errorf("extra arguments provided: [%s]", strings.Join(unused, ","))
+		return nil, fmt.Errorf("unused arguments %s", unused)
 	}
-	op.Spec = ctx.spec
-	return op, ctx.parents, nil
+	return v, nil
 }
 
-func (ev *evaluator) resolveArguments(args []ast.Expression, scope *evalScope) (Arguments, error) {
+func (ev evaluator) doArguments(args []ast.Expression, scope *Scope) (Arguments, error) {
 	if l := len(args); l > 1 {
 		return nil, fmt.Errorf("arguments not a single object expression %v", args)
 	} else if l == 0 {
@@ -484,14 +214,6 @@ func (ev *evaluator) resolveArguments(args []ast.Expression, scope *evalScope) (
 	if !ok {
 		return nil, fmt.Errorf("arguments not a valid object expression")
 	}
-	paramMap, err := ev.resolveParameters(params, scope)
-	if err != nil {
-		return nil, err
-	}
-	return newArguments(paramMap), nil
-}
-
-func (ev *evaluator) resolveParameters(params *ast.ObjectExpression, scope *evalScope) (map[string]Value, error) {
 	paramsMap := make(map[string]Value, len(params.Properties))
 	for _, p := range params.Properties {
 		value, err := ev.doExpression(p.Value, scope)
@@ -503,229 +225,34 @@ func (ev *evaluator) resolveParameters(params *ast.ObjectExpression, scope *eval
 		}
 		paramsMap[p.Key.Name] = value
 	}
-	return paramsMap, nil
+	return newArguments(paramsMap), nil
 }
 
-func ToQueryTime(value Value) (query.Time, error) {
-	switch v := value.Value.(type) {
-	case time.Time:
-		return query.Time{
-			Absolute: v,
-		}, nil
-	case time.Duration:
-		return query.Time{
-			Relative:   v,
-			IsRelative: true,
-		}, nil
-	case int64:
-		return query.Time{
-			Absolute: time.Unix(v, 0),
-		}, nil
-	default:
-		return query.Time{}, fmt.Errorf("value is not a time, got %v", value.Type)
-	}
-}
-
-func (ev *evaluator) binaryOperation(expr ast.Expression) (expression.Node, error) {
-	switch op := expr.(type) {
-	case *ast.BinaryExpression:
-		return ev.binaryExpression(op)
-	case *ast.LogicalExpression:
-		return ev.logicalExpression(op)
-	default:
-		return nil, fmt.Errorf("Expression type expected to be arithmatic, relational or logical, but is %t", op)
-	}
-}
-
-func (ev *evaluator) binaryExpression(expr *ast.BinaryExpression) (expression.Node, error) {
-	lhs, err := ev.primaryNode(expr.Left)
-	if err != nil {
-		return nil, err
-	}
-
-	rhs, err := ev.primaryNode(expr.Right)
-	if err != nil {
-		return nil, err
-	}
-
-	isRegexp := lhs.Type() == expression.RegexpLiteral || rhs.Type() == expression.RegexpLiteral
-	op, err := expressionOperator(expr.Operator, isRegexp)
-	if err != nil {
-		return nil, err
-	}
-
-	return &expression.BinaryNode{
-		Operator: op,
-		Left:     lhs,
-		Right:    rhs,
-	}, nil
-}
-
-func expressionOperator(op ast.OperatorKind, isRegexp bool) (expression.Operator, error) {
-	switch op {
-	case ast.EqualOperator:
-		if isRegexp {
-			return expression.RegexpMatchOperator, nil
-		}
-		return expression.EqualOperator, nil
-	case ast.NotEqualOperator:
-		if isRegexp {
-			return expression.RegexpNotMatchOperator, nil
-		}
-		return expression.NotEqualOperator, nil
-	case ast.StartsWithOperator:
-		return expression.StartsWithOperator, nil
-	case ast.MultiplicationOperator:
-		return expression.MultiplicationOperator, nil
-	case ast.DivisionOperator:
-		return expression.DivisionOperator, nil
-	case ast.AdditionOperator:
-		return expression.AdditionOperator, nil
-	case ast.SubtractionOperator:
-		return expression.SubtractionOperator, nil
-	case ast.LessThanEqualOperator:
-		return expression.LessThanEqualOperator, nil
-	case ast.LessThanOperator:
-		return expression.LessThanOperator, nil
-	case ast.GreaterThanEqualOperator:
-		return expression.GreaterThanEqualOperator, nil
-	case ast.GreaterThanOperator:
-		return expression.GreaterThanOperator, nil
-	case ast.InOperator:
-		return expression.InOperator, nil
-	case ast.NotEmptyOperator:
-		return expression.NotEmptyOperator, nil
-	default:
-		return 0, fmt.Errorf("unknown operator %s", op)
-	}
-}
-
-func logicalOperator(op ast.LogicalOperatorKind) (expression.Operator, error) {
-	switch op {
-	case ast.AndOperator:
-		return expression.AndOperator, nil
-	case ast.OrOperator:
-		return expression.OrOperator, nil
-	default:
-		return 0, fmt.Errorf("unknown logical operator %s", op)
-	}
-}
-
-func (ev *evaluator) primaryNode(expr ast.Expression) (expression.Node, error) {
-	switch e := expr.(type) {
-	case *ast.BinaryExpression:
-		return ev.binaryExpression(e)
-	case *ast.StringLiteral:
-		return &expression.StringLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.BooleanLiteral:
-		return &expression.BooleanLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.NumberLiteral:
-		return &expression.FloatLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.IntegerLiteral:
-		return &expression.IntegerLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.DurationLiteral:
-		return &expression.DurationLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.DateTimeLiteral:
-		return &expression.TimeLiteralNode{
-			Value: e.Value,
-		}, nil
-	case *ast.RegexpLiteral:
-		return &expression.RegexpLiteralNode{
-			Value: e.Value.String(),
-		}, nil
-	case *ast.Identifier:
-		return &expression.ReferenceNode{
-			Name: e.Name,
-		}, nil
-	case *ast.MemberExpression:
-		o, err := ev.primaryNode(e.Object)
-		if err != nil {
-			return nil, err
-		}
-		p, err := ev.propertyName(e)
-		if err != nil {
-			return nil, err
-		}
-		return &expression.MemberReferenceNode{
-			Object:   o,
-			Property: p,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown primary type: %T", expr)
-	}
-}
-
-func (ev *evaluator) propertyName(m *ast.MemberExpression) (string, error) {
+func propertyName(m *ast.MemberExpression) (string, error) {
 	switch p := m.Property.(type) {
 	case *ast.Identifier:
 		return p.Name, nil
 	case *ast.StringLiteral:
 		return p.Value, nil
 	default:
-		return "", fmt.Errorf("unsupported property expression of type %T", m.Property)
+		return "", fmt.Errorf("unsupported member property expression of type %T", m.Property)
 	}
 }
 
-func (ev *evaluator) logicalExpression(expr *ast.LogicalExpression) (expression.Node, error) {
-	lhs, err := ev.binaryOperation(expr.Left)
-	if err != nil {
-		return nil, err
-	}
-
-	rhs, err := ev.binaryOperation(expr.Right)
-	if err != nil {
-		return nil, err
-	}
-	op, err := logicalOperator(expr.Operator)
-	if err != nil {
-		return nil, err
-	}
-
-	return &expression.BinaryNode{
-		Operator: op,
-		Left:     lhs,
-		Right:    rhs,
-	}, nil
-}
-
-type evalScope struct {
-	parent *evalScope
+type Scope struct {
+	parent *Scope
 	values map[string]Value
 }
 
-func newScope() *evalScope {
-	return &evalScope{
+func NewScope() *Scope {
+	return &Scope{
 		values: make(map[string]Value),
 	}
 }
 
-// newBuiltInScope returns a scope populated with the builtin values.
-func newBuiltInScope() *evalScope {
-	s := &evalScope{
-		values: make(map[string]Value, len(functionsMap)),
-	}
-	for n, f := range functionsMap {
-		s.values[n] = Value{
-			Type:  TFunction,
-			Value: f,
-		}
-	}
-	return s
-}
-
-func (s *evalScope) Lookup(name string) (Value, bool) {
+func (s *Scope) Lookup(name string) (Value, bool) {
 	if s == nil {
-		return Value{}, false
+		return nil, false
 	}
 	v, ok := s.values[name]
 	if !ok {
@@ -733,41 +260,73 @@ func (s *evalScope) Lookup(name string) (Value, bool) {
 	}
 	return v, ok
 }
-func (s *evalScope) Set(name string, value Value) {
+
+func (s *Scope) Set(name string, value Value) {
 	s.values[name] = value
 }
 
 // Nest returns a new nested scope.
-func (s *evalScope) Nest() *evalScope {
-	c := newScope()
+func (s *Scope) Nest() *Scope {
+	c := NewScope()
 	c.parent = s
 	return c
 }
 
-// TODO(nathanielc): Maybe we want Value to be an interface instead of a struct?
 // Value represents any value that can be the result of evaluating any expression.
-type Value struct {
-	Type  Type
-	Value interface{}
+type Value interface {
+	// Type reports the type of value
+	Type() Type
+	// Value returns the actual value represented.
+	Value() interface{}
+	// Property returns a new value which is a property of this value.
+	Property(name string) (Value, error)
+}
+
+type value struct {
+	t Type
+	v interface{}
+}
+
+func (v value) Type() Type {
+	return v.t
+}
+func (v value) Value() interface{} {
+	return v.v
+}
+func (v value) Property(name string) (Value, error) {
+	return nil, fmt.Errorf("property %q does not exist", name)
 }
 
 // Type represents the supported types within IFQL
 type Type int
 
 const (
-	TInvalid    Type = iota // Go type nil
-	TString                 // Go type string
-	TInt                    // Go type int64
-	TFloat                  // Go type float64
-	TBool                   // Go type bool
-	TTime                   // Go type time.Time
-	TDuration               // Go type time.Duration
-	TArray                  // Go type Array
-	TMap                    // Go type Map
-	TChain                  // Go type *CallChain
-	TExpression             // Go type expression.Expression
-	TFunction               // Go type *Function
+	TInvalid  Type = iota // Go type nil
+	TString               // Go type string
+	TInt                  // Go type int64
+	TFloat                // Go type float64
+	TBool                 // Go type bool
+	TTime                 // Go type time.Time
+	TDuration             // Go type time.Duration
+	TFunction             // Go type Function
+	TArray                // Go type Array
+	TMap                  // Go type Map
+	endBuiltInTypes
 )
+
+var lastType = endBuiltInTypes
+var extraTypes = make(map[string]Type)
+var extraTypesLookup = make(map[Type]string)
+
+func RegisterType(name string) Type {
+	if _, ok := extraTypes[name]; ok {
+		panic(fmt.Errorf("duplicate registration for ifql type %q", name))
+	}
+	lastType++
+	extraTypes[name] = lastType
+	extraTypesLookup[lastType] = name
+	return lastType
+}
 
 // String converts Type into a string representation of the type's name
 func (t Type) String() string {
@@ -784,58 +343,66 @@ func (t Type) String() string {
 		return "time"
 	case TDuration:
 		return "duration"
+	case TFunction:
+		return "function"
 	case TArray:
 		return "list"
 	case TMap:
 		return "map"
-	case TChain:
-		return "chain"
-	case TExpression:
-		return "expression"
 	default:
-		return fmt.Sprintf("unknown type %d", int(t))
-	}
-}
-
-// Array represents an IFQL sequence of elements
-type Array struct {
-	Type Type
-	// Elements will be a typed slice of any other type
-	// []string, []float64, or possibly even []Array and []Map
-	Elements interface{}
-}
-
-// Map represents an IFQL association of keys to values of Type
-type Map struct {
-	Type Type
-	// Elements will be a typed map of any other type, keys are always strings
-	// map[string]string, map[string]float64, or possibly even map[string]Array and map[string]Map
-	Elements interface{}
-}
-
-type Function struct {
-	Chainable bool
-
-	// call is the implementation of the function
-	call func(Arguments, Context) error
-}
-
-type context struct {
-	parents []query.OperationID
-	spec    query.OperationSpec
-}
-
-func (c *context) AddParent(id query.OperationID) {
-	// Check for duplicates
-	for _, p := range c.parents {
-		if p == id {
-			return
+		name, ok := extraTypesLookup[t]
+		if !ok {
+			return fmt.Sprintf("unknown type %d", int(t))
 		}
+		return name
 	}
-	c.parents = append(c.parents, id)
 }
-func (c *context) setSpec(spec query.OperationSpec) {
-	c.spec = spec
+
+// Function represents a callable type
+type Function interface {
+	Call(args Arguments, d Domain) (Value, error)
+	// Resolve rewrites the function resolving any identifiers not listed in the function params.
+	Resolve() (*ast.ArrowFunctionExpression, error)
+}
+
+type arrowFunc struct {
+	e    *ast.ArrowFunctionExpression
+	call func(Arguments, Domain) (Value, error)
+}
+
+func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
+	return f.call(args, d)
+}
+
+// Resolve rewrites the function resolving any identifiers not listed in the function params.
+func (f arrowFunc) Resolve() (*ast.ArrowFunctionExpression, error) {
+	//TODO(nathanielc): actually resolve the function
+	return f.e, nil
+}
+
+// Array represents an sequence of elements
+// All elements must be the same type
+type Array struct {
+	Type     Type
+	Elements []Value
+}
+
+func (a Array) AsStrings() []string {
+	if a.Type != TString {
+		return nil
+	}
+	strs := make([]string, len(a.Elements))
+	for i, v := range a.Elements {
+		strs[i] = v.Value().(string)
+	}
+	return strs
+}
+
+// Map represents an association of keys to values of Type
+// All elements must be the same type
+type Map struct {
+	Type     Type
+	Elements map[string]Value
 }
 
 // Arguments provides access to the keyword arguments passed to a function.
@@ -843,23 +410,22 @@ func (c *context) setSpec(spec query.OperationSpec) {
 // whether the argument was specified and any errors about the argument type.
 // The GetRequired{Type} methods return only two values, the typed value of the arg and any errors, a missing argument is considered an error in this case.
 type Arguments interface {
+	Get(name string) (Value, bool)
+	GetRequired(name string) (Value, error)
+
 	GetString(name string) (string, bool, error)
 	GetInt(name string) (int64, bool, error)
 	GetFloat(name string) (float64, bool, error)
 	GetBool(name string) (bool, bool, error)
-	GetTime(name string) (query.Time, bool, error)
-	GetDuration(name string) (query.Duration, bool, error)
+	GetFunction(name string) (Function, bool, error)
 	GetArray(name string, t Type) (Array, bool, error)
-	GetExpression(name string) (expression.Expression, bool, error)
 
 	GetRequiredString(name string) (string, error)
 	GetRequiredInt(name string) (int64, error)
 	GetRequiredFloat(name string) (float64, error)
 	GetRequiredBool(name string) (bool, error)
-	GetRequiredTime(name string) (query.Time, error)
-	GetRequiredDuration(name string) (query.Duration, error)
+	GetRequiredFunction(name string) (Function, error)
 	GetRequiredArray(name string, t Type) (Array, error)
-	GetRequiredExpression(name string) (expression.Expression, error)
 
 	// listUnused returns the list of provided arguments that were not used by the function.
 	listUnused() []string
@@ -877,133 +443,113 @@ func newArguments(params map[string]Value) *arguments {
 	}
 }
 
+func (a *arguments) Get(name string) (Value, bool) {
+	a.used[name] = true
+	v, ok := a.params[name]
+	return v, ok
+}
+
+func (a *arguments) GetRequired(name string) (Value, error) {
+	a.used[name] = true
+	v, ok := a.params[name]
+	if !ok {
+		return nil, fmt.Errorf("missing required keyword argument %q", name)
+	}
+	return v, nil
+}
+
 func (a *arguments) GetString(name string) (string, bool, error) {
 	v, ok, err := a.get(name, TString, false)
 	if err != nil || !ok {
 		return "", ok, err
 	}
-	return v.Value.(string), ok, nil
+	return v.Value().(string), ok, nil
 }
 func (a *arguments) GetRequiredString(name string) (string, error) {
 	v, _, err := a.get(name, TString, true)
 	if err != nil {
 		return "", err
 	}
-	return v.Value.(string), nil
+	return v.Value().(string), nil
 }
 func (a *arguments) GetInt(name string) (int64, bool, error) {
 	v, ok, err := a.get(name, TInt, false)
 	if err != nil || !ok {
 		return 0, ok, err
 	}
-	return v.Value.(int64), ok, nil
+	return v.Value().(int64), ok, nil
 }
 func (a *arguments) GetRequiredInt(name string) (int64, error) {
 	v, _, err := a.get(name, TInt, true)
 	if err != nil {
 		return 0, err
 	}
-	return v.Value.(int64), nil
+	return v.Value().(int64), nil
 }
 func (a *arguments) GetFloat(name string) (float64, bool, error) {
 	v, ok, err := a.get(name, TFloat, false)
 	if err != nil || !ok {
 		return 0, ok, err
 	}
-	return v.Value.(float64), ok, nil
+	return v.Value().(float64), ok, nil
 }
 func (a *arguments) GetRequiredFloat(name string) (float64, error) {
 	v, _, err := a.get(name, TFloat, true)
 	if err != nil {
 		return 0, err
 	}
-	return v.Value.(float64), nil
+	return v.Value().(float64), nil
 }
 func (a *arguments) GetBool(name string) (bool, bool, error) {
 	v, ok, err := a.get(name, TBool, false)
 	if err != nil || !ok {
 		return false, ok, err
 	}
-	return v.Value.(bool), ok, nil
+	return v.Value().(bool), ok, nil
 }
 func (a *arguments) GetRequiredBool(name string) (bool, error) {
 	v, _, err := a.get(name, TBool, true)
 	if err != nil {
 		return false, err
 	}
-	return v.Value.(bool), nil
+	return v.Value().(bool), nil
 }
-func (a *arguments) GetTime(name string) (query.Time, bool, error) {
-	a.used[name] = true
-	v, ok := a.params[name]
-	if !ok {
-		return query.Time{}, false, nil
-	}
-	qt, err := ToQueryTime(v)
-	if err != nil {
-		return query.Time{}, ok, err
-	}
-	return qt, ok, nil
-}
-func (a *arguments) GetRequiredTime(name string) (query.Time, error) {
-	qt, ok, err := a.GetTime(name)
-	if err != nil {
-		return query.Time{}, err
-	}
-	if !ok {
-		return query.Time{}, fmt.Errorf("missing required keyword argument %q", name)
-	}
-	return qt, nil
-}
-func (a *arguments) GetDuration(name string) (query.Duration, bool, error) {
-	v, ok, err := a.get(name, TDuration, false)
-	if err != nil || !ok {
-		return 0, ok, err
-	}
-	return query.Duration(v.Value.(time.Duration)), ok, nil
-}
-func (a *arguments) GetRequiredDuration(name string) (query.Duration, error) {
-	v, _, err := a.get(name, TDuration, true)
-	if err != nil {
-		return 0, err
-	}
-	return query.Duration(v.Value.(time.Duration)), nil
-}
+
 func (a *arguments) GetArray(name string, t Type) (Array, bool, error) {
 	v, ok, err := a.get(name, TArray, false)
 	if err != nil || !ok {
 		return Array{}, ok, err
 	}
-	arr := v.Value.(Array)
+	arr := v.Value().(Array)
 	if arr.Type != t {
 		return Array{}, true, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
 	}
-	return v.Value.(Array), ok, nil
+	return v.Value().(Array), ok, nil
 }
 func (a *arguments) GetRequiredArray(name string, t Type) (Array, error) {
 	v, _, err := a.get(name, TArray, true)
 	if err != nil {
 		return Array{}, err
 	}
-	arr := v.Value.(Array)
+	arr := v.Value().(Array)
 	if arr.Type != t {
 		return Array{}, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
 	}
 	return arr, nil
 }
-func (a *arguments) GetExpression(name string) (expression.Expression, bool, error) {
-	v, ok, err := a.get(name, TExpression, false)
+func (a *arguments) GetFunction(name string) (Function, bool, error) {
+	v, ok, err := a.get(name, TFunction, false)
 	if err != nil || !ok {
-		return expression.Expression{}, ok, err
+		return nil, ok, err
 	}
-	return v.Value.(expression.Expression), ok, nil
+	return v.Value().(Function), ok, nil
 }
-func (a *arguments) GetRequiredExpression(name string) (expression.Expression, error) {
-	v, _, err := a.get(name, TExpression, true)
+func (a *arguments) GetRequiredFunction(name string) (Function, error) {
+	v, _, err := a.get(name, TFunction, true)
 	if err != nil {
-		return expression.Expression{}, err
+		return nil, err
 	}
-	return v.Value.(expression.Expression), nil
+	return v.Value().(Function), nil
 }
 
 func (a *arguments) get(name string, typ Type, required bool) (Value, bool, error) {
@@ -1011,12 +557,12 @@ func (a *arguments) get(name string, typ Type, required bool) (Value, bool, erro
 	v, ok := a.params[name]
 	if !ok {
 		if required {
-			return Value{}, false, fmt.Errorf("missing required keyword argument %q", name)
+			return nil, false, fmt.Errorf("missing required keyword argument %q", name)
 		}
-		return Value{}, false, nil
+		return nil, false, nil
 	}
-	if v.Type != typ {
-		return Value{}, true, fmt.Errorf("keyword argument %q should be of type %v, but got %v", name, typ, v.Type)
+	if v.Type() != typ {
+		return nil, true, fmt.Errorf("keyword argument %q should be of type %v, but got %v", name, typ, v.Type())
 	}
 	return v, true, nil
 }

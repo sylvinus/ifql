@@ -225,6 +225,135 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "var as binary expression of other vars",
+			raw: `var a = 1
+            var b = 2
+            var c = a + b
+            var d = a`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "b",
+							},
+							Init: &ast.IntegerLiteral{Value: 2},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "c",
+							},
+							Init: &ast.BinaryExpression{
+								Operator: ast.AdditionOperator,
+								Left:     &ast.Identifier{Name: "a"},
+								Right:    &ast.Identifier{Name: "b"},
+							},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "d",
+							},
+							Init: &ast.Identifier{Name: "a"},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "var as unary expression of other vars",
+			raw: `var a = 5
+            var c = -a`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.IntegerLiteral{Value: 5},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "c",
+							},
+							Init: &ast.UnaryExpression{
+								Operator: ast.SubtractionOperator,
+								Argument: &ast.Identifier{Name: "a"},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "var as both binary and unary expressions",
+			raw: `var a = 5
+            var c = 10 * -a`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.IntegerLiteral{Value: 5},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "c",
+							},
+							Init: &ast.BinaryExpression{
+								Operator: ast.MultiplicationOperator,
+								Left:     &ast.IntegerLiteral{Value: 10},
+								Right: &ast.UnaryExpression{
+									Operator: ast.SubtractionOperator,
+									Argument: &ast.Identifier{Name: "a"},
+								},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "expressions with function calls",
+			raw:  `var a = foo() == 10`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "foo"},
+								},
+								Right: &ast.IntegerLiteral{Value: 10},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
 			name: "arrow function as single expression",
 			raw:  `var f = r => r["_measurement"] == "cpu"`,
 			want: &ast.Program{

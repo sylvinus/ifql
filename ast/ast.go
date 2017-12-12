@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"encoding/json"
 	"regexp"
 	"time"
 )
@@ -37,6 +38,7 @@ func (*CallExpression) node()        {}
 func (*MemberExpression) node()      {}
 func (*SequenceExpression) node()    {}
 func (*BinaryExpression) node()      {}
+func (*UnaryExpression) node()       {}
 func (*LogicalExpression) node()     {}
 func (*ObjectExpression) node()      {}
 func (*ConditionalExpression) node() {}
@@ -144,6 +146,7 @@ func (*CallExpression) expression()          {}
 func (*MemberExpression) expression()        {}
 func (*SequenceExpression) expression()      {}
 func (*BinaryExpression) expression()        {}
+func (*UnaryExpression) expression()         {}
 func (*LogicalExpression) expression()       {}
 func (*ObjectExpression) expression()        {}
 func (*ConditionalExpression) expression()   {}
@@ -217,6 +220,7 @@ const (
 	GreaterThanOperator
 	StartsWithOperator
 	InOperator
+	NotOperator
 	NotEmptyOperator
 	EmptyOperator
 	EqualOperator
@@ -244,6 +248,16 @@ type BinaryExpression struct {
 
 // Type is the abstract type
 func (*BinaryExpression) Type() string { return "BinaryExpression" }
+
+// UnaryExpression use operators act on a single operand in an expression.
+type UnaryExpression struct {
+	*BaseNode
+	Operator OperatorKind `json:"operator"`
+	Argument Expression   `json:"argument"`
+}
+
+// Type is the abstract type
+func (*UnaryExpression) Type() string { return "UnaryExpression" }
 
 // LogicalOperatorKind are used with boolean (logical) values
 type LogicalOperatorKind int
@@ -380,11 +394,40 @@ func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
-	Value *regexp.Regexp `json:"value"`
+	Value *regexp.Regexp
 }
 
 // Type is the abstract type
 func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
+
+func (r *RegexpLiteral) MarshalJSON() ([]byte, error) {
+	type Alias RegexpLiteral
+	raw := struct {
+		*Alias
+		Value string `json:"value"`
+	}{
+		Alias: (*Alias)(r),
+		Value: r.Value.String(),
+	}
+	return json.Marshal(raw)
+}
+func (r *RegexpLiteral) UnmarshalJSON(data []byte) error {
+	type Alias RegexpLiteral
+	raw := struct {
+		*Alias
+		Value string `json:"value"`
+	}{}
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return err
+	}
+	r.BaseNode = raw.BaseNode
+	r.Value, err = regexp.Compile(raw.Value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // DurationLiteral represents the elapsed time between two instants as an
 // int64 nanosecond count with syntax of golang's time.Duration
@@ -419,6 +462,7 @@ var OperatorTokens = map[OperatorKind]string{
 	GreaterThanOperator:      ">",
 	GreaterThanEqualOperator: ">=",
 	InOperator:               "in",
+	NotOperator:              "not",
 	NotEmptyOperator:         "not empty",
 	EmptyOperator:            "empty",
 	StartsWithOperator:       "startswith",

@@ -33,7 +33,6 @@ BlockStatement
   = "{" __ body:Statement* __ "}" {
     return blockstmt(body, c.text, c.pos)
   }
-  
 
 VariableStatement
   = VarToken __ declaration:VariableDeclaration {
@@ -60,8 +59,7 @@ Initializer
 
 // TODO: Perhaps this should be modeled like an AssignmentExpresssion
 VariableExpression
-  = CallExpression
-  / Primary
+  = Expr
 
 ExpressionStatement
   = call:CallExpression {
@@ -182,7 +180,7 @@ Logical
 
 EqualityOperators
   = ("==" / "!=" ) {
-      return binaryOp(c.text)
+      return operator(c.text)
     }
 
 Equality
@@ -200,7 +198,7 @@ RelationalOperators
       / "NOT EMPTY"i
       / "EMPTY"i
     ) {
-        return binaryOp(c.text)
+        return operator(c.text)
       }
 
 Relational
@@ -210,7 +208,7 @@ Relational
 
 AdditiveOperator
   = ("+" / "-") {
-        return binaryOp(c.text)
+        return operator(c.text)
       }
 
 Additive
@@ -220,7 +218,7 @@ Additive
 
 MultiplicativeOperator
   = ("*" / "/") {
-      return binaryOp(c.text)
+      return operator(c.text)
     }
 
 Multiplicative
@@ -228,10 +226,21 @@ Multiplicative
       return binaryExpression(head, tail, c.text, c.pos)
     }
 
+UnaryOperator
+  = ("-" / "not") {
+      return operator(c.text)
+    }
+
+UnaryExpression
+  =  __ op:UnaryOperator __ argument:Expr {
+      return unaryExpression(op, argument, c.text, c.pos)
+    }
+
 Primary
-  = '(' __ expr:Logical __ ')' {
+  = '(' __ expr:Expr __ ')' {
       return expr, nil
     }
+  / CallExpression
   / Array
   / StringLiteral
   / BooleanLiteral
@@ -240,6 +249,7 @@ Primary
   / DateTime
   / Number
   / Integer
+  / UnaryExpression
   / ArrowFunctionExpression
   / MemberExpressions
   / Identifier
@@ -385,7 +395,6 @@ Integer
   = ('0' / '-'? NonZeroDigit Digit*) {
       return integerLiteral(c.text, c.pos)
    }
-
 
 NonZeroDigit
   = [1-9]

@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/influxdata/ifql/expression"
-	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -15,24 +14,29 @@ import (
 const FilterKind = "filter"
 
 type FilterOpSpec struct {
-	Expression expression.Expression `json:"expression"`
+	F *ast.ArrowFunctionExpression `json:"f"`
 }
 
 func init() {
-	ifql.RegisterMethod(FilterKind, createFilterOpSpec)
+	query.RegisterMethod(FilterKind, createFilterOpSpec)
 	query.RegisterOpSpec(FilterKind, newFilterOp)
 	plan.RegisterProcedureSpec(FilterKind, newFilterProcedure, FilterKind)
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
-func createFilterOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
-	expr, err := args.GetRequiredExpression("f")
+func createFilterOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+	f, err := args.GetRequiredFunction("f")
+	if err != nil {
+		return nil, err
+	}
+
+	expr, err := f.Resolve()
 	if err != nil {
 		return nil, err
 	}
 
 	return &FilterOpSpec{
-		Expression: expr,
+		F: expr,
 	}, nil
 }
 func newFilterOp() query.OperationSpec {
@@ -44,7 +48,7 @@ func (s *FilterOpSpec) Kind() query.OperationKind {
 }
 
 type FilterProcedureSpec struct {
-	Expression expression.Expression
+	F *ast.ArrowFunctionExpression
 }
 
 func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -54,7 +58,7 @@ func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	return &FilterProcedureSpec{
-		Expression: spec.Expression,
+		F: spec.F,
 	}, nil
 }
 
@@ -64,7 +68,7 @@ func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
 func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FilterProcedureSpec)
 	//TODO copy expression
-	ns.Expression = s.Expression
+	ns.F = s.F
 	return ns
 }
 
@@ -80,11 +84,11 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 		root = dup()
 		selectSpec = root.Spec.(*FromProcedureSpec)
 		selectSpec.FilterSet = false
-		selectSpec.Filter = expression.Expression{}
+		selectSpec.Filter = nil
 		return
 	}
 	selectSpec.FilterSet = true
-	selectSpec.Filter = s.Expression
+	selectSpec.Filter = s.F
 }
 
 func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -94,7 +98,10 @@ func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationM
 	}
 	cache := execute.NewBlockBuilderCache(ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
-	t := NewFilterTransformation(d, cache, s)
+	t, err := NewFilterTransformation(d, cache, s)
+	if err != nil {
+		return nil, nil, err
+	}
 	return t, d, nil
 }
 
@@ -102,10 +109,10 @@ type filterTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
-	names     []string
-	scope     execute.Scope
-	scopeCols map[string]int
-	ces       map[execute.DataType]expressionOrError
+	properties []execute.ObjectProperty
+	scope      execute.Scope
+	scopeCols  map[string]int
+	ces        map[execute.DataType]expressionOrError
 
 	colMap []int
 }
@@ -115,18 +122,31 @@ type expressionOrError struct {
 	Expr execute.CompiledExpression
 }
 
-func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *FilterProcedureSpec) *filterTransformation {
-	names := execute.ExpressionNames(spec.Expression.Root)
-	types := make(map[string]execute.DataType, len(names))
-	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
-	for _, n := range names {
-		if n != "$" {
-			types[n] = execute.TString
+func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *FilterProcedureSpec) (*filterTransformation, error) {
+	if len(spec.F.Params) != 1 {
+		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.F.Params)
+	}
+	objectName := spec.F.Params[0].Name
+	properties, err := execute.ObjectProperties(spec.F)
+	if err != nil {
+		return nil, err
+	}
+
+	valueOP := execute.ObjectProperty{
+		Object:   objectName,
+		Property: "_value",
+	}
+	types := make(map[execute.ObjectProperty]execute.DataType, len(properties))
+	for _, op := range properties {
+		if op != valueOP {
+			types[op] = execute.TString
 		}
 	}
+
+	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
 	for _, typ := range execute.ValueDataTypes {
-		types["$"] = typ
-		ce, err := execute.CompileExpression(spec.Expression, types)
+		types[valueOP] = typ
+		ce, err := execute.CompileExpression(spec.F, types)
 		ces[typ] = expressionOrError{
 			Err:  err,
 			Expr: ce,
@@ -140,13 +160,13 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 	}
 
 	return &filterTransformation{
-		d:         d,
-		cache:     cache,
-		names:     names,
-		scope:     make(execute.Scope),
-		scopeCols: make(map[string]int),
-		ces:       ces,
-	}
+		d:          d,
+		cache:      cache,
+		properties: properties,
+		scope:      make(execute.Scope),
+		scopeCols:  make(map[string]int),
+		ces:        ces,
+	}, nil
 }
 
 func (t *filterTransformation) RetractBlock(id execute.DatasetID, meta execute.BlockMetadata) error {
@@ -174,10 +194,10 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 	valueIdx := execute.ValueIdx(cols)
 	for j, c := range cols {
 		if c.Label == execute.ValueColLabel {
-			t.scopeCols["$"] = valueIdx
+			t.scopeCols["_value"] = valueIdx
 		} else {
-			for _, k := range t.names {
-				if k == c.Label {
+			for _, op := range t.properties {
+				if op.Property == c.Label {
 					t.scopeCols[c.Label] = j
 					break
 				}
@@ -195,8 +215,8 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 	// Append only matching rows to block
 	b.Times().DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i := range ts {
-			for _, k := range t.names {
-				t.scope[k] = execute.ValueForRow(i, t.scopeCols[k], rr)
+			for _, op := range t.properties {
+				t.scope[op] = execute.ValueForRow(i, t.scopeCols[op.Property], rr)
 			}
 			if pass, err := ce.EvalBool(t.scope); !pass {
 				if err != nil {

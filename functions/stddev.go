@@ -3,7 +3,6 @@ package functions
 import (
 	"math"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -15,12 +14,12 @@ type StddevOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(StddevKind, createStddevOpSpec)
+	query.RegisterMethod(StddevKind, createStddevOpSpec)
 	query.RegisterOpSpec(StddevKind, newStddevOp)
 	plan.RegisterProcedureSpec(StddevKind, newStddevProcedure, StddevKind)
 	execute.RegisterTransformation(StddevKind, createStddevTransformation)
 }
-func createStddevOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createStddevOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(StddevOpSpec), nil
 }
 

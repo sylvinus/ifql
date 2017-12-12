@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -19,14 +18,14 @@ type LimitOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(LimitKind, createLimitOpSpec)
+	query.RegisterMethod(LimitKind, createLimitOpSpec)
 	query.RegisterOpSpec(LimitKind, newLimitOp)
 	plan.RegisterProcedureSpec(LimitKind, newLimitProcedure, LimitKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
 	execute.RegisterTransformation(LimitKind, createLimitTransformation)
 }
 
-func createLimitOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createLimitOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(LimitOpSpec)
 
 	n, err := args.GetRequiredInt("n")

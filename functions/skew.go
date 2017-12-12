@@ -3,7 +3,6 @@ package functions
 import (
 	"math"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -15,12 +14,12 @@ type SkewOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(SkewKind, createSkewOpSpec)
+	query.RegisterMethod(SkewKind, createSkewOpSpec)
 	query.RegisterOpSpec(SkewKind, newSkewOp)
 	plan.RegisterProcedureSpec(SkewKind, newSkewProcedure, SkewKind)
 	execute.RegisterTransformation(SkewKind, createSkewTransformation)
 }
-func createSkewOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSkewOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(SkewOpSpec), nil
 }
 

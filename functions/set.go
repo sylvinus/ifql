@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -17,13 +16,13 @@ type SetOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(SetKind, createSetOpSpec)
+	query.RegisterMethod(SetKind, createSetOpSpec)
 	query.RegisterOpSpec(SetKind, newSetOp)
 	plan.RegisterProcedureSpec(SetKind, newSetProcedure, SetKind)
 	execute.RegisterTransformation(SetKind, createSetTransformation)
 }
 
-func createSetOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSetOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(SetOpSpec)
 	key, err := args.GetRequiredString("key")
 	if err != nil {

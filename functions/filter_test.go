@@ -1,12 +1,12 @@
 package functions_test
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
-	"github.com/influxdata/ifql/ifql/ifqltest"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestFilter_NewQuery(t *testing.T) {
-	tests := []ifqltest.NewQueryTestCase{
+	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with database filter and range",
 			Raw:  `from(db:"mydb").filter(f: r => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
@@ -31,29 +31,29 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t1",
+											Property: &ast.StringLiteral{Value: "t1"},
 										},
-										Right: &expression.StringLiteralNode{Value: "val1"},
+										Right: &ast.StringLiteral{Value: "val1"},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t2",
+											Property: &ast.StringLiteral{Value: "t2"},
 										},
-										Right: &expression.StringLiteralNode{Value: "val2"},
+										Right: &ast.StringLiteral{Value: "val2"},
 									},
 								},
 							},
@@ -109,42 +109,42 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.OrOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.AndOperator,
-										Left: &expression.BinaryNode{
-											Operator: expression.EqualOperator,
-											Left: &expression.MemberReferenceNode{
-												Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.OrOperator,
+									Left: &ast.LogicalExpression{
+										Operator: ast.AndOperator,
+										Left: &ast.BinaryExpression{
+											Operator: ast.EqualOperator,
+											Left: &ast.MemberExpression{
+												Object: &ast.Identifier{
 													Name: "r",
 												},
-												Property: "t1",
+												Property: &ast.StringLiteral{Value: "t1"},
 											},
-											Right: &expression.StringLiteralNode{Value: "val1"},
+											Right: &ast.StringLiteral{Value: "val1"},
 										},
-										Right: &expression.BinaryNode{
-											Operator: expression.EqualOperator,
-											Left: &expression.MemberReferenceNode{
-												Object: &expression.ReferenceNode{
+										Right: &ast.BinaryExpression{
+											Operator: ast.EqualOperator,
+											Left: &ast.MemberExpression{
+												Object: &ast.Identifier{
 													Name: "r",
 												},
-												Property: "t2",
+												Property: &ast.StringLiteral{Value: "t2"},
 											},
-											Right: &expression.StringLiteralNode{Value: "val2"},
+											Right: &ast.StringLiteral{Value: "val2"},
 										},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t3",
+											Property: &ast.StringLiteral{Value: "t3"},
 										},
-										Right: &expression.StringLiteralNode{Value: "val3"},
+										Right: &ast.StringLiteral{Value: "val3"},
 									},
 								},
 							},
@@ -196,29 +196,29 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t1",
+											Property: &ast.StringLiteral{Value: "t1"},
 										},
-										Right: &expression.StringLiteralNode{Value: "val1"},
+										Right: &ast.StringLiteral{Value: "val1"},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "_field",
+											Property: &ast.StringLiteral{Value: "_field"},
 										},
-										Right: &expression.IntegerLiteralNode{Value: 10},
+										Right: &ast.IntegerLiteral{Value: 10},
 									},
 								},
 							},
@@ -270,29 +270,29 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t1",
+											Property: &ast.StringLiteral{Value: "t1"},
 										},
-										Right: &expression.StringLiteralNode{Value: "val1"},
+										Right: &ast.StringLiteral{Value: "val1"},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "_field",
+											Property: &ast.StringLiteral{Value: "_field"},
 										},
-										Right: &expression.IntegerLiteralNode{Value: 10},
+										Right: &ast.IntegerLiteral{Value: 10},
 									},
 								},
 							},
@@ -344,29 +344,29 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.RegexpMatchOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t1",
+											Property: &ast.StringLiteral{Value: "t1"},
 										},
-										Right: &expression.RegexpLiteralNode{Value: "val1"},
+										Right: &ast.RegexpLiteral{Value: regexp.MustCompile("val1")},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "_field",
+											Property: &ast.StringLiteral{Value: "_field"},
 										},
-										Right: &expression.FloatLiteralNode{Value: 10.5},
+										Right: &ast.NumberLiteral{Value: 10.5},
 									},
 								},
 							},
@@ -414,17 +414,17 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.RegexpMatchOperator,
-									Left: &expression.MemberReferenceNode{
-										Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.EqualOperator,
+									Left: &ast.MemberExpression{
+										Object: &ast.Identifier{
 											Name: "r",
 										},
-										Property: "t1",
+										Property: &ast.StringLiteral{Value: "t1"},
 									},
-									Right: &expression.RegexpLiteralNode{Value: `va/l1`},
+									Right: &ast.RegexpLiteral{Value: regexp.MustCompile(`va/l1`)},
 								},
 							},
 						},
@@ -454,29 +454,29 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Params: []string{"r"},
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.RegexpMatchOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+							F: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t1",
+											Property: &ast.StringLiteral{Value: "t1"},
 										},
-										Right: &expression.RegexpLiteralNode{Value: `va/l1`},
+										Right: &ast.RegexpLiteral{Value: regexp.MustCompile(`va/l1`)},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.RegexpNotMatchOperator,
-										Left: &expression.MemberReferenceNode{
-											Object: &expression.ReferenceNode{
+									Right: &ast.BinaryExpression{
+										Operator: ast.NotEqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
 												Name: "r",
 											},
-											Property: "t2",
+											Property: &ast.StringLiteral{Value: "t2"},
 										},
-										Right: &expression.RegexpLiteralNode{Value: `val2`},
+										Right: &ast.RegexpLiteral{Value: regexp.MustCompile(`val2`)},
 									},
 								},
 							},
@@ -493,7 +493,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			ifqltest.NewQueryTestHelper(t, tc)
+			querytest.NewQueryTestHelper(t, tc)
 		})
 	}
 }
@@ -502,9 +502,9 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 		"id":"filter",
 		"kind":"filter",
 		"spec":{
-			"expression":{
-				"params": ["r"],
-				"root":{
+			"ast":{
+				"params": [{"name":"r"}],
+				"body":{
 					"type":"binary",
 					"operator": "!=",
 					"left":{
@@ -526,17 +526,17 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "filter",
 		Spec: &functions.FilterOpSpec{
-			Expression: expression.Expression{
-				Params: []string{"r"},
-				Root: &expression.BinaryNode{
-					Operator: expression.NotEqualOperator,
-					Left: &expression.MemberReferenceNode{
-						Object: &expression.ReferenceNode{
+			F: &ast.ArrowFunctionExpression{
+				Params: []*ast.Identifier{{Name: "r"}},
+				Body: &ast.BinaryExpression{
+					Operator: ast.NotEqualOperator,
+					Left: &ast.MemberExpression{
+						Object: &ast.Identifier{
 							Name: "r",
 						},
-						Property: "_measurement",
+						Property: &ast.StringLiteral{Value: "_measurement"},
 					},
-					Right: &expression.StringLiteralNode{Value: "mem"},
+					Right: &ast.StringLiteral{Value: "mem"},
 				},
 			},
 		},
@@ -552,16 +552,19 @@ func TestFilter_Process(t *testing.T) {
 		want []*executetest.Block
 	}{
 		{
-			name: "$>5",
+			name: `_value>5`,
 			spec: &functions.FilterProcedureSpec{
-				Expression: expression.Expression{
-					Params: []string{"r"},
-					Root: &expression.BinaryNode{
-						Operator: expression.GreaterThanOperator,
-						Left: &expression.ReferenceNode{
-							Name: "$",
+				F: &ast.ArrowFunctionExpression{
+					Params: []*ast.Identifier{{Name: "r"}},
+					Body: &ast.BinaryExpression{
+						Operator: ast.GreaterThanOperator,
+						Left: &ast.MemberExpression{
+							Object: &ast.Identifier{
+								Name: "r",
+							},
+							Property: &ast.StringLiteral{Value: "_value"},
 						},
-						Right: &expression.FloatLiteralNode{
+						Right: &ast.NumberLiteral{
 							Value: 5,
 						},
 					},
@@ -596,16 +599,19 @@ func TestFilter_Process(t *testing.T) {
 			}},
 		},
 		{
-			name: "$>5 multiple blocks",
+			name: "_value>5 multiple blocks",
 			spec: &functions.FilterProcedureSpec{
-				Expression: expression.Expression{
-					Params: []string{"r"},
-					Root: &expression.BinaryNode{
-						Operator: expression.GreaterThanOperator,
-						Left: &expression.ReferenceNode{
-							Name: "$",
+				F: &ast.ArrowFunctionExpression{
+					Params: []*ast.Identifier{{Name: "r"}},
+					Body: &ast.BinaryExpression{
+						Operator: ast.GreaterThanOperator,
+						Left: &ast.MemberExpression{
+							Object: &ast.Identifier{
+								Name: "r",
+							},
+							Property: &ast.StringLiteral{Value: "_value"},
 						},
-						Right: &expression.FloatLiteralNode{
+						Right: &ast.NumberLiteral{
 							Value: 5,
 						},
 					},
@@ -673,38 +679,47 @@ func TestFilter_Process(t *testing.T) {
 			},
 		},
 		{
-			name: "$>5 and t1 = a and t2 = y",
+			name: "_value>5 and t1 = a and t2 = y",
 			spec: &functions.FilterProcedureSpec{
-				Expression: expression.Expression{
-					Params: []string{"r"},
-					Root: &expression.BinaryNode{
-						Operator: expression.AndOperator,
-						Left: &expression.BinaryNode{
-							Operator: expression.GreaterThanOperator,
-							Left: &expression.ReferenceNode{
-								Name: "$",
+				F: &ast.ArrowFunctionExpression{
+					Params: []*ast.Identifier{{Name: "r"}},
+					Body: &ast.LogicalExpression{
+						Operator: ast.AndOperator,
+						Left: &ast.BinaryExpression{
+							Operator: ast.GreaterThanOperator,
+							Left: &ast.MemberExpression{
+								Object: &ast.Identifier{
+									Name: "r",
+								},
+								Property: &ast.StringLiteral{Value: "_value"},
 							},
-							Right: &expression.FloatLiteralNode{
+							Right: &ast.NumberLiteral{
 								Value: 5,
 							},
 						},
-						Right: &expression.BinaryNode{
-							Operator: expression.AndOperator,
-							Left: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "t1",
+						Right: &ast.LogicalExpression{
+							Operator: ast.AndOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "t1"},
 								},
-								Right: &expression.StringLiteralNode{
+								Right: &ast.StringLiteral{
 									Value: "a",
 								},
 							},
-							Right: &expression.BinaryNode{
-								Operator: expression.EqualOperator,
-								Left: &expression.ReferenceNode{
-									Name: "t2",
+							Right: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "t2"},
 								},
-								Right: &expression.StringLiteralNode{
+								Right: &ast.StringLiteral{
 									Value: "y",
 								},
 							},
@@ -754,7 +769,11 @@ func TestFilter_Process(t *testing.T) {
 				tc.data,
 				tc.want,
 				func(d execute.Dataset, c execute.BlockBuilderCache) execute.Transformation {
-					return functions.NewFilterTransformation(d, c, tc.spec)
+					f, err := functions.NewFilterTransformation(d, c, tc.spec)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return f
 				},
 			)
 		})
@@ -763,17 +782,17 @@ func TestFilter_Process(t *testing.T) {
 
 func TestFilter_PushDown(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
-		Expression: expression.Expression{
-			Params: []string{"r"},
-			Root: &expression.BinaryNode{
-				Operator: expression.NotEqualOperator,
-				Left: &expression.MemberReferenceNode{
-					Object: &expression.ReferenceNode{
+		F: &ast.ArrowFunctionExpression{
+			Params: []*ast.Identifier{{Name: "r"}},
+			Body: &ast.BinaryExpression{
+				Operator: ast.NotEqualOperator,
+				Left: &ast.MemberExpression{
+					Object: &ast.Identifier{
 						Name: "r",
 					},
-					Property: "_measurement",
+					Property: &ast.StringLiteral{Value: "_measurement"},
 				},
-				Right: &expression.StringLiteralNode{Value: "mem"},
+				Right: &ast.StringLiteral{Value: "mem"},
 			},
 		},
 	}
@@ -783,17 +802,17 @@ func TestFilter_PushDown(t *testing.T) {
 	want := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
 			FilterSet: true,
-			Filter: expression.Expression{
-				Params: []string{"r"},
-				Root: &expression.BinaryNode{
-					Operator: expression.NotEqualOperator,
-					Left: &expression.MemberReferenceNode{
-						Object: &expression.ReferenceNode{
+			Filter: &ast.ArrowFunctionExpression{
+				Params: []*ast.Identifier{{Name: "r"}},
+				Body: &ast.BinaryExpression{
+					Operator: ast.NotEqualOperator,
+					Left: &ast.MemberExpression{
+						Object: &ast.Identifier{
 							Name: "r",
 						},
-						Property: "_measurement",
+						Property: &ast.StringLiteral{Value: "_measurement"},
 					},
-					Right: &expression.StringLiteralNode{Value: "mem"},
+					Right: &ast.StringLiteral{Value: "mem"},
 				},
 			},
 		},
@@ -804,33 +823,33 @@ func TestFilter_PushDown(t *testing.T) {
 
 func TestFilter_PushDown_Duplicate(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
-		Expression: expression.Expression{
-			Params: []string{"r"},
-			Root: &expression.BinaryNode{
-				Operator: expression.NotEqualOperator,
-				Left: &expression.MemberReferenceNode{
-					Object: &expression.ReferenceNode{
+		F: &ast.ArrowFunctionExpression{
+			Params: []*ast.Identifier{{Name: "r"}},
+			Body: &ast.BinaryExpression{
+				Operator: ast.NotEqualOperator,
+				Left: &ast.MemberExpression{
+					Object: &ast.Identifier{
 						Name: "r",
 					},
-					Property: "_measurement",
+					Property: &ast.StringLiteral{Value: "_measurement"},
 				},
-				Right: &expression.StringLiteralNode{Value: "mem"},
+				Right: &ast.StringLiteral{Value: "mem"},
 			},
 		},
 	}
 	root := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
 			FilterSet: true,
-			Filter: expression.Expression{
-				Root: &expression.BinaryNode{
-					Operator: expression.NotEqualOperator,
-					Left: &expression.MemberReferenceNode{
-						Object: &expression.ReferenceNode{
+			Filter: &ast.ArrowFunctionExpression{
+				Body: &ast.BinaryExpression{
+					Operator: ast.NotEqualOperator,
+					Left: &ast.MemberExpression{
+						Object: &ast.Identifier{
 							Name: "r",
 						},
-						Property: "_measurement",
+						Property: &ast.StringLiteral{Value: "_measurement"},
 					},
-					Right: &expression.StringLiteralNode{Value: "mem"},
+					Right: &ast.StringLiteral{Value: "mem"},
 				},
 			},
 		},
