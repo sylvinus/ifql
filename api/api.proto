@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package api;
+
+service API {
+}
+
+message Organization {
+	uint32 id = 1;
+	string name = 2;
+	Bucket buckets = 3;
+	Limits limits = 4;
+	User users = 5;
+	repeated SlackConfig slack_configs = 6;
+}
+
+message Bucket {
+	uint32 id = 1;
+	string name = 2;
+	Limits limits = 3;
+	string retention_period = 4;
+	repeated RetentionRule retention_rules = 5;
+	AuthorizationScope default_scope = 6;
+	repeated ETLRule etl_rules = 7;
+}
+
+message User {
+	uint32 id = 1;
+	repeated ApiKey keys = 2;
+	repeated Organization organizations = 3;
+
+	// what stuff for oauth?
+}
+
+message ApiKey {
+	string key = 1;
+	// how should API keys work?
+	string secret = 2;
+	string description = 3;
+	repeated AuthorizationScope authorization_scopes = 4;
+}
+
+message AuthorizationScope {
+	enum Resource {
+		BUCKET = 0;
+		ORGANIZATION = 1;
+	}
+	enum Right {
+		CREATE = 1;
+		UPDATE = 2;
+		DELETE = 3;
+		READ = 4;
+		WRITE = 5;
+	}
+	Resource resource = 1;
+	repeated Right rights = 2;
+}
+
+// Limits represents rate, storage and other
+// limits.
+// limit number of concurrent writes/queries rather than per/min/sec?
+message Limits {
+	int64 write_bytes_min = 0;
+	int64 read_bytes_min = 1;
+	int64 storage_mb = 2;
+	int write_requests_min = 3;
+	int read_requests_min = 4;
+	int batch_tasks = 5;
+	int stream_tasks = 6;
+	int users = 7;
+	int buckets = 8;
+	int scrape_targets = 9;
+}
+
+// RetentionRule 
+message RetentionRule {
+	string matcher = 1;
+	string duration = 2;
+}
+
+message ETLRule {
+	Query query = 1;
+	repeated Bucket input_buckets = 2;
+	Bucket output_bucket = 3;
+}
+
+message Query {
+	string query = 1;
+	int32 priority = 2;
+	int concurrency_quota = 3;
+	int64 memory_bytes_quota = 4;
+}
+
+/*
+    Kapacitor configs
+*/
+
+message SlackConfig {
+	string name = 1;
+	bool enabled = 2;
+}
+
+/*
+    Telegraf configs
+*/
