@@ -1,7 +1,6 @@
 package ifql
 
 import (
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -52,9 +51,9 @@ func vardecl(id, initializer interface{}, text []byte, pos position) (*ast.Varia
 	}, nil
 }
 
-func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
+func exprstmt(expr interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
 	return &ast.ExpressionStatement{
-		Expression: call.(ast.Expression),
+		Expression: expr.(ast.Expression),
 		BaseNode:   base(text, pos),
 	}, nil
 }
@@ -137,7 +136,7 @@ func arrowfunc(params interface{}, body interface{}, text []byte, pos position) 
 	}
 }
 
-func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
+func objectexpr(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
 	props := []*ast.Property{first.(*ast.Property)}
 	if rest != nil {
 		for _, prop := range toIfaceSlice(rest) {
@@ -215,7 +214,6 @@ func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.E
 }
 
 func unaryExpression(op, argument interface{}, text []byte, pos position) (*ast.UnaryExpression, error) {
-	log.Println(op, argument)
 	return &ast.UnaryExpression{
 		Operator: op.(ast.OperatorKind),
 		Argument: argument.(ast.Expression),
@@ -256,12 +254,12 @@ func integerLiteral(text []byte, pos position) (*ast.IntegerLiteral, error) {
 	}, nil
 }
 
-func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
+func numberLiteral(text []byte, pos position) (*ast.FloatLiteral, error) {
 	n, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
 		return nil, err
 	}
-	return &ast.NumberLiteral{
+	return &ast.FloatLiteral{
 		BaseNode: base(text, pos),
 		Value:    n,
 	}, nil

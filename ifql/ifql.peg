@@ -25,45 +25,34 @@ SourceElement
 
 Statement
   = varstmt:VariableStatement
+  / returnstmt:ReturnStatement
   / exprstmt:ExpressionStatement
   / blockstmt:BlockStatement
-  / returnstmt:ReturnStatement
 
-BlockStatement
-  = "{" __ body:Statement* __ "}" {
-    return blockstmt(body, c.text, c.pos)
-  }
 
 VariableStatement
-  = VarToken __ declaration:VariableDeclaration {
+  = __ "var" __ declaration:VariableDeclaration  __ {
       return varstmt(declaration, c.text, c.pos)
     }
 
-
 ReturnStatement
-  = "return" __ argument:Expr __  {
+  = __ "return" __ argument:Expr __  {
     return returnstmt(argument, c.text, c.pos)
   }
 
-VarToken = "var"
+ExpressionStatement
+  = __ expr:Expr __ {
+        return exprstmt(expr, c.text, c.pos)
+    }
+
+BlockStatement
+  = __ "{" __ body:Statement* __ "}"  __ {
+    return blockstmt(body, c.text, c.pos)
+  }
 
 VariableDeclaration
-  = id:Identifier __ initExpr:Initializer {
-      return vardecl(id, initExpr, c.text, c.pos)
-    }
-
-Initializer
-  = "=" !"=" __ expression:VariableExpression {
-      return expression, nil
-    }
-
-// TODO: Perhaps this should be modeled like an AssignmentExpresssion
-VariableExpression
-  = Expr
-
-ExpressionStatement
-  = call:CallExpression {
-        return exprstmt(call, c.text, c.pos)
+  = id:Identifier __ "=" __ init:Expr {
+      return vardecl(id, init, c.text, c.pos)
     }
 
 MemberExpressions
@@ -104,27 +93,9 @@ CallExpression
     }
 
 Arguments
-  = "(" __ args:(FunctionArgs)? __ ")" {
+  = "(" __ args:(ObjectProperties)? __ ")" {
       return args, nil
     }
-
-FunctionArgs
-  = first:FunctionArg __ rest:FunctionArgsRest* {
-      return object(first, rest, c.text, c.pos)
-    }
-
-FunctionArgsRest
-  = "," __  arg:FunctionArg {
-      return arg, nil
-    }
-
-FunctionArg
-  = key:Identifier __  ":" __ value:FunctionArgValues {
-      return property(key, value, c.text, c.pos)
-    }
-
-FunctionArgValues
-  = Primary
 
 ArrowFunctionExpression
   = __ params:ArrowFunctionParams __ "=>" __ body:ArrowFunctionBody __  {
@@ -157,6 +128,25 @@ ArrowFunctionBody
     return body, nil
   }
 
+ObjectExpression
+  = "{" __ object:(ObjectProperties)? __ "}" {
+    return object, nil
+  }
+
+ObjectProperties
+  = first:Property __ rest:PropertiesRest* __ ","? {
+      return objectexpr(first, rest, c.text, c.pos)
+    }
+
+PropertiesRest
+  = "," __  arg:Property {
+      return arg, nil
+    }
+
+Property
+  = key:Identifier __  ":" __ value:Expr {
+      return property(key, value, c.text, c.pos)
+    }
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
@@ -166,14 +156,14 @@ ArrowFunctionBody
 // Highest Priority includes the valid primary
 // primary contains the Lowest Priority
 Expr
-  = Logical
+  = LogicalExpression
 
 LogicalOperators
   = ("or"i / "and"i) {
         return logicalOp(c.text)
       }
 
-Logical
+LogicalExpression
   = head:Equality tail:( __  LogicalOperators __  Equality )* {
       return logicalExpression(head, tail, c.text, c.pos)
     }
@@ -193,10 +183,10 @@ RelationalOperators
       / "<"
       / ">="
       / ">"
-      / "startsWith"i
-      / "IN"i
-      / "NOT EMPTY"i
-      / "EMPTY"i
+      / "startswith"i
+      / "in"i
+      / "not empty"i
+      / "empty"i
     ) {
         return operator(c.text)
       }
@@ -222,7 +212,7 @@ MultiplicativeOperator
     }
 
 Multiplicative
-  = head:Primary tail:( __ MultiplicativeOperator __ Primary )* {
+  = head:UnaryExpression tail:( __ MultiplicativeOperator __ UnaryExpression )* {
       return binaryExpression(head, tail, c.text, c.pos)
     }
 
@@ -232,15 +222,15 @@ UnaryOperator
     }
 
 UnaryExpression
-  =  __ op:UnaryOperator __ argument:Expr {
+  = __ op:UnaryOperator __ argument:Primary __ {
       return unaryExpression(op, argument, c.text, c.pos)
     }
+  / Primary
 
 Primary
-  = '(' __ expr:Expr __ ')' {
+  = "(" __ expr:Expr __ ")" {
       return expr, nil
     }
-  / CallExpression
   / Array
   / StringLiteral
   / BooleanLiteral
@@ -249,10 +239,11 @@ Primary
   / DateTime
   / Number
   / Integer
-  / UnaryExpression
+  / CallExpression
   / ArrowFunctionExpression
   / MemberExpressions
   / Identifier
+  / ObjectExpression
 
 
 Array
@@ -381,18 +372,18 @@ BooleanLiteral
     }
 
 Identifier
-  // Allow any unicode letter
-  = [\pL]+ {
+  // Allow any unicode letter possibly followed by any number of unicode letters, underscores and numbers.
+  = [_\pL][_0-9\pL]* {
       return identifier(c.text, c.pos)
     }
 
 Number
-  = Integer '.' Digit+ {
+  = Integer "." Digit+ {
       return numberLiteral(c.text, c.pos)
    }
 
 Integer
-  = ('0' / '-'? NonZeroDigit Digit*) {
+  = ("0" / NonZeroDigit Digit*) {
       return integerLiteral(c.text, c.pos)
    }
 
@@ -442,7 +433,7 @@ LineTerminator
   = [\n\r]
 
 EOL
-  = '\n'
+  = "\n"
 
 EOF
   = !.

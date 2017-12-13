@@ -6,7 +6,6 @@ import (
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ifql"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -188,7 +187,7 @@ func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
 }
 
 func (f function) Resolve() (*ast.ArrowFunctionExpression, error) {
-	return nil, errors.New("function cannot be resolved")
+	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }
 
 type Arguments struct {
@@ -253,6 +252,6 @@ func ToQueryTime(value ifql.Value) (Time, error) {
 			Absolute: time.Unix(v, 0),
 		}, nil
 	default:
-		return Time{}, fmt.Errorf("value is not a time, got %v", value.Type)
+		return Time{}, fmt.Errorf("value is not a time, got %v", value.Type())
 	}
 }

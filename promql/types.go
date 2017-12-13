@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 )
@@ -199,23 +199,24 @@ func NewRangeOp(rng, offset time.Duration) (*query.Operation, error) {
 	}, nil
 }
 
-var operatorLookup = map[MatchKind]expression.Operator{
-	Equal:        expression.EqualOperator,
-	NotEqual:     expression.NotEqualOperator,
-	RegexMatch:   expression.RegexpMatchOperator,
-	RegexNoMatch: expression.RegexpNotMatchOperator,
+var operatorLookup = map[MatchKind]ast.OperatorKind{
+	Equal:        ast.EqualOperator,
+	NotEqual:     ast.NotEqualOperator,
+	RegexMatch:   ast.EqualOperator,
+	RegexNoMatch: ast.NotEqualOperator,
 }
 
 func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operation, error) {
-	node := &expression.BinaryNode{
-		Operator: expression.EqualOperator,
-		Left: &expression.MemberReferenceNode{
-			Object: &expression.ReferenceNode{
+	var node ast.Expression
+	node = &ast.BinaryExpression{
+		Operator: ast.EqualOperator,
+		Left: &ast.MemberExpression{
+			Object: &ast.Identifier{
 				Name: "r",
 			},
-			Property: "_metric",
+			Property: &ast.StringLiteral{Value: "_metric"},
 		},
-		Right: &expression.StringLiteralNode{
+		Right: &ast.StringLiteral{
 			Value: metricName,
 		},
 	}
@@ -224,26 +225,26 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 		if !ok {
 			return nil, fmt.Errorf("unknown label match kind %d", label.Kind)
 		}
-		ref := &expression.MemberReferenceNode{
-			Object: &expression.ReferenceNode{
+		ref := &ast.MemberExpression{
+			Object: &ast.Identifier{
 				Name: "r",
 			},
-			Property: label.Name,
+			Property: &ast.StringLiteral{Value: label.Name},
 		}
-		var value expression.Node
+		var value ast.Expression
 		if label.Value.Type() == StringKind {
-			value = &expression.StringLiteralNode{
+			value = &ast.StringLiteral{
 				Value: label.Value.Value().(string),
 			}
 		} else if label.Value.Type() == NumberKind {
-			value = &expression.FloatLiteralNode{
+			value = &ast.FloatLiteral{
 				Value: label.Value.Value().(float64),
 			}
 		}
-		node = &expression.BinaryNode{
-			Operator: expression.AndOperator,
+		node = &ast.LogicalExpression{
+			Operator: ast.AndOperator,
 			Left:     node,
-			Right: &expression.BinaryNode{
+			Right: &ast.BinaryExpression{
 				Operator: op,
 				Left:     ref,
 				Right:    value,
@@ -254,9 +255,9 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.FilterOpSpec{
-			Expression: expression.Expression{
-				Params: []string{"r"},
-				Root:   node,
+			F: &ast.ArrowFunctionExpression{
+				Params: []*ast.Identifier{{Name: "r"}},
+				Body:   node,
 			},
 		},
 	}, nil

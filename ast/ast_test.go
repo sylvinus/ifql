@@ -180,11 +180,11 @@ func TestJSONMarshal(t *testing.T) {
 			want: `{"type":"BooleanLiteral","value":true}`,
 		},
 		{
-			name: "number literal",
-			node: &ast.NumberLiteral{
+			name: "float literal",
+			node: &ast.FloatLiteral{
 				Value: 42.1,
 			},
-			want: `{"type":"NumberLiteral","value":42.1}`,
+			want: `{"type":"FloatLiteral","value":42.1}`,
 		},
 		{
 			name: "integer literal",
@@ -192,6 +192,13 @@ func TestJSONMarshal(t *testing.T) {
 				Value: math.MaxInt64,
 			},
 			want: `{"type":"IntegerLiteral","value":"9223372036854775807"}`,
+		},
+		{
+			name: "unsigned integer literal",
+			node: &ast.UnsignedIntegerLiteral{
+				Value: math.MaxUint64,
+			},
+			want: `{"type":"UnsignedIntegerLiteral","value":"18446744073709551615"}`,
 		},
 		{
 			name: "regexp literal",

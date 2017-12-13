@@ -14,7 +14,6 @@ import (
 	_ "github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query/control"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -41,14 +40,14 @@ func ExecuteQuery(ctx context.Context, queryStr string, opts *Options) ([]execut
 
 	qSpec, err := QuerySpec(ctx, queryStr)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to parse query")
+		return nil, nil, errors.Wrap(err, "failed to compile query")
 	}
 
 	return QueryWithSpec(ctx, qSpec, opts)
 }
 
 func QuerySpec(ctx context.Context, queryStr string) (*query.QuerySpec, error) {
-	return ifql.NewQuery(queryStr)
+	return query.NewQuery(queryStr)
 }
 
 // QueryWithSpec unmarshals the JSON plan, returns results and the query specification
@@ -86,7 +85,11 @@ func QueryWithSpec(ctx context.Context, qSpec *query.QuerySpec, opts *Options) (
 	return r, qSpec, nil
 }
 
+// Controller provides a central location to manage all incoming queries.
+// The controller is responsible for queueing, planning, and executing queries.
 type Controller = control.Controller
+
+// Query represents a single request.
 type Query = control.Query
 
 func NewController(opts Options) (*Controller, error) {

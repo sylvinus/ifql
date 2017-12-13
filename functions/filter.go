@@ -67,8 +67,7 @@ func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FilterProcedureSpec)
-	//TODO copy expression
-	ns.F = s.F
+	ns.Fn = s.Fn.Copy().(*ast.ArrowFunctionExpression)
 	return ns
 }
 
@@ -113,8 +112,6 @@ type filterTransformation struct {
 	scope      execute.Scope
 	scopeCols  map[string]int
 	ces        map[execute.DataType]expressionOrError
-
-	colMap []int
 }
 
 type expressionOrError struct {
@@ -179,16 +176,6 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 		execute.AddBlockCols(b, builder)
 	}
 
-	ncols := builder.NCols()
-	if cap(t.colMap) < ncols {
-		t.colMap = make([]int, ncols)
-		for j := range t.colMap {
-			t.colMap[j] = j
-		}
-	} else {
-		t.colMap = t.colMap[:ncols]
-	}
-
 	// Prepare scope
 	cols := b.Cols()
 	valueIdx := execute.ValueIdx(cols)
@@ -230,17 +217,17 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 				}
 				switch c.Type {
 				case execute.TBool:
-					builder.AppendBool(j, rr.AtBool(i, t.colMap[j]))
+					builder.AppendBool(j, rr.AtBool(i, j))
 				case execute.TInt:
-					builder.AppendInt(j, rr.AtInt(i, t.colMap[j]))
+					builder.AppendInt(j, rr.AtInt(i, j))
 				case execute.TUInt:
-					builder.AppendUInt(j, rr.AtUInt(i, t.colMap[j]))
+					builder.AppendUInt(j, rr.AtUInt(i, j))
 				case execute.TFloat:
-					builder.AppendFloat(j, rr.AtFloat(i, t.colMap[j]))
+					builder.AppendFloat(j, rr.AtFloat(i, j))
 				case execute.TString:
-					builder.AppendString(j, rr.AtString(i, t.colMap[j]))
+					builder.AppendString(j, rr.AtString(i, j))
 				case execute.TTime:
-					builder.AppendTime(j, rr.AtTime(i, t.colMap[j]))
+					builder.AppendTime(j, rr.AtTime(i, j))
 				default:
 					execute.PanicUnknownType(c.Type)
 				}
