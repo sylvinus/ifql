@@ -26,34 +26,41 @@ type Node interface {
 	node()
 	Type() string // Type property is a string that contains the variant type of the node
 	Location() *SourceLocation
+	Copy() Node
+
+	// All node must support json marshalling
+	json.Marshaler
 }
 
-func (*BaseNode) node() {}
+func (*Program) node() {}
 
 func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
+func (*ReturnStatement) node()     {}
 func (*VariableDeclaration) node() {}
 func (*VariableDeclarator) node()  {}
-func (*ReturnStatement) node()     {}
 
-func (*CallExpression) node()        {}
-func (*MemberExpression) node()      {}
-func (*BinaryExpression) node()      {}
-func (*UnaryExpression) node()       {}
-func (*LogicalExpression) node()     {}
-func (*ObjectExpression) node()      {}
-func (*ConditionalExpression) node() {}
-func (*ArrayExpression) node()       {}
+func (*ArrayExpression) node()         {}
+func (*ArrowFunctionExpression) node() {}
+func (*BinaryExpression) node()        {}
+func (*CallExpression) node()          {}
+func (*ConditionalExpression) node()   {}
+func (*LogicalExpression) node()       {}
+func (*MemberExpression) node()        {}
+func (*ObjectExpression) node()        {}
+func (*UnaryExpression) node()         {}
 
 func (*Property) node()   {}
 func (*Identifier) node() {}
 
-func (*StringLiteral) node()   {}
-func (*BooleanLiteral) node()  {}
-func (*NumberLiteral) node()   {}
-func (*RegexpLiteral) node()   {}
-func (*DurationLiteral) node() {}
-func (*DateTimeLiteral) node() {}
+func (*BooleanLiteral) node()         {}
+func (*DateTimeLiteral) node()        {}
+func (*DurationLiteral) node()        {}
+func (*IntegerLiteral) node()         {}
+func (*NumberLiteral) node()          {}
+func (*RegexpLiteral) node()          {}
+func (*StringLiteral) node()          {}
+func (*UnsignedIntegerLiteral) node() {}
 
 // BaseNode holds the attributes every expression or statement should have
 type BaseNode struct {
@@ -71,6 +78,18 @@ type Program struct {
 
 // Type is the abstract type
 func (*Program) Type() string { return "Program" }
+
+func (p *Program) Copy() Node {
+	np := new(Program)
+	*np = *p
+	if len(p.Body) > 0 {
+		np.Body = make([]Statement, len(p.Body))
+		for i, s := range p.Body {
+			np.Body[i] = s.Copy().(Statement)
+		}
+	}
+	return np
+}
 
 func (p *Program) MarshalJSON() ([]byte, error) {
 	type Alias Program
@@ -128,6 +147,19 @@ type BlockStatement struct {
 // Type is the abstract type
 func (*BlockStatement) Type() string { return "BlockStatement" }
 
+func (s *BlockStatement) Copy() Node {
+	ns := new(BlockStatement)
+	*ns = *s
+
+	if len(s.Body) > 0 {
+		ns.Body = make([]Statement, len(s.Body))
+		for i, stmt := range s.Body {
+			ns.Body[i] = stmt.Copy().(Statement)
+		}
+	}
+	return ns
+}
+
 func (s *BlockStatement) MarshalJSON() ([]byte, error) {
 	type Alias BlockStatement
 	raw := struct {
@@ -172,6 +204,18 @@ type ExpressionStatement struct {
 // Type is the abstract type
 func (*ExpressionStatement) Type() string { return "ExpressionStatement" }
 
+func (s *ExpressionStatement) Copy() Node {
+	if s == nil {
+		return s
+	}
+	ns := new(ExpressionStatement)
+	*ns = *s
+
+	ns.Expression = s.Expression.Copy().(Expression)
+
+	return ns
+}
+
 func (s *ExpressionStatement) MarshalJSON() ([]byte, error) {
 	type Alias ExpressionStatement
 	raw := struct {
@@ -212,6 +256,17 @@ type ReturnStatement struct {
 
 // Type is the abstract type
 func (*ReturnStatement) Type() string { return "ReturnStatement" }
+func (s *ReturnStatement) Copy() Node {
+	if s == nil {
+		return s
+	}
+	ns := new(ReturnStatement)
+	*ns = *s
+
+	ns.Argument = s.Argument.Copy().(Expression)
+
+	return ns
+}
 
 func (s *ReturnStatement) MarshalJSON() ([]byte, error) {
 	type Alias ReturnStatement
@@ -262,6 +317,23 @@ type VariableDeclaration struct {
 // Type is the abstract type
 func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
 
+func (d *VariableDeclaration) Copy() Node {
+	if d == nil {
+		return d
+	}
+	nd := new(VariableDeclaration)
+	*nd = *d
+
+	if len(d.Declarations) > 0 {
+		nd.Declarations = make([]*VariableDeclarator, len(d.Declarations))
+		for i, decl := range d.Declarations {
+			nd.Declarations[i] = decl.Copy().(*VariableDeclarator)
+		}
+	}
+
+	return nd
+}
+
 func (d *VariableDeclaration) MarshalJSON() ([]byte, error) {
 	type Alias VariableDeclaration
 	raw := struct {
@@ -284,6 +356,17 @@ type VariableDeclarator struct {
 // Type is the abstract type
 func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
 
+func (d *VariableDeclarator) Copy() Node {
+	if d == nil {
+		return d
+	}
+	nd := new(VariableDeclarator)
+	*nd = *d
+
+	nd.Init = d.Init.Copy().(Expression)
+
+	return nd
+}
 func (d *VariableDeclarator) MarshalJSON() ([]byte, error) {
 	type Alias VariableDeclarator
 	raw := struct {
@@ -335,6 +418,7 @@ func (*StringLiteral) expression()           {}
 func (*BooleanLiteral) expression()          {}
 func (*NumberLiteral) expression()           {}
 func (*IntegerLiteral) expression()          {}
+func (*UnsignedIntegerLiteral) expression()  {}
 func (*RegexpLiteral) expression()           {}
 func (*DurationLiteral) expression()         {}
 func (*DateTimeLiteral) expression()         {}
@@ -350,6 +434,24 @@ type CallExpression struct {
 // Type is the abstract type
 func (*CallExpression) Type() string { return "CallExpression" }
 
+func (e *CallExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(CallExpression)
+	*ne = *e
+
+	ne.Callee = e.Callee.Copy().(Expression)
+
+	if len(e.Arguments) > 0 {
+		ne.Arguments = make([]Expression, len(e.Arguments))
+		for i, arg := range e.Arguments {
+			ne.Arguments[i] = arg.Copy().(Expression)
+		}
+	}
+
+	return ne
+}
 func (e *CallExpression) MarshalJSON() ([]byte, error) {
 	type Alias CallExpression
 	raw := struct {
@@ -402,6 +504,18 @@ type MemberExpression struct {
 // Type is the abstract type
 func (*MemberExpression) Type() string { return "MemberExpression" }
 
+func (e *MemberExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(MemberExpression)
+	*ne = *e
+
+	ne.Object = e.Object.Copy().(Expression)
+	ne.Property = e.Property.Copy().(Expression)
+
+	return ne
+}
 func (e *MemberExpression) MarshalJSON() ([]byte, error) {
 	type Alias MemberExpression
 	raw := struct {
@@ -451,6 +565,24 @@ type ArrowFunctionExpression struct {
 // Type is the abstract type
 func (*ArrowFunctionExpression) Type() string { return "ArrowFunctionExpression" }
 
+func (e *ArrowFunctionExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ArrowFunctionExpression)
+	*ne = *e
+
+	if len(e.Params) > 0 {
+		ne.Params = make([]*Identifier, len(e.Params))
+		for i, param := range e.Params {
+			ne.Params[i] = param.Copy().(*Identifier)
+		}
+	}
+
+	ne.Body = e.Body.Copy()
+
+	return ne
+}
 func (e *ArrowFunctionExpression) MarshalJSON() ([]byte, error) {
 	type Alias ArrowFunctionExpression
 	raw := struct {
@@ -547,6 +679,18 @@ type BinaryExpression struct {
 // Type is the abstract type
 func (*BinaryExpression) Type() string { return "BinaryExpression" }
 
+func (e *BinaryExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(BinaryExpression)
+	*ne = *e
+
+	ne.Left = e.Left.Copy().(Expression)
+	ne.Right = e.Right.Copy().(Expression)
+
+	return ne
+}
 func (e *BinaryExpression) MarshalJSON() ([]byte, error) {
 	type Alias BinaryExpression
 	raw := struct {
@@ -596,6 +740,17 @@ type UnaryExpression struct {
 // Type is the abstract type
 func (*UnaryExpression) Type() string { return "UnaryExpression" }
 
+func (e *UnaryExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(UnaryExpression)
+	*ne = *e
+
+	ne.Argument = e.Argument.Copy().(Expression)
+
+	return ne
+}
 func (e *UnaryExpression) MarshalJSON() ([]byte, error) {
 	type Alias UnaryExpression
 	raw := struct {
@@ -677,6 +832,18 @@ type LogicalExpression struct {
 // Type is the abstract type
 func (*LogicalExpression) Type() string { return "LogicalExpression" }
 
+func (e *LogicalExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(LogicalExpression)
+	*ne = *e
+
+	ne.Left = e.Left.Copy().(Expression)
+	ne.Right = e.Right.Copy().(Expression)
+
+	return ne
+}
 func (e *LogicalExpression) MarshalJSON() ([]byte, error) {
 	type Alias LogicalExpression
 	raw := struct {
@@ -725,6 +892,22 @@ type ArrayExpression struct {
 // Type is the abstract type
 func (*ArrayExpression) Type() string { return "ArrayExpression" }
 
+func (e *ArrayExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ArrayExpression)
+	*ne = *e
+
+	if len(e.Elements) > 0 {
+		ne.Elements = make([]Expression, len(e.Elements))
+		for i, el := range e.Elements {
+			ne.Elements[i] = el.Copy().(Expression)
+		}
+	}
+
+	return ne
+}
 func (e *ArrayExpression) MarshalJSON() ([]byte, error) {
 	type Alias ArrayExpression
 	raw := struct {
@@ -769,6 +952,22 @@ type ObjectExpression struct {
 // Type is the abstract type
 func (*ObjectExpression) Type() string { return "ObjectExpression" }
 
+func (e *ObjectExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ObjectExpression)
+	*ne = *e
+
+	if len(e.Properties) > 0 {
+		ne.Properties = make([]*Property, len(e.Properties))
+		for i, p := range e.Properties {
+			ne.Properties[i] = p.Copy().(*Property)
+		}
+	}
+
+	return ne
+}
 func (e *ObjectExpression) MarshalJSON() ([]byte, error) {
 	type Alias ObjectExpression
 	raw := struct {
@@ -793,6 +992,19 @@ type ConditionalExpression struct {
 // Type is the abstract type
 func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
 
+func (e *ConditionalExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ConditionalExpression)
+	*ne = *e
+
+	ne.Test = e.Test.Copy().(Expression)
+	ne.Alternate = e.Alternate.Copy().(Expression)
+	ne.Consequent = e.Consequent.Copy().(Expression)
+
+	return ne
+}
 func (e *ConditionalExpression) MarshalJSON() ([]byte, error) {
 	type Alias ConditionalExpression
 	raw := struct {
@@ -847,6 +1059,17 @@ type Property struct {
 	Value Expression  `json:"value"`
 }
 
+func (p *Property) Copy() Node {
+	if p == nil {
+		return p
+	}
+	np := new(Property)
+	*np = *p
+
+	np.Value = p.Value.Copy().(Expression)
+
+	return np
+}
 func (p *Property) MarshalJSON() ([]byte, error) {
 	type Alias Property
 	raw := struct {
@@ -892,6 +1115,14 @@ type Identifier struct {
 // Type is the abstract type
 func (*Identifier) Type() string { return "Identifier" }
 
+func (i *Identifier) Copy() Node {
+	if i == nil {
+		return i
+	}
+	ni := new(Identifier)
+	*ni = *i
+	return ni
+}
 func (i *Identifier) MarshalJSON() ([]byte, error) {
 	type Alias Identifier
 	raw := struct {
@@ -912,13 +1143,14 @@ type Literal interface {
 	literal()
 }
 
-func (*StringLiteral) literal()   {}
-func (*BooleanLiteral) literal()  {}
-func (*NumberLiteral) literal()   {}
-func (*IntegerLiteral) literal()  {}
-func (*RegexpLiteral) literal()   {}
-func (*DurationLiteral) literal() {}
-func (*DateTimeLiteral) literal() {}
+func (*StringLiteral) literal()          {}
+func (*BooleanLiteral) literal()         {}
+func (*NumberLiteral) literal()          {}
+func (*IntegerLiteral) literal()         {}
+func (*UnsignedIntegerLiteral) literal() {}
+func (*RegexpLiteral) literal()          {}
+func (*DurationLiteral) literal()        {}
+func (*DateTimeLiteral) literal()        {}
 
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {
@@ -928,6 +1160,14 @@ type StringLiteral struct {
 
 func (*StringLiteral) Type() string { return "StringLiteral" }
 
+func (l *StringLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(StringLiteral)
+	*nl = *l
+	return nl
+}
 func (l *StringLiteral) MarshalJSON() ([]byte, error) {
 	type Alias StringLiteral
 	raw := struct {
@@ -949,6 +1189,14 @@ type BooleanLiteral struct {
 // Type is the abstract type
 func (*BooleanLiteral) Type() string { return "BooleanLiteral" }
 
+func (l *BooleanLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(BooleanLiteral)
+	*nl = *l
+	return nl
+}
 func (l *BooleanLiteral) MarshalJSON() ([]byte, error) {
 	type Alias BooleanLiteral
 	raw := struct {
@@ -970,6 +1218,14 @@ type NumberLiteral struct {
 // Type is the abstract type
 func (*NumberLiteral) Type() string { return "NumberLiteral" }
 
+func (l *NumberLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(NumberLiteral)
+	*nl = *l
+	return nl
+}
 func (l *NumberLiteral) MarshalJSON() ([]byte, error) {
 	type Alias NumberLiteral
 	raw := struct {
@@ -991,6 +1247,14 @@ type IntegerLiteral struct {
 // Type is the abstract type
 func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
 
+func (l *IntegerLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(IntegerLiteral)
+	*nl = *l
+	return nl
+}
 func (l *IntegerLiteral) MarshalJSON() ([]byte, error) {
 	type Alias IntegerLiteral
 	raw := struct {
@@ -1026,6 +1290,58 @@ func (l *IntegerLiteral) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnsignedIntegerLiteral represent integer numbers.
+type UnsignedIntegerLiteral struct {
+	*BaseNode
+	Value uint64 `json:"value"`
+}
+
+// Type is the abstract type
+func (*UnsignedIntegerLiteral) Type() string { return "UnsignedIntegerLiteral" }
+
+func (l *UnsignedIntegerLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(UnsignedIntegerLiteral)
+	*nl = *l
+	return nl
+}
+func (l *UnsignedIntegerLiteral) MarshalJSON() ([]byte, error) {
+	type Alias UnsignedIntegerLiteral
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+		Value string `json:"value"`
+	}{
+		Type:  l.Type(),
+		Alias: (*Alias)(l),
+		Value: strconv.FormatUint(l.Value, 10),
+	}
+	return json.Marshal(raw)
+}
+func (l *UnsignedIntegerLiteral) UnmarshalJSON(data []byte) error {
+	type Alias UnsignedIntegerLiteral
+	raw := struct {
+		*Alias
+		Value string `json:"value"`
+	}{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if raw.Alias != nil {
+		*l = *(*UnsignedIntegerLiteral)(raw.Alias)
+	}
+
+	value, err := strconv.ParseUint(raw.Value, 10, 64)
+	if err != nil {
+		return err
+	}
+	l.Value = value
+	return nil
+}
+
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
@@ -1035,6 +1351,14 @@ type RegexpLiteral struct {
 // Type is the abstract type
 func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
 
+func (l *RegexpLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(RegexpLiteral)
+	*nl = *l
+	return nl
+}
 func (l *RegexpLiteral) MarshalJSON() ([]byte, error) {
 	type Alias RegexpLiteral
 	raw := struct {
@@ -1081,6 +1405,14 @@ type DurationLiteral struct {
 // Type is the abstract type
 func (*DurationLiteral) Type() string { return "DurationLiteral" }
 
+func (l *DurationLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(DurationLiteral)
+	*nl = *l
+	return nl
+}
 func (l *DurationLiteral) MarshalJSON() ([]byte, error) {
 	type Alias DurationLiteral
 	raw := struct {
@@ -1127,6 +1459,14 @@ type DateTimeLiteral struct {
 // Type is the abstract type
 func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
 
+func (l *DateTimeLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(DateTimeLiteral)
+	*nl = *l
+	return nl
+}
 func (l *DateTimeLiteral) MarshalJSON() ([]byte, error) {
 	type Alias DateTimeLiteral
 	raw := struct {
@@ -1261,6 +1601,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(NumberLiteral)
 	case "IntegerLiteral":
 		node = new(IntegerLiteral)
+	case "UnsignedIntegerLiteral":
+		node = new(UnsignedIntegerLiteral)
 	case "RegexpLiteral":
 		node = new(RegexpLiteral)
 	case "DurationLiteral":

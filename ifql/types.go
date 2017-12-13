@@ -1,7 +1,6 @@
 package ifql
 
 import (
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -52,9 +51,9 @@ func vardecl(id, initializer interface{}, text []byte, pos position) (*ast.Varia
 	}, nil
 }
 
-func exprstmt(call interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
+func exprstmt(expr interface{}, text []byte, pos position) (*ast.ExpressionStatement, error) {
 	return &ast.ExpressionStatement{
-		Expression: call.(ast.Expression),
+		Expression: expr.(ast.Expression),
 		BaseNode:   base(text, pos),
 	}, nil
 }
@@ -215,7 +214,6 @@ func binaryExpression(head, tails interface{}, text []byte, pos position) (ast.E
 }
 
 func unaryExpression(op, argument interface{}, text []byte, pos position) (*ast.UnaryExpression, error) {
-	log.Println(op, argument)
 	return &ast.UnaryExpression{
 		Operator: op.(ast.OperatorKind),
 		Argument: argument.(ast.Expression),

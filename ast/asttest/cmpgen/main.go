@@ -6,8 +6,6 @@ import (
 	"go/types"
 	"log"
 	"os"
-
-	_ "github.com/influxdata/ifql/ast"
 )
 
 func main() {
@@ -22,7 +20,7 @@ func main() {
 	}
 	defer f.Close()
 
-	pkg, err := importer.Default().Import("github.com/influxdata/ifql/ast")
+	pkg, err := importer.For("source", nil).Import("github.com/influxdata/ifql/ast")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -194,6 +194,13 @@ func TestJSONMarshal(t *testing.T) {
 			want: `{"type":"IntegerLiteral","value":"9223372036854775807"}`,
 		},
 		{
+			name: "unsigned integer literal",
+			node: &ast.UnsignedIntegerLiteral{
+				Value: math.MaxUint64,
+			},
+			want: `{"type":"UnsignedIntegerLiteral","value":"18446744073709551615"}`,
+		},
+		{
 			name: "regexp literal",
 			node: &ast.RegexpLiteral{
 				Value: regexp.MustCompile(`.*`),

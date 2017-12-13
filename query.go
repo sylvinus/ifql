@@ -14,7 +14,6 @@ import (
 	_ "github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query/control"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -48,7 +47,7 @@ func ExecuteQuery(ctx context.Context, queryStr string, opts *Options) ([]execut
 }
 
 func QuerySpec(ctx context.Context, queryStr string) (*query.QuerySpec, error) {
-	return ifql.NewQuery(queryStr)
+	return query.NewQuery(queryStr)
 }
 
 // QueryWithSpec unmarshals the JSON plan, returns results and the query specification

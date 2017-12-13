@@ -6,7 +6,6 @@ import (
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ifql"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -188,7 +187,7 @@ func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
 }
 
 func (f function) Resolve() (*ast.ArrowFunctionExpression, error) {
-	return nil, errors.New("function cannot be resolved")
+	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }
 
 type Arguments struct {

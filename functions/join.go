@@ -107,12 +107,10 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	//joinEval, err := NewExpressionSpec(s.Eval)
-	//if err != nil {
-	//	return nil, nil, errors.Wrap(err, "invalid expression")
-	//}
-	// TODO(nathanielc): !!!!
-	var joinEval *expressionSpec
+	joinEval, err := NewExpressionSpec(s.Eval)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "invalid expression")
+	}
 	cache := NewMergeJoinCache(joinEval, ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewMergeJoinTransformation(d, cache, s)

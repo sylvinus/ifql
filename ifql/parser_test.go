@@ -32,6 +32,21 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "identifier with number",
+			raw:  `tan2()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "tan2",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "declare variable as an int",
 			raw:  `var howdy = 1`,
 			want: &ast.Program{
@@ -332,6 +347,48 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "unary expressions within logical expression",
+			raw: `var a = 5.0
+            10.0 * -a == -0.5 or a == 6.0`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.NumberLiteral{Value: 5},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.LogicalExpression{
+							Operator: ast.OrOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.BinaryExpression{
+									Operator: ast.MultiplicationOperator,
+									Left:     &ast.NumberLiteral{Value: 10},
+									Right: &ast.UnaryExpression{
+										Operator: ast.SubtractionOperator,
+										Argument: &ast.Identifier{Name: "a"},
+									},
+								},
+								Right: &ast.UnaryExpression{
+									Operator: ast.SubtractionOperator,
+									Argument: &ast.NumberLiteral{Value: 0.5},
+								},
+							},
+							Right: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left:     &ast.Identifier{Name: "a"},
+								Right:    &ast.NumberLiteral{Value: 6},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "expressions with function calls",
 			raw:  `var a = foo() == 10`,
 			want: &ast.Program{
@@ -349,6 +406,167 @@ func TestParse(t *testing.T) {
 								Right: &ast.IntegerLiteral{Value: 10},
 							},
 						}},
+					},
+				},
+			},
+		},
+		{
+			name: "mix unary logical and binary expressions",
+			raw: `
+            not (f() == 6.0 * x) or fail()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.LogicalExpression{
+							Operator: ast.OrOperator,
+							Left: &ast.UnaryExpression{
+								Operator: ast.NotOperator,
+								Argument: &ast.BinaryExpression{
+									Operator: ast.EqualOperator,
+									Left: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "f"},
+									},
+									Right: &ast.BinaryExpression{
+										Operator: ast.MultiplicationOperator,
+										Left:     &ast.NumberLiteral{Value: 6},
+										Right:    &ast.Identifier{Name: "x"},
+									},
+								},
+							},
+							Right: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "fail"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "mix unary logical and binary expressions with extra parens",
+			raw: `
+            (not (f() == 6.0 * x) or fail())`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.LogicalExpression{
+							Operator: ast.OrOperator,
+							Left: &ast.UnaryExpression{
+								Operator: ast.NotOperator,
+								Argument: &ast.BinaryExpression{
+									Operator: ast.EqualOperator,
+									Left: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "f"},
+									},
+									Right: &ast.BinaryExpression{
+										Operator: ast.MultiplicationOperator,
+										Left:     &ast.NumberLiteral{Value: 6},
+										Right:    &ast.Identifier{Name: "x"},
+									},
+								},
+							},
+							Right: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "fail"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "arrow function called",
+			raw: `var plusOne = r => r + 1
+			plusOne(r:5)
+			`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "plusOne",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.AdditionOperator,
+									Left:     &ast.Identifier{Name: "r"},
+									Right:    &ast.IntegerLiteral{Value: 1},
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{Name: "plusOne"},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										{
+											Key: &ast.Identifier{
+												Name: "r",
+											},
+											Value: &ast.IntegerLiteral{
+												Value: 5,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "arrow function called in binary expression",
+			raw: `
+            var plusOne = r => r + 1
+            plusOne(r:5) == 6 or die()
+			`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "plusOne",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.BinaryExpression{
+									Operator: ast.AdditionOperator,
+									Left:     &ast.Identifier{Name: "r"},
+									Right:    &ast.IntegerLiteral{Value: 1},
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.LogicalExpression{
+							Operator: ast.OrOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "plusOne"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key: &ast.Identifier{
+														Name: "r",
+													},
+													Value: &ast.IntegerLiteral{
+														Value: 5,
+													},
+												},
+											},
+										},
+									},
+								},
+								Right: &ast.IntegerLiteral{Value: 6},
+							},
+							Right: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "die"},
+							},
+						},
 					},
 				},
 			},
@@ -521,8 +739,11 @@ func TestParse(t *testing.T) {
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
 										{
-											Key:   &ast.Identifier{Name: "start"},
-											Value: &ast.DurationLiteral{Value: -time.Hour},
+											Key: &ast.Identifier{Name: "start"},
+											Value: &ast.UnaryExpression{
+												Operator: ast.SubtractionOperator,
+												Argument: &ast.DurationLiteral{Value: time.Hour},
+											},
 										},
 										{
 											Key:   &ast.Identifier{Name: "end"},
@@ -609,12 +830,18 @@ func TestParse(t *testing.T) {
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
 												{
-													Key:   &ast.Identifier{Name: "start"},
-													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
+													},
 												},
 												{
-													Key:   &ast.Identifier{Name: "stop"},
-													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+													Key: &ast.Identifier{Name: "stop"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
+													},
 												},
 											},
 										},
@@ -662,12 +889,18 @@ func TestParse(t *testing.T) {
 												&ast.ObjectExpression{
 													Properties: []*ast.Property{
 														{
-															Key:   &ast.Identifier{Name: "start"},
-															Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+															Key: &ast.Identifier{Name: "start"},
+															Value: &ast.UnaryExpression{
+																Operator: ast.SubtractionOperator,
+																Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
+															},
 														},
 														{
-															Key:   &ast.Identifier{Name: "stop"},
-															Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+															Key: &ast.Identifier{Name: "stop"},
+															Value: &ast.UnaryExpression{
+																Operator: ast.SubtractionOperator,
+																Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
+															},
 														},
 													},
 												},
@@ -751,12 +984,18 @@ func TestParse(t *testing.T) {
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
 												{
-													Key:   &ast.Identifier{Name: "start"},
-													Value: &ast.DurationLiteral{Value: -4 * time.Hour},
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
+													},
 												},
 												{
-													Key:   &ast.Identifier{Name: "stop"},
-													Value: &ast.DurationLiteral{Value: -2 * time.Hour},
+													Key: &ast.Identifier{Name: "stop"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
+													},
 												},
 											},
 										},
@@ -804,8 +1043,11 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 									&ast.ObjectExpression{
 										Properties: []*ast.Property{
 											{
-												Key:   &ast.Identifier{Name: "start"},
-												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												Key: &ast.Identifier{Name: "start"},
+												Value: &ast.UnaryExpression{
+													Operator: ast.SubtractionOperator,
+													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+												},
 											},
 										},
 									},
@@ -839,8 +1081,11 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 									&ast.ObjectExpression{
 										Properties: []*ast.Property{
 											{
-												Key:   &ast.Identifier{Name: "start"},
-												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												Key: &ast.Identifier{Name: "start"},
+												Value: &ast.UnaryExpression{
+													Operator: ast.SubtractionOperator,
+													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+												},
 											},
 										},
 									},
@@ -955,8 +1200,11 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 									&ast.ObjectExpression{
 										Properties: []*ast.Property{
 											{
-												Key:   &ast.Identifier{Name: "start"},
-												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												Key: &ast.Identifier{Name: "start"},
+												Value: &ast.UnaryExpression{
+													Operator: ast.SubtractionOperator,
+													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+												},
 											},
 										},
 									},
@@ -1015,8 +1263,11 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 									&ast.ObjectExpression{
 										Properties: []*ast.Property{
 											{
-												Key:   &ast.Identifier{Name: "start"},
-												Value: &ast.DurationLiteral{Value: -1 * time.Hour},
+												Key: &ast.Identifier{Name: "start"},
+												Value: &ast.UnaryExpression{
+													Operator: ast.SubtractionOperator,
+													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+												},
 											},
 										},
 									},
@@ -1107,8 +1358,8 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 			if tt.wantErr {
 				return
 			}
-			if !cmp.Equal(tt.want, got, asttest.IgnoreBaseNodeOptions...) {
-				t.Errorf("Parse() = -want/+got %s", cmp.Diff(tt.want, got, asttest.IgnoreBaseNodeOptions...))
+			if !cmp.Equal(tt.want, got, asttest.CompareOptions...) {
+				t.Errorf("Parse() = -want/+got %s", cmp.Diff(tt.want, got, asttest.CompareOptions...))
 			}
 		})
 	}
