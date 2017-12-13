@@ -3,6 +3,26 @@ syntax = "proto3";
 package api;
 
 service API {
+	rpc GetOrganizations() returns (Organizations) {}
+	rpc GetOrganization(uint32 id) returns (Organization) {}
+
+	// TODO add tests for all kapacitor notifier configs
+	rpc TestSlackConfig(SlackConfig, SlackNotifier, string) returns (Error) {}
+
+	// TODO 
+	rpc TestK8sConfig(K8sConfig) returns (Error) {}
+}
+
+message Error {
+	enum Kind {
+		UNKNOWN = 1;
+	}
+	Kind kind = 1;
+	string message = 2;
+}
+
+message Organizations {
+	repeated Organization
 }
 
 message Organization {
@@ -60,16 +80,16 @@ message AuthorizationScope {
 // limits.
 // limit number of concurrent writes/queries rather than per/min/sec?
 message Limits {
-	int64 write_bytes_min = 0;
-	int64 read_bytes_min = 1;
-	int64 storage_mb = 2;
-	int write_requests_min = 3;
-	int read_requests_min = 4;
-	int batch_tasks = 5;
-	int stream_tasks = 6;
-	int users = 7;
-	int buckets = 8;
-	int scrape_targets = 9;
+	int64 write_bytes_min = 1;
+	int64 read_bytes_min = 2;
+	int64 storage_mb = 3;
+	int write_requests_min = 4;
+	int read_requests_min = 5;
+	int batch_tasks = 6;
+	int stream_tasks = 7;
+	int users = 8;
+	int buckets = 9;
+	int scrape_targets = 10;
 }
 
 // RetentionRule 
@@ -91,6 +111,49 @@ message Query {
 	int64 memory_bytes_quota = 4;
 }
 
+/* Alert Handling */
+message AlertHandler {
+	string name = 1;
+	uint32 bucket_id = 2;
+
+	// log_bucket_id is where the log that a notification was
+	//               sent will be written.
+	uint32 log_bucket_id = 3;
+	repeated NotificationTarget notification_targets = 4;
+
+	// rate limits. Will limit how many times notifications
+	//              get sent to the targets in this handler
+	uint32 max_count = 5;
+	uint32 duration = 6;
+}
+
+message NotificationTarget {
+	oneof kind {
+		SlackNotifier slack_notifier = 1;
+		EmailNotifier email_notifier = 2;
+		// TODO finish the notifiers
+	}
+}
+
+message SlackNotifier {
+	string name = 1;
+	string username = 2;
+	string channel = 3;
+	string icon_emoji = 4;
+}
+
+message EmailNotifier {
+	string name = 1;
+	string from = 2;
+	repeated string to = 3;
+}
+
+/*
+  Service Configs
+
+  ** Only service configs can contain secrets
+*/
+
 /*
     Kapacitor configs
 */
@@ -102,4 +165,8 @@ message SlackConfig {
 
 /*
     Telegraf configs
+*/
+
+/*
+    Chronograf configs
 */
