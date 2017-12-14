@@ -38,7 +38,7 @@ ifqld --verbose --host localhost:8082
 ```sh
 curl -XPOST --data-urlencode \
 'q=from(db:"telegraf")
-.filter(f: r => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
+.filter(fn: r => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
 .range(start:-170h).sum()' \
 localhost:8093/query
 ```
@@ -121,9 +121,9 @@ Join two time series together on time and the list of `on` keys.
 Example:
 
 ```
-var cpu = from(db: "telegraf").filter(f: r => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
-var mem = from(db: "telegraf").filter(f: r => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
-join(tables:[cpu, mem], on:["host"], f: (cpu, mem) => cpu["_value"] + mem["_value"])
+var cpu = from(db: "telegraf").filter(fn: r => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
+var mem = from(db: "telegraf").filter(fn: r => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
+join(tables:[cpu, mem], on:["host"], fn: (cpu, mem) => cpu["_value"] + mem["_value"])
 ````
 
 ##### options
@@ -134,7 +134,7 @@ List of tables to join. Currently only two tables are allowed.
 * `on` array of strings
 List of tag keys that when equal produces a result set.
 
-* `f` 
+* `fn` 
 
 Defines the function that merges the values of the tables.
 The function must defined to accept the same number of parameters as tables being joined.
@@ -157,7 +157,7 @@ Returns the max value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(f: r => r["_measurement"]=="cpu" AND 
+    .filter(fn: r => r["_measurement"]=="cpu" AND 
                 r["_field"] == "usage_system" AND 
                 r["service"] == "app-server")
     .range(start:-12h)
@@ -171,7 +171,7 @@ Returns the mean of the values within the results
 Example:
 ```
 from(db:"foo")
-    .filter(f: r => r["_measurement"] == "mem" AND 
+    .filter(fn: r => r["_measurement"] == "mem" AND 
                 r["_field"] == "used_percent")
     .range(start:-12h)
     .window(every:10m)
@@ -184,7 +184,7 @@ Returns the min value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(f: r => r[ "_measurement"] == "cpu" AND 
+    .filter(fn: r => r[ "_measurement"] == "cpu" AND 
                 r["_field" ]== "usage_system")
     .range(start:-12h)
     .window(every:10m, period: 5m)
@@ -198,7 +198,7 @@ Filters the results by time boundaries
 Example:
 ```
 from(db:"foo")
-    .filter(f: r => r["_measurement"] == "cpu" AND 
+    .filter(fn: r => r["_measurement"] == "cpu" AND 
                 r["_field"] == "usage_system")
     .range(start:-12h, stop: -15m)
 ```
@@ -216,7 +216,7 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 from(db:"foo")
-    .filter(f: r => r["_measurement"] == "cpu" AND 
+    .filter(fn: r => r["_measurement"] == "cpu" AND 
                 r["_field"] == "usage_system")
     .range(start:-1d)
     .sample(n: 5, pos: 1)
@@ -250,7 +250,7 @@ Default sort is ascending
 Example: 
 ```
 from(db:"telegraf")
-    .filter(f: r => r["_measurement"] == "system" AND 
+    .filter(fn: r => r["_measurement"] == "system" AND 
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(cols:["region", "host", "value"])
@@ -266,7 +266,7 @@ running instances.
 
 ```
 from(db:"telegraf")
-    .filter(f: r => r["_measurement"] == "system" AND 
+    .filter(fn: r => r["_measurement"] == "system" AND 
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(desc: true)
@@ -296,7 +296,7 @@ Filters the results using an expression
 Example:
 ```
 from(db:"foo")
-    .filter(f: r => r["_measurement"]=="cpu" AND 
+    .filter(fn: r => r["_measurement"]=="cpu" AND 
                 r["_field"] == "usage_system" AND 
                 r["service"] == "app-server")
     .range(start:-12h)
@@ -305,7 +305,7 @@ from(db:"foo")
 
 ##### options
 
-* `f` function(record) bool
+* `fn` function(record) bool
 
 Function to when filtering the records.
 The function must accept a single parameter which will be the records and return a boolean value.

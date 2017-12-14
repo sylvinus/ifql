@@ -255,7 +255,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.FilterOpSpec{
-			F: &ast.ArrowFunctionExpression{
+			Fn: &ast.ArrowFunctionExpression{
 				Params: []*ast.Identifier{{Name: "r"}},
 				Body:   node,
 			},

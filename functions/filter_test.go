@@ -19,7 +19,7 @@ func TestFilter_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with database filter and range",
-			Raw:  `from(db:"mydb").filter(f: r => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
+			Raw:  `from(db:"mydb").filter(fn: r => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -31,7 +31,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -87,7 +87,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter (and with or) and range",
 			Raw: `from(db:"mydb")
-						.filter(f: r =>
+						.filter(fn: r =>
 								(
 									(r["t1"]=="val1")
 									and
@@ -109,7 +109,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.OrOperator,
@@ -178,7 +178,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter including fields",
 			Raw: `from(db:"mydb")
-						.filter(f: r =>
+						.filter(fn: r =>
 							(r["t1"] =="val1")
 							and
 							(r["_field"] == 10)
@@ -196,7 +196,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -252,7 +252,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter with no parens including fields",
 			Raw: `from(db:"mydb")
-						.filter(f: r =>
+						.filter(fn: r =>
 							r["t1"]=="val1"
 							and
 							r["_field"] == 10
@@ -270,7 +270,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -326,7 +326,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter with no parens including regex and field",
 			Raw: `from(db:"mydb")
-						.filter(f: r =>
+						.filter(fn: r =>
 							r["t1"]==/val1/
 							and
 							r["_field"] == 10.5
@@ -344,7 +344,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -400,7 +400,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database regex with escape",
 			Raw: `from(db:"mydb")
-						.filter(f: r => 
+						.filter(fn: r => 
 							r["t1"]==/va\/l1/
 						)`,
 			Want: &query.QuerySpec{
@@ -414,7 +414,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.EqualOperator,
@@ -438,7 +438,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database with two regex",
 			Raw: `from(db:"mydb")
-						.filter(f: r => 
+						.filter(fn: r => 
 							r["t1"]==/va\/l1/
 							and
 							r["t2"] != /val2/
@@ -454,7 +454,7 @@ func TestFilter_NewQuery(t *testing.T) {
 					{
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
-							F: &ast.ArrowFunctionExpression{
+							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "r"}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -502,7 +502,7 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 		"id":"filter",
 		"kind":"filter",
 		"spec":{
-			"f":{
+			"fn":{
 				"type": "ArrowFunctionExpression",
 				"params": [{"type":"Identifier","name":"r"}],
 				"body":{
@@ -527,7 +527,7 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "filter",
 		Spec: &functions.FilterOpSpec{
-			F: &ast.ArrowFunctionExpression{
+			Fn: &ast.ArrowFunctionExpression{
 				Params: []*ast.Identifier{{Name: "r"}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.NotEqualOperator,
@@ -555,7 +555,7 @@ func TestFilter_Process(t *testing.T) {
 		{
 			name: `_value>5`,
 			spec: &functions.FilterProcedureSpec{
-				F: &ast.ArrowFunctionExpression{
+				Fn: &ast.ArrowFunctionExpression{
 					Params: []*ast.Identifier{{Name: "r"}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.GreaterThanOperator,
@@ -602,7 +602,7 @@ func TestFilter_Process(t *testing.T) {
 		{
 			name: "_value>5 multiple blocks",
 			spec: &functions.FilterProcedureSpec{
-				F: &ast.ArrowFunctionExpression{
+				Fn: &ast.ArrowFunctionExpression{
 					Params: []*ast.Identifier{{Name: "r"}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.GreaterThanOperator,
@@ -682,7 +682,7 @@ func TestFilter_Process(t *testing.T) {
 		{
 			name: "_value>5 and t1 = a and t2 = y",
 			spec: &functions.FilterProcedureSpec{
-				F: &ast.ArrowFunctionExpression{
+				Fn: &ast.ArrowFunctionExpression{
 					Params: []*ast.Identifier{{Name: "r"}},
 					Body: &ast.LogicalExpression{
 						Operator: ast.AndOperator,
@@ -783,7 +783,7 @@ func TestFilter_Process(t *testing.T) {
 
 func TestFilter_PushDown(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
-		F: &ast.ArrowFunctionExpression{
+		Fn: &ast.ArrowFunctionExpression{
 			Params: []*ast.Identifier{{Name: "r"}},
 			Body: &ast.BinaryExpression{
 				Operator: ast.NotEqualOperator,
@@ -824,7 +824,7 @@ func TestFilter_PushDown(t *testing.T) {
 
 func TestFilter_PushDown_Duplicate(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
-		F: &ast.ArrowFunctionExpression{
+		Fn: &ast.ArrowFunctionExpression{
 			Params: []*ast.Identifier{{Name: "r"}},
 			Body: &ast.BinaryExpression{
 				Operator: ast.NotEqualOperator,
