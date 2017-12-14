@@ -38,7 +38,7 @@ ifqld --verbose --host localhost:8082
 ```sh
 curl -XPOST --data-urlencode \
 'q=from(db:"telegraf")
-.filter(exp:{"_measurement" == "cpu" AND "_field" == "usage_user"})
+.filter(f: r => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
 .range(start:-170h).sum()' \
 localhost:8093/query
 ```
@@ -121,22 +121,24 @@ Join two time series together on time and the list of `on` keys.
 Example:
 
 ```
-var cpu = from(db: "telegraf").filter(exp:{"_measurement" == "cpu" and "_field" == "usage_user"}).range(start: -30m)
-from(db: "telegraf").filter(exp:{"_measurement" == "mem" and "_field" == "used_percent"}).range(start: -30m)
-.join(on:["host"], eval:{$ + cpu})
+var cpu = from(db: "telegraf").filter(f: r => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
+var mem = from(db: "telegraf").filter(f: r => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
+join(tables:[cpu, mem], on:["host"], f: (cpu, mem) => cpu["_value"] + mem["_value"])
 ````
 
-The special identifier `$` represents the current value of the query.  It can
-only be used in expressions.
-
 ##### options
+
+* `tables` array of tables
+List of tables to join. Currently only two tables are allowed.
 
 * `on` array of strings
 List of tag keys that when equal produces a result set.
 
-* `exp` 
+* `f` 
 
-Defines the expression that merges the joined results sets together
+Defines the function that merges the values of the tables.
+The function must defined to accept the same number of parameters as tables being joined.
+The records of each table are then passed in turn to the function.
 
 #### last
 Returns the last result of the query
@@ -155,9 +157,9 @@ Returns the max value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="cpu" AND 
-                "_field"=="usage_system" AND 
-                "service"=="app-server"})
+    .filter(f: r => r["_measurement"]=="cpu" AND 
+                r["_field"] == "usage_system" AND 
+                r["service"] == "app-server")
     .range(start:-12h)
     .window(every:10m)
     .max()
@@ -169,8 +171,8 @@ Returns the mean of the values within the results
 Example:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="mem" AND 
-                "_field"=="used_percent"})
+    .filter(f: r => r["_measurement"] == "mem" AND 
+                r["_field"] == "used_percent")
     .range(start:-12h)
     .window(every:10m)
     .mean()
@@ -182,8 +184,8 @@ Returns the min value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="cpu" AND 
-                "_field"=="usage_system"})
+    .filter(f: r => r[ "_measurement"] == "cpu" AND 
+                r["_field" ]== "usage_system")
     .range(start:-12h)
     .window(every:10m, period: 5m)
     .min()
@@ -196,8 +198,8 @@ Filters the results by time boundaries
 Example:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="cpu" AND 
-                "_field"=="usage_system"})
+    .filter(f: r => r["_measurement"] == "cpu" AND 
+                r["_field"] == "usage_system")
     .range(start:-12h, stop: -15m)
 ```
 
@@ -214,8 +216,8 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="cpu" AND 
-                "_field"=="usage_system"})
+    .filter(f: r => r["_measurement"] == "cpu" AND 
+                r["_field"] == "usage_system")
     .range(start:-1d)
     .sample(n: 5, pos: 1)
 ```
@@ -248,8 +250,8 @@ Default sort is ascending
 Example: 
 ```
 from(db:"telegraf")
-    .filter(exp:{"_measurement"=="system" AND 
-                "_field"=="uptime"})
+    .filter(f: r => r["_measurement"] == "system" AND 
+                r["_field"] == "uptime")
     .range(start:-12h)
     .sort(cols:["region", "host", "value"])
 ```
@@ -264,8 +266,8 @@ running instances.
 
 ```
 from(db:"telegraf")
-    .filter(exp:{"_measurement"=="system" AND 
-                "_field"=="uptime"})
+    .filter(f: r => r["_measurement"] == "system" AND 
+                r["_field"] == "uptime")
     .range(start:-12h)
     .sort(desc: true)
 ```
@@ -294,12 +296,20 @@ Filters the results using an expression
 Example:
 ```
 from(db:"foo")
-    .filter(exp:{"_measurement"=="cpu" AND 
-                "_field"=="usage_system" AND 
-                "service"=="app-server"})
+    .filter(f: r => r["_measurement"]=="cpu" AND 
+                r["_field"] == "usage_system" AND 
+                r["service"] == "app-server")
     .range(start:-12h)
     .max()
 ```
+
+##### options
+
+* `f` function(record) bool
+
+Function to when filtering the records.
+The function must accept a single parameter which will be the records and return a boolean value.
+Records which evaluate to true, will be included in the results.
 
 #### window
 Partitions the results by a given time range 
