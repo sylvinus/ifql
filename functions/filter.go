@@ -14,7 +14,7 @@ import (
 const FilterKind = "filter"
 
 type FilterOpSpec struct {
-	F *ast.ArrowFunctionExpression `json:"f"`
+	Fn *ast.ArrowFunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -25,18 +25,18 @@ func init() {
 }
 
 func createFilterOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
-	f, err := args.GetRequiredFunction("f")
+	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err
 	}
 
-	expr, err := f.Resolve()
+	resolved, err := f.Resolve()
 	if err != nil {
 		return nil, err
 	}
 
 	return &FilterOpSpec{
-		F: expr,
+		Fn: resolved,
 	}, nil
 }
 func newFilterOp() query.OperationSpec {
@@ -48,7 +48,7 @@ func (s *FilterOpSpec) Kind() query.OperationKind {
 }
 
 type FilterProcedureSpec struct {
-	F *ast.ArrowFunctionExpression
+	Fn *ast.ArrowFunctionExpression
 }
 
 func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -58,7 +58,7 @@ func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	return &FilterProcedureSpec{
-		F: spec.F,
+		Fn: spec.Fn,
 	}, nil
 }
 
@@ -68,7 +68,7 @@ func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
 func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FilterProcedureSpec)
 	//TODO copy expression
-	ns.F = s.F
+	ns.Fn = s.Fn
 	return ns
 }
 
@@ -88,7 +88,7 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 		return
 	}
 	selectSpec.FilterSet = true
-	selectSpec.Filter = s.F
+	selectSpec.Filter = s.Fn
 }
 
 func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
@@ -123,11 +123,11 @@ type expressionOrError struct {
 }
 
 func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *FilterProcedureSpec) (*filterTransformation, error) {
-	if len(spec.F.Params) != 1 {
-		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.F.Params)
+	if len(spec.Fn.Params) != 1 {
+		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.Fn.Params)
 	}
-	objectName := spec.F.Params[0].Name
-	properties, err := execute.ObjectProperties(spec.F)
+	objectName := spec.Fn.Params[0].Name
+	properties, err := execute.ObjectProperties(spec.Fn)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
 	for _, typ := range execute.ValueDataTypes {
 		types[valueOP] = typ
-		ce, err := execute.CompileExpression(spec.F, types)
+		ce, err := execute.CompileExpression(spec.Fn, types)
 		ces[typ] = expressionOrError{
 			Err:  err,
 			Expr: ce,

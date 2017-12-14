@@ -19,7 +19,7 @@ const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
 	On []string                     `json:"on"`
-	F  *ast.ArrowFunctionExpression `json:"f"`
+	Fn *ast.ArrowFunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -31,7 +31,7 @@ func init() {
 }
 
 func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
-	f, err := args.GetRequiredFunction("f")
+	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.Operation
 		return nil, err
 	}
 	spec := &JoinOpSpec{
-		F: resolved,
+		Fn: resolved,
 	}
 
 	if array, ok, err := args.GetArray("on", ifql.TString); err != nil {
@@ -70,7 +70,7 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 
 type MergeJoinProcedureSpec struct {
 	On []string                     `json:"keys"`
-	F  *ast.ArrowFunctionExpression `json:"f"`
+	Fn *ast.ArrowFunctionExpression `json:"f"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -81,7 +81,7 @@ func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 
 	p := &MergeJoinProcedureSpec{
 		On: spec.On,
-		F:  spec.F,
+		Fn: spec.Fn,
 	}
 	sort.Strings(p.On)
 	return p, nil
@@ -97,7 +97,7 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	copy(ns.On, s.On)
 
 	// TODO Copy Expression
-	ns.F = s.F
+	ns.Fn = s.Fn
 
 	return ns
 }
@@ -107,7 +107,7 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinEval, err := NewExpressionSpec(s.F)
+	joinEval, err := NewExpressionSpec(s.Fn)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
