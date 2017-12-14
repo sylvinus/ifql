@@ -1,11 +1,11 @@
 package ifql
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
+	"github.com/pkg/errors"
 )
 
 func Eval(program *ast.Program, scope *Scope, d Domain) error {
@@ -94,7 +94,12 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 		}
 		return value, nil
 	case *ast.CallExpression:
-		return ev.callFunction(e, scope)
+		v, err := ev.callFunction(e, scope)
+		if err != nil {
+			// Determine function name
+			return nil, errors.Wrapf(err, "error calling funcion %q", functionName(e))
+		}
+		return v, nil
 	case *ast.MemberExpression:
 		obj, err := ev.doExpression(e.Object, scope)
 		if err != nil {
@@ -285,6 +290,21 @@ func (ev evaluator) doLiteral(lit ast.Literal) (Value, error) {
 		return nil, fmt.Errorf("unknown literal type %T", lit)
 	}
 
+}
+
+func functionName(call *ast.CallExpression) string {
+	switch callee := call.Callee.(type) {
+	case *ast.Identifier:
+		return callee.Name
+	case *ast.MemberExpression:
+		name, err := propertyName(callee)
+		if err != nil {
+			return "<anonymous function>"
+		}
+		return name
+	default:
+		return "<anonymous function>"
+	}
 }
 
 func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value, error) {

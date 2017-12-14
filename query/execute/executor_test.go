@@ -168,7 +168,7 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("join"): {
 						ID: plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
-							Eval: &ast.ArrowFunctionExpression{
+							F: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{
 									{Name: "a"},
 									{Name: "b"},

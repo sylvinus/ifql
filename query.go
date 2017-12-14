@@ -40,7 +40,7 @@ func ExecuteQuery(ctx context.Context, queryStr string, opts *Options) ([]execut
 
 	qSpec, err := QuerySpec(ctx, queryStr)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to parse query")
+		return nil, nil, errors.Wrap(err, "failed to compile query")
 	}
 
 	return QueryWithSpec(ctx, qSpec, opts)
