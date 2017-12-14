@@ -136,7 +136,7 @@ func arrowfunc(params interface{}, body interface{}, text []byte, pos position) 
 	}
 }
 
-func object(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
+func objectexpr(first, rest interface{}, text []byte, pos position) (*ast.ObjectExpression, error) {
 	props := []*ast.Property{first.(*ast.Property)}
 	if rest != nil {
 		for _, prop := range toIfaceSlice(rest) {
@@ -254,12 +254,12 @@ func integerLiteral(text []byte, pos position) (*ast.IntegerLiteral, error) {
 	}, nil
 }
 
-func numberLiteral(text []byte, pos position) (*ast.NumberLiteral, error) {
+func numberLiteral(text []byte, pos position) (*ast.FloatLiteral, error) {
 	n, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
 		return nil, err
 	}
-	return &ast.NumberLiteral{
+	return &ast.FloatLiteral{
 		BaseNode: base(text, pos),
 		Value:    n,
 	}, nil

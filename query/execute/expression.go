@@ -210,7 +210,7 @@ func compile(n ast.Expression, types map[ObjectProperty]DataType) (DataTypeEvalu
 			compiledType: compiledType(TInt),
 			i:            n.Value,
 		}, nil
-	case *ast.NumberLiteral:
+	case *ast.FloatLiteral:
 		return &floatEvaluator{
 			compiledType: compiledType(TFloat),
 			f:            n.Value,

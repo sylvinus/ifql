@@ -366,7 +366,7 @@ func TestFilter_NewQuery(t *testing.T) {
 											},
 											Property: &ast.StringLiteral{Value: "_field"},
 										},
-										Right: &ast.NumberLiteral{Value: 10.5},
+										Right: &ast.FloatLiteral{Value: 10.5},
 									},
 								},
 							},
@@ -565,7 +565,7 @@ func TestFilter_Process(t *testing.T) {
 							},
 							Property: &ast.StringLiteral{Value: "_value"},
 						},
-						Right: &ast.NumberLiteral{
+						Right: &ast.FloatLiteral{
 							Value: 5,
 						},
 					},
@@ -612,7 +612,7 @@ func TestFilter_Process(t *testing.T) {
 							},
 							Property: &ast.StringLiteral{Value: "_value"},
 						},
-						Right: &ast.NumberLiteral{
+						Right: &ast.FloatLiteral{
 							Value: 5,
 						},
 					},
@@ -694,7 +694,7 @@ func TestFilter_Process(t *testing.T) {
 								},
 								Property: &ast.StringLiteral{Value: "_value"},
 							},
-							Right: &ast.NumberLiteral{
+							Right: &ast.FloatLiteral{
 								Value: 5,
 							},
 						},

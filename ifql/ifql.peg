@@ -93,27 +93,9 @@ CallExpression
     }
 
 Arguments
-  = "(" __ args:(FunctionArgs)? __ ")" {
+  = "(" __ args:(ObjectProperties)? __ ")" {
       return args, nil
     }
-
-FunctionArgs
-  = first:FunctionArg __ rest:FunctionArgsRest* {
-      return object(first, rest, c.text, c.pos)
-    }
-
-FunctionArgsRest
-  = "," __  arg:FunctionArg {
-      return arg, nil
-    }
-
-FunctionArg
-  = key:Identifier __  ":" __ value:FunctionArgValues {
-      return property(key, value, c.text, c.pos)
-    }
-
-FunctionArgValues
-  = Expr
 
 ArrowFunctionExpression
   = __ params:ArrowFunctionParams __ "=>" __ body:ArrowFunctionBody __  {
@@ -146,6 +128,25 @@ ArrowFunctionBody
     return body, nil
   }
 
+ObjectExpression
+  = "{" __ object:(ObjectProperties)? __ "}" {
+    return object, nil
+  }
+
+ObjectProperties
+  = first:Property __ rest:PropertiesRest* __ ","? {
+      return objectexpr(first, rest, c.text, c.pos)
+    }
+
+PropertiesRest
+  = "," __  arg:Property {
+      return arg, nil
+    }
+
+Property
+  = key:Identifier __  ":" __ value:Expr {
+      return property(key, value, c.text, c.pos)
+    }
 
 // + -
 // <= < >= > startsWith IN NOT EMPTY EMPTY
@@ -242,6 +243,7 @@ Primary
   / ArrowFunctionExpression
   / MemberExpressions
   / Identifier
+  / ObjectExpression
 
 
 Array

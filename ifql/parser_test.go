@@ -68,7 +68,7 @@ func TestParse(t *testing.T) {
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
 							ID:   &ast.Identifier{Name: "howdy"},
-							Init: &ast.NumberLiteral{Value: 1.1},
+							Init: &ast.FloatLiteral{Value: 1.1},
 						}},
 					},
 				},
@@ -240,6 +240,48 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "map member expressions",
+			raw: `var m = {key1: 1, key2:"value2"}
+			m.key1
+			m["key2"]
+			`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "m",
+							},
+							Init: &ast.ObjectExpression{
+								Properties: []*ast.Property{
+									{
+										Key:   &ast.Identifier{Name: "key1"},
+										Value: &ast.IntegerLiteral{Value: 1},
+									},
+									{
+										Key:   &ast.Identifier{Name: "key2"},
+										Value: &ast.StringLiteral{Value: "value2"},
+									},
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.MemberExpression{
+							Object:   &ast.Identifier{Name: "m"},
+							Property: &ast.Identifier{Name: "key1"},
+						},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.MemberExpression{
+							Object:   &ast.Identifier{Name: "m"},
+							Property: &ast.StringLiteral{Value: "key2"},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "var as binary expression of other vars",
 			raw: `var a = 1
             var b = 2
@@ -357,7 +399,7 @@ func TestParse(t *testing.T) {
 							ID: &ast.Identifier{
 								Name: "a",
 							},
-							Init: &ast.NumberLiteral{Value: 5},
+							Init: &ast.FloatLiteral{Value: 5},
 						}},
 					},
 					&ast.ExpressionStatement{
@@ -367,7 +409,7 @@ func TestParse(t *testing.T) {
 								Operator: ast.EqualOperator,
 								Left: &ast.BinaryExpression{
 									Operator: ast.MultiplicationOperator,
-									Left:     &ast.NumberLiteral{Value: 10},
+									Left:     &ast.FloatLiteral{Value: 10},
 									Right: &ast.UnaryExpression{
 										Operator: ast.SubtractionOperator,
 										Argument: &ast.Identifier{Name: "a"},
@@ -375,13 +417,13 @@ func TestParse(t *testing.T) {
 								},
 								Right: &ast.UnaryExpression{
 									Operator: ast.SubtractionOperator,
-									Argument: &ast.NumberLiteral{Value: 0.5},
+									Argument: &ast.FloatLiteral{Value: 0.5},
 								},
 							},
 							Right: &ast.BinaryExpression{
 								Operator: ast.EqualOperator,
 								Left:     &ast.Identifier{Name: "a"},
-								Right:    &ast.NumberLiteral{Value: 6},
+								Right:    &ast.FloatLiteral{Value: 6},
 							},
 						},
 					},
@@ -428,7 +470,7 @@ func TestParse(t *testing.T) {
 									},
 									Right: &ast.BinaryExpression{
 										Operator: ast.MultiplicationOperator,
-										Left:     &ast.NumberLiteral{Value: 6},
+										Left:     &ast.FloatLiteral{Value: 6},
 										Right:    &ast.Identifier{Name: "x"},
 									},
 								},
@@ -459,7 +501,7 @@ func TestParse(t *testing.T) {
 									},
 									Right: &ast.BinaryExpression{
 										Operator: ast.MultiplicationOperator,
-										Left:     &ast.NumberLiteral{Value: 6},
+										Left:     &ast.FloatLiteral{Value: 6},
 										Right:    &ast.Identifier{Name: "x"},
 									},
 								},
@@ -512,6 +554,30 @@ func TestParse(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+			},
+		},
+		{
+			name: "arrow function return map",
+			raw:  `var toMap = r =>({r:r})`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "toMap",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.ObjectExpression{
+									Properties: []*ast.Property{{
+										Key:   &ast.Identifier{Name: "r"},
+										Value: &ast.Identifier{Name: "r"},
+									}},
+								},
+							},
+						}},
 					},
 				},
 			},
@@ -970,7 +1036,7 @@ func TestParse(t *testing.T) {
 																		Object:   &ast.Identifier{Name: "r"},
 																		Property: &ast.StringLiteral{Value: "_field"},
 																	},
-																	Right: &ast.NumberLiteral{Value: 10.1},
+																	Right: &ast.FloatLiteral{Value: 10.1},
 																},
 															},
 														},

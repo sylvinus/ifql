@@ -237,7 +237,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 				Value: label.Value.Value().(string),
 			}
 		} else if label.Value.Type() == NumberKind {
-			value = &ast.NumberLiteral{
+			value = &ast.FloatLiteral{
 				Value: label.Value.Value().(float64),
 			}
 		}

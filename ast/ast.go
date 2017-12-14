@@ -57,7 +57,7 @@ func (*BooleanLiteral) node()         {}
 func (*DateTimeLiteral) node()        {}
 func (*DurationLiteral) node()        {}
 func (*IntegerLiteral) node()         {}
-func (*NumberLiteral) node()          {}
+func (*FloatLiteral) node()           {}
 func (*RegexpLiteral) node()          {}
 func (*StringLiteral) node()          {}
 func (*UnsignedIntegerLiteral) node() {}
@@ -416,7 +416,7 @@ func (*ArrayExpression) expression()         {}
 func (*Identifier) expression()              {}
 func (*StringLiteral) expression()           {}
 func (*BooleanLiteral) expression()          {}
-func (*NumberLiteral) expression()           {}
+func (*FloatLiteral) expression()            {}
 func (*IntegerLiteral) expression()          {}
 func (*UnsignedIntegerLiteral) expression()  {}
 func (*RegexpLiteral) expression()           {}
@@ -1145,7 +1145,7 @@ type Literal interface {
 
 func (*StringLiteral) literal()          {}
 func (*BooleanLiteral) literal()         {}
-func (*NumberLiteral) literal()          {}
+func (*FloatLiteral) literal()           {}
 func (*IntegerLiteral) literal()         {}
 func (*UnsignedIntegerLiteral) literal() {}
 func (*RegexpLiteral) literal()          {}
@@ -1209,25 +1209,25 @@ func (l *BooleanLiteral) MarshalJSON() ([]byte, error) {
 	return json.Marshal(raw)
 }
 
-// NumberLiteral  represent floating point numbers according to the double representations defined by the IEEE-754-1985
-type NumberLiteral struct {
+// FloatLiteral  represent floating point numbers according to the double representations defined by the IEEE-754-1985
+type FloatLiteral struct {
 	*BaseNode
 	Value float64 `json:"value"`
 }
 
 // Type is the abstract type
-func (*NumberLiteral) Type() string { return "NumberLiteral" }
+func (*FloatLiteral) Type() string { return "FloatLiteral" }
 
-func (l *NumberLiteral) Copy() Node {
+func (l *FloatLiteral) Copy() Node {
 	if l == nil {
 		return l
 	}
-	nl := new(NumberLiteral)
+	nl := new(FloatLiteral)
 	*nl = *l
 	return nl
 }
-func (l *NumberLiteral) MarshalJSON() ([]byte, error) {
-	type Alias NumberLiteral
+func (l *FloatLiteral) MarshalJSON() ([]byte, error) {
+	type Alias FloatLiteral
 	raw := struct {
 		Type string `json:"type"`
 		*Alias
@@ -1597,8 +1597,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(StringLiteral)
 	case "BooleanLiteral":
 		node = new(BooleanLiteral)
-	case "NumberLiteral":
-		node = new(NumberLiteral)
+	case "FloatLiteral":
+		node = new(FloatLiteral)
 	case "IntegerLiteral":
 		node = new(IntegerLiteral)
 	case "UnsignedIntegerLiteral":

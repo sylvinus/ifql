@@ -91,7 +91,7 @@ func toStoragePredicate(n ast.Expression, objectName string) (*storage.Node, err
 				BooleanValue: n.Value,
 			},
 		}, nil
-	case *ast.NumberLiteral:
+	case *ast.FloatLiteral:
 		return &storage.Node{
 			NodeType: storage.NodeTypeLiteral,
 			Value: &storage.Node_FloatValue{

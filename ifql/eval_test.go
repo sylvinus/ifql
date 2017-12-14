@@ -119,6 +119,18 @@ func TestEval(t *testing.T) {
             plusX(r:2) == 7 or fail()
 			`,
 		},
+		{
+			name: "return map from func",
+			query: `
+            var toMap = (a,b) => ({
+                a: a,
+                b: b,
+            })
+            var m = toMap(a:1, b:false)
+            m.a == 1 or fail()
+            not m.b or fail()
+			`,
+		},
 	}
 
 	for _, tc := range testCases {

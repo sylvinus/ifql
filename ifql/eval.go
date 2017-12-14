@@ -105,6 +105,8 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 			return nil, err
 		}
 		return obj.Property(p)
+	case *ast.ObjectExpression:
+		return ev.doMap(e, scope)
 	case *ast.UnaryExpression:
 		v, err := ev.doExpression(e.Argument, scope)
 		if err != nil {
@@ -202,9 +204,9 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 
 func (ev evaluator) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
-		Type: TInvalid,
+		Type:     TInvalid,
+		Elements: make([]Value, len(a.Elements)),
 	}
-	array.Elements = make([]Value, len(a.Elements))
 	for i, el := range a.Elements {
 		v, err := ev.doExpression(el, scope)
 		if err != nil {
@@ -224,6 +226,23 @@ func (ev evaluator) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error)
 	}, nil
 }
 
+func (ev evaluator) doMap(m *ast.ObjectExpression, scope *Scope) (Value, error) {
+	mapValue := Map{
+		Elements: make(map[string]Value, len(m.Properties)),
+	}
+	for _, p := range m.Properties {
+		v, err := ev.doExpression(p.Value, scope)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := mapValue.Elements[p.Key.Name]; ok {
+			return nil, fmt.Errorf("duplicate key in map: %q", p.Key.Name)
+		}
+		mapValue.Elements[p.Key.Name] = v
+	}
+	return mapValue, nil
+}
+
 func (ev evaluator) doLiteral(lit ast.Literal) (Value, error) {
 	switch l := lit.(type) {
 	case *ast.DateTimeLiteral:
@@ -236,7 +255,7 @@ func (ev evaluator) doLiteral(lit ast.Literal) (Value, error) {
 			t: TDuration,
 			v: l.Value,
 		}, nil
-	case *ast.NumberLiteral:
+	case *ast.FloatLiteral:
 		return value{
 			t: TFloat,
 			v: l.Value,
@@ -491,7 +510,7 @@ func (t Type) String() string {
 	case TFunction:
 		return "function"
 	case TArray:
-		return "list"
+		return "array"
 	case TMap:
 		return "map"
 	default:
@@ -703,7 +722,7 @@ func resolveValue(v Value) (ast.Node, error) {
 			Value: v.Value().(uint64),
 		}, nil
 	case TFloat:
-		return &ast.NumberLiteral{
+		return &ast.FloatLiteral{
 			Value: v.Value().(float64),
 		}, nil
 	case TBool:
@@ -733,8 +752,20 @@ func resolveValue(v Value) (ast.Node, error) {
 		}
 		return node, nil
 	case TMap:
-		//TODO
-		return nil, errors.New("resolving maps not implemented")
+		m := v.Value().(Map)
+		node := new(ast.ObjectExpression)
+		node.Properties = make([]*ast.Property, 0, len(m.Elements))
+		for k, el := range m.Elements {
+			n, err := resolveValue(el)
+			if err != nil {
+				return nil, err
+			}
+			node.Properties = append(node.Properties, &ast.Property{
+				Key:   &ast.Identifier{Name: k},
+				Value: n.(ast.Expression),
+			})
+		}
+		return node, nil
 	default:
 		return nil, fmt.Errorf("cannot resove value of type %v", t)
 	}
@@ -758,11 +789,24 @@ func (a Array) AsStrings() []string {
 	return strs
 }
 
-// Map represents an association of keys to values of Type
-// All elements must be the same type
+// Map represents an association of keys to values.
+// Map values may be of any type.
 type Map struct {
-	Type     Type
 	Elements map[string]Value
+}
+
+func (m Map) Type() Type {
+	return TMap
+}
+func (m Map) Value() interface{} {
+	return m
+}
+func (m Map) Property(name string) (Value, error) {
+	v, ok := m.Elements[name]
+	if ok {
+		return v, nil
+	}
+	return nil, fmt.Errorf("property %q does not exist", name)
 }
 
 // Arguments provides access to the keyword arguments passed to a function.

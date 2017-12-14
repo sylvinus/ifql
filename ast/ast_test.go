@@ -180,11 +180,11 @@ func TestJSONMarshal(t *testing.T) {
 			want: `{"type":"BooleanLiteral","value":true}`,
 		},
 		{
-			name: "number literal",
-			node: &ast.NumberLiteral{
+			name: "float literal",
+			node: &ast.FloatLiteral{
 				Value: 42.1,
 			},
-			want: `{"type":"NumberLiteral","value":42.1}`,
+			want: `{"type":"FloatLiteral","value":42.1}`,
 		},
 		{
 			name: "integer literal",
