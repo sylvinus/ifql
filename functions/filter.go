@@ -24,7 +24,7 @@ func init() {
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
-func createFilterOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createFilterOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ type FilterProcedureSpec struct {
 	Fn *ast.ArrowFunctionExpression
 }
 
-func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newFilterProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*FilterOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -90,12 +90,12 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 	selectSpec.Filter = s.Fn
 }
 
-func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*FilterProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t, err := NewFilterTransformation(d, cache, s)
 	if err != nil {
@@ -108,7 +108,7 @@ type filterTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
-	properties []execute.ObjectProperty
+	references []execute.Reference
 	scope      execute.Scope
 	scopeCols  map[string]int
 	ces        map[execute.DataType]expressionOrError
@@ -124,25 +124,26 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.Fn.Params)
 	}
 	objectName := spec.Fn.Params[0].Name
-	properties, err := execute.ObjectProperties(spec.Fn)
+	references, err := execute.FindReferences(spec.Fn)
 	if err != nil {
 		return nil, err
 	}
 
-	valueOP := execute.ObjectProperty{
-		Object:   objectName,
-		Property: "_value",
-	}
-	types := make(map[execute.ObjectProperty]execute.DataType, len(properties))
-	for _, op := range properties {
-		if op != valueOP {
-			types[op] = execute.TString
+	valueRP := execute.Reference{objectName, "_value"}.Path()
+	types := make(map[execute.ReferencePath]execute.DataType, len(references))
+	for _, r := range references {
+		if len(r) != 2 {
+			return nil, fmt.Errorf("found invalid reference in the filter function %q", r)
+		}
+		rp := r.Path()
+		if rp != valueRP {
+			types[rp] = execute.TString
 		}
 	}
 
 	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
 	for _, typ := range execute.ValueDataTypes {
-		types[valueOP] = typ
+		types[valueRP] = typ
 		ce, err := execute.CompileExpression(spec.Fn, types)
 		ces[typ] = expressionOrError{
 			Err:  err,
@@ -159,7 +160,7 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 	return &filterTransformation{
 		d:          d,
 		cache:      cache,
-		properties: properties,
+		references: references,
 		scope:      make(execute.Scope),
 		scopeCols:  make(map[string]int),
 		ces:        ces,
@@ -183,8 +184,8 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 		if c.Label == execute.ValueColLabel {
 			t.scopeCols["_value"] = valueIdx
 		} else {
-			for _, op := range t.properties {
-				if op.Property == c.Label {
+			for _, r := range t.references {
+				if r[1] == c.Label {
 					t.scopeCols[c.Label] = j
 					break
 				}
@@ -202,8 +203,8 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 	// Append only matching rows to block
 	b.Times().DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i := range ts {
-			for _, op := range t.properties {
-				t.scope[op] = execute.ValueForRow(i, t.scopeCols[op.Property], rr)
+			for _, r := range t.references {
+				t.scope[r.Path()] = execute.ValueForRow(i, t.scopeCols[r[1]], rr)
 			}
 			if pass, err := ce.EvalBool(t.scope); !pass {
 				if err != nil {
@@ -245,6 +246,4 @@ func (t *filterTransformation) UpdateProcessingTime(id execute.DatasetID, pt exe
 }
 func (t *filterTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *filterTransformation) SetParents(ids []execute.DatasetID) {
 }

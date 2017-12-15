@@ -8,6 +8,7 @@ package ifql
 import (
 
 	// Import functions
+
 	_ "github.com/influxdata/ifql/functions"
 
 	"github.com/influxdata/ifql/query/control"

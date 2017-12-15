@@ -23,7 +23,7 @@ func init() {
 	execute.RegisterTransformation(SortKind, createSortTransformation)
 }
 
-func createSortOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSortOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SortOpSpec)
 
 	if array, ok, err := args.GetArray("cols", ifql.TString); err != nil {
@@ -57,7 +57,7 @@ type SortProcedureSpec struct {
 	Desc bool
 }
 
-func newSortProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSortProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*SortOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -82,12 +82,12 @@ func (s *SortProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func createSortTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createSortTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*SortProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewSortTransformation(d, cache, s)
 	return t, d, nil
@@ -146,6 +146,4 @@ func (t *sortTransformation) UpdateProcessingTime(id execute.DatasetID, pt execu
 }
 func (t *sortTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *sortTransformation) SetParents(ids []execute.DatasetID) {
 }

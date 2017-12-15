@@ -11,6 +11,8 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
+	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 	"github.com/influxdata/ifql/query/querytest"
 )
 
@@ -21,7 +23,7 @@ func TestJoin_NewQuery(t *testing.T) {
 			Raw: `
 var a = from(db:"dbA").range(start:-1h)
 var b = from(db:"dbB").range(start:-1h)
-join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
+join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -63,20 +65,27 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 					{
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
-							On: []string{"host"},
+							On:         []string{"host"},
+							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "a",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "a"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
 									Right: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "b",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "b"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -98,7 +107,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 			Raw: `
 				var a = from(db:"dbA").range(start:-1h)
 				var b = from(db:"dbB").range(start:-1h)
-				a.join(tables:[a,b], on:["host"], fn: r => a["_value"] + b["_value"])
+				a.join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])
 			`,
 			WantErr: true,
 		},
@@ -107,7 +116,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 			Raw: `
 				var a = from(db:"ifql").range(start:-1h)
 				var b = from(db:"ifql").range(start:-1h)
-				join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_value"]-b["_value"])/b["_value"])
+				join(tables:{a:a,b:b}, on:["t1"], fn: (t) => (t.a["_value"]-t.b["_value"])/t.b["_value"])
 			`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
@@ -150,29 +159,39 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 					{
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
-							On: []string{"t1"},
+							On:         []string{"t1"},
+							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &ast.BinaryExpression{
 										Operator: ast.SubtractionOperator,
 										Left: &ast.MemberExpression{
-											Object: &ast.Identifier{
-												Name: "a",
+											Object: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "t",
+												},
+												Property: &ast.Identifier{Name: "a"},
 											},
 											Property: &ast.StringLiteral{Value: "_value"},
 										},
 										Right: &ast.MemberExpression{
-											Object: &ast.Identifier{
-												Name: "b",
+											Object: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "t",
+												},
+												Property: &ast.Identifier{Name: "b"},
 											},
 											Property: &ast.StringLiteral{Value: "_value"},
 										},
 									},
 									Right: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "b",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "b"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -205,8 +224,9 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"kind":"join",
 		"spec":{
 			"on":["t1","t2"],
+			"table_names": {"sum1":"a","count3":"b"},
 			"fn":{
-				"params": [{"type":"Identifier","name":"a"},{"type":"Identifier","name":"b"}],
+				"params": [{"type":"Identifier","name":"t"}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "+",
@@ -233,9 +253,10 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
-			On: []string{"t1", "t2"},
+			On:         []string{"t1", "t2"},
+			TableNames: map[query.OperationID]string{"sum1": "a", "count3": "b"},
 			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+				Params: []*ast.Identifier{{Name: "t"}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.AdditionOperator,
 					Left: &ast.MemberExpression{
@@ -258,23 +279,35 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 }
 
 func TestMergeJoin_Process(t *testing.T) {
-	addExpression := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+	addFunction := &ast.ArrowFunctionExpression{
+		Params: []*ast.Identifier{{Name: "t"}},
 		Body: &ast.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left: &ast.MemberExpression{
-				Object: &ast.Identifier{
-					Name: "a",
+				Object: &ast.MemberExpression{
+					Object: &ast.Identifier{
+						Name: "t",
+					},
+					Property: &ast.Identifier{Name: "a"},
 				},
 				Property: &ast.StringLiteral{Value: "_value"},
 			},
 			Right: &ast.MemberExpression{
-				Object: &ast.Identifier{
-					Name: "b",
+				Object: &ast.MemberExpression{
+					Object: &ast.Identifier{
+						Name: "t",
+					},
+					Property: &ast.Identifier{Name: "b"},
 				},
 				Property: &ast.StringLiteral{Value: "_value"},
 			},
 		},
+	}
+	parentID0 := plantest.RandomProcedureID()
+	parentID1 := plantest.RandomProcedureID()
+	addTableNames := map[plan.ProcedureID]string{
+		parentID0: "a",
+		parentID1: "b",
 	}
 	testCases := []struct {
 		skip  bool
@@ -287,7 +320,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -344,7 +378,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner with ints",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -401,7 +436,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with missing values",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -456,7 +492,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with multiple matches",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -517,8 +554,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with common tags",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1"},
-				Fn: addExpression,
+				On:         []string{"t1"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -578,8 +616,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1"},
-				Fn: addExpression,
+				On:         []string{"t1"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -648,8 +687,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with tags and extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1", "t2"},
-				Fn: addExpression,
+				On:         []string{"t1", "t2"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -725,18 +765,21 @@ func TestMergeJoin_Process(t *testing.T) {
 			if tc.skip {
 				t.Skip()
 			}
+			parents := []execute.DatasetID{execute.DatasetID(parentID0), execute.DatasetID(parentID1)}
+
+			tableNames := make(map[execute.DatasetID]string, len(tc.spec.TableNames))
+			for pid, name := range tc.spec.TableNames {
+				tableNames[execute.DatasetID(pid)] = name
+			}
+
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			joinExpr, err := functions.NewExpressionSpec(tc.spec.Fn)
+			joinExpr, err := functions.NewJoinFunction(tc.spec.Fn, parents, tableNames)
 			if err != nil {
 				t.Fatal(err)
 			}
-			c := functions.NewMergeJoinCache(joinExpr, executetest.UnlimitedAllocator)
+			c := functions.NewMergeJoinCache(joinExpr, executetest.UnlimitedAllocator, parents[0], parents[1])
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
-			jt := functions.NewMergeJoinTransformation(d, c, tc.spec)
-
-			parentID0 := executetest.RandomDatasetID()
-			parentID1 := executetest.RandomDatasetID()
-			jt.SetParents([]execute.DatasetID{parentID0, parentID1})
+			jt := functions.NewMergeJoinTransformation(d, c, tc.spec, parents)
 
 			l := len(tc.data0)
 			if len(tc.data1) > l {
@@ -744,12 +787,12 @@ func TestMergeJoin_Process(t *testing.T) {
 			}
 			for i := 0; i < l; i++ {
 				if i < len(tc.data0) {
-					if err := jt.Process(parentID0, tc.data0[i]); err != nil {
+					if err := jt.Process(parents[0], tc.data0[i]); err != nil {
 						t.Fatal(err)
 					}
 				}
 				if i < len(tc.data1) {
-					if err := jt.Process(parentID1, tc.data1[i]); err != nil {
+					if err := jt.Process(parents[1], tc.data1[i]); err != nil {
 						t.Fatal(err)
 					}
 				}

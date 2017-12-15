@@ -5,8 +5,6 @@ type selectorTransformation struct {
 	cache      BlockBuilderCache
 	bounds     Bounds
 	useRowTime bool
-
-	parents []DatasetID
 }
 
 type rowSelectorTransformation struct {
@@ -64,9 +62,6 @@ func (t *selectorTransformation) UpdateProcessingTime(id DatasetID, pt Time) err
 }
 func (t *selectorTransformation) Finish(id DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *selectorTransformation) SetParents(ids []DatasetID) {
-	t.parents = ids
 }
 
 func (t *selectorTransformation) setupBuilder(b Block) (BlockBuilder, []int, ColMeta) {

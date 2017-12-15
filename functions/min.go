@@ -21,7 +21,7 @@ func init() {
 	execute.RegisterTransformation(MinKind, createMinTransformation)
 }
 
-func createMinOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createMinOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(MinOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ type MinProcedureSpec struct {
 	UseRowTime bool
 }
 
-func newMinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newMinProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*MinOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -68,12 +68,12 @@ type MinSelector struct {
 	rows []execute.Row
 }
 
-func createMinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createMinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	ps, ok := spec.(*MinProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(MinSelector), ps.UseRowTime, ctx.Allocator())
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, a.Bounds(), new(MinSelector), ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

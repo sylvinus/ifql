@@ -19,7 +19,7 @@ func init() {
 	plan.RegisterProcedureSpec(StddevKind, newStddevProcedure, StddevKind)
 	execute.RegisterTransformation(StddevKind, createStddevTransformation)
 }
-func createStddevOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createStddevOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(StddevOpSpec), nil
 }
 
@@ -34,7 +34,7 @@ func (s *StddevOpSpec) Kind() query.OperationKind {
 type StddevProcedureSpec struct {
 }
 
-func newStddevProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
+func newStddevProcedure(query.OperationSpec, plan.Administration) (plan.ProcedureSpec, error) {
 	return new(StddevProcedureSpec), nil
 }
 
@@ -49,8 +49,8 @@ type StddevAgg struct {
 	n, m2, mean float64
 }
 
-func createStddevTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(StddevAgg), ctx.Allocator())
+func createStddevTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(StddevAgg), a.Allocator())
 	return t, d, nil
 }
 

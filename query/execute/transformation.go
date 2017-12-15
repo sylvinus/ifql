@@ -13,16 +13,17 @@ type Transformation interface {
 	UpdateWatermark(id DatasetID, t Time) error
 	UpdateProcessingTime(id DatasetID, t Time) error
 	Finish(id DatasetID, err error)
-	SetParents(ids []DatasetID)
 }
 
-type Context interface {
+type Administration interface {
 	ResolveTime(qt query.Time) Time
 	Bounds() Bounds
 	Allocator() *Allocator
+	Parents() []DatasetID
+	ConvertID(plan.ProcedureID) DatasetID
 }
 
-type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, ctx Context) (Transformation, Dataset, error)
+type CreateTransformation func(id DatasetID, mode AccumulationMode, spec plan.ProcedureSpec, a Administration) (Transformation, Dataset, error)
 
 var procedureToTransformation = make(map[plan.ProcedureKind]CreateTransformation)
 

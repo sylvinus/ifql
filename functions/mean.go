@@ -19,7 +19,7 @@ func init() {
 	plan.RegisterProcedureSpec(MeanKind, newMeanProcedure, MeanKind)
 	execute.RegisterTransformation(MeanKind, createMeanTransformation)
 }
-func createMeanOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createMeanOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(MeanOpSpec), nil
 }
 
@@ -34,7 +34,7 @@ func (s *MeanOpSpec) Kind() query.OperationKind {
 type MeanProcedureSpec struct {
 }
 
-func newMeanProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
+func newMeanProcedure(query.OperationSpec, plan.Administration) (plan.ProcedureSpec, error) {
 	return new(MeanProcedureSpec), nil
 }
 
@@ -50,8 +50,8 @@ type MeanAgg struct {
 	sum   float64
 }
 
-func createMeanTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(MeanAgg), ctx.Allocator())
+func createMeanTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(MeanAgg), a.Allocator())
 	return t, d, nil
 }
 

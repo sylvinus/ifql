@@ -22,7 +22,7 @@ func init() {
 	//execute.RegisterTransformation(RangeKind, createRangeTransformation)
 }
 
-func createRangeOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createRangeOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	start, err := args.GetRequiredTime("start")
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ type RangeProcedureSpec struct {
 	Bounds plan.BoundsSpec
 }
 
-func newRangeProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newRangeProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*RangeOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)

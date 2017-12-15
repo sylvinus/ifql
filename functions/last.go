@@ -21,7 +21,7 @@ func init() {
 	execute.RegisterTransformation(LastKind, createLastTransformation)
 }
 
-func createLastOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createLastOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(LastOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ type LastProcedureSpec struct {
 	UseRowTime bool
 }
 
-func newLastProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newLastProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*LastOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -104,12 +104,12 @@ type LastSelector struct {
 	rows []execute.Row
 }
 
-func createLastTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createLastTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	ps, ok := spec.(*LastProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(LastSelector), ps.UseRowTime, ctx.Allocator())
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, a.Bounds(), new(LastSelector), ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

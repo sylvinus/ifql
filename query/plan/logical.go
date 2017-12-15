@@ -87,5 +87,9 @@ func (p *logicalPlanner) createSpec(qk query.OperationKind, spec query.Operation
 		return nil, fmt.Errorf("unknown query operation %v", qk)
 	}
 	//TODO(nathanielc): Support adding all procedures to logical plan instead of only the first
-	return createPs[0](spec)
+	return createPs[0](spec, p)
+}
+
+func (p *logicalPlanner) ConvertID(qid query.OperationID) ProcedureID {
+	return ProcedureIDFromOperationID(qid)
 }

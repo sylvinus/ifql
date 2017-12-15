@@ -1,11 +1,11 @@
 package plan
 
 import (
-	"errors"
 	"math"
 	"time"
 
 	"github.com/influxdata/ifql/query"
+	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -77,7 +77,9 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 			if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
 				rule := pd.PushDownRule()
 				if p.pushDownAndSearch(pr, rule, pd.PushDown) {
-					p.removeProcedure(pr)
+					if err := p.removeProcedure(pr); err != nil {
+						return nil, errors.Wrap(err, "failed to remove procedure")
+					}
 				}
 			}
 		}
@@ -136,7 +138,12 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 	return matched
 }
 
-func (p *planner) removeProcedure(pr *Procedure) {
+func (p *planner) removeProcedure(pr *Procedure) error {
+	// It only makes sense to remove a procedure that has a single parent.
+	if len(pr.Parents) > 1 {
+		return errors.New("cannot remove a procedure that has more than one parent")
+	}
+
 	p.modified = true
 	delete(p.plan.Procedures, pr.ID)
 	p.plan.Order = removeID(p.plan.Order, pr.ID)
@@ -150,7 +157,14 @@ func (p *planner) removeProcedure(pr *Procedure) {
 		child := p.plan.Procedures[id]
 		child.Parents = removeID(child.Parents, pr.ID)
 		child.Parents = append(child.Parents, pr.Parents...)
+
+		if len(pr.Parents) == 1 {
+			if pa, ok := child.Spec.(ParentAwareProcedureSpec); ok {
+				pa.ParentChanged(pr.ID, pr.Parents[0])
+			}
+		}
 	}
+	return nil
 }
 
 func ProcedureIDForDuplicate(id ProcedureID) ProcedureID {
@@ -179,6 +193,10 @@ func (p *planner) duplicate(pr *Procedure, skipParents bool) *Procedure {
 		newChild.Parents = append(newChild.Parents, np.ID)
 
 		newChildren[i] = newChild.ID
+
+		if pa, ok := newChild.Spec.(ParentAwareProcedureSpec); ok {
+			pa.ParentChanged(pr.ID, np.ID)
+		}
 	}
 	np.Children = newChildren
 	return np

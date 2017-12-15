@@ -5,8 +5,6 @@ type aggregateTransformation struct {
 	cache  BlockBuilderCache
 	bounds Bounds
 	agg    Aggregate
-
-	parents []DatasetID
 }
 
 func NewAggregateTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, agg Aggregate) *aggregateTransformation {
@@ -111,9 +109,6 @@ func (t *aggregateTransformation) UpdateProcessingTime(id DatasetID, pt Time) er
 }
 func (t *aggregateTransformation) Finish(id DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *aggregateTransformation) SetParents(ids []DatasetID) {
-	t.parents = ids
 }
 
 type Aggregate interface {

@@ -18,7 +18,7 @@ type Source interface {
 	Run(ctx context.Context)
 }
 
-type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, ctx Context) Source
+type CreateSource func(spec plan.ProcedureSpec, id DatasetID, sr StorageReader, ctx Administration) Source
 
 var procedureToSource = make(map[plan.ProcedureKind]CreateSource)
 
