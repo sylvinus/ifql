@@ -19,7 +19,7 @@ func TestFilter_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with database filter and range",
-			Raw:  `from(db:"mydb").filter(fn: r => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
+			Raw:  `from(db:"mydb").filter(fn: (r) => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -87,7 +87,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter (and with or) and range",
 			Raw: `from(db:"mydb")
-						.filter(fn: r =>
+						.filter(fn: (r) =>
 								(
 									(r["t1"]=="val1")
 									and
@@ -178,7 +178,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter including fields",
 			Raw: `from(db:"mydb")
-						.filter(fn: r =>
+						.filter(fn: (r) =>
 							(r["t1"] =="val1")
 							and
 							(r["_field"] == 10)
@@ -252,7 +252,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter with no parens including fields",
 			Raw: `from(db:"mydb")
-						.filter(fn: r =>
+						.filter(fn: (r) =>
 							r["t1"]=="val1"
 							and
 							r["_field"] == 10
@@ -326,7 +326,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter with no parens including regex and field",
 			Raw: `from(db:"mydb")
-						.filter(fn: r =>
+						.filter(fn: (r) =>
 							r["t1"]==/val1/
 							and
 							r["_field"] == 10.5
@@ -400,7 +400,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database regex with escape",
 			Raw: `from(db:"mydb")
-						.filter(fn: r => 
+						.filter(fn: (r) => 
 							r["t1"]==/va\/l1/
 						)`,
 			Want: &query.QuerySpec{
@@ -438,7 +438,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database with two regex",
 			Raw: `from(db:"mydb")
-						.filter(fn: r => 
+						.filter(fn: (r) => 
 							r["t1"]==/va\/l1/
 							and
 							r["t2"] != /val2/

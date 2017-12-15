@@ -85,14 +85,14 @@ func TestEval(t *testing.T) {
 		{
 			name: "arrow function",
 			query: `
-            var plusSix = r => r + six()
+            var plusSix = (r) => r + six()
             plusSix(r:1.0) == 7.0 or fail()
 			`,
 		},
 		{
 			name: "arrow function block",
 			query: `
-            var f = r => {
+            var f = (r) => {
                 var r2 = r * r
                 return (r - r2) / r2
             }
@@ -102,7 +102,7 @@ func TestEval(t *testing.T) {
 		{
 			name: "extra statements after return",
 			query: `
-            var f = r => {
+            var f = (r) => {
                 var r2 = r * r
                 return (r - r2) / r2
                 var x = r2 * r
@@ -115,7 +115,7 @@ func TestEval(t *testing.T) {
 			name: "scope closing",
 			query: `
 			var x = 5
-            var plusX = r => r + x
+            var plusX = (r) => r + x
             plusX(r:2) == 7 or fail()
 			`,
 		},
@@ -171,7 +171,7 @@ func TestFunction_Resolve(t *testing.T) {
 
 	program, err := ifql.NewAST(`
 	var x = 42
-	resolver(f: r => r + x)
+	resolver(f: (r) => r + x)
 `)
 	if err != nil {
 		t.Fatal(err)
