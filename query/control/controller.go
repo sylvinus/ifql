@@ -83,20 +83,20 @@ func (c *Controller) createQuery(ctx context.Context) *Query {
 	cctx, cancel := context.WithCancel(ctx)
 	ready := make(chan []execute.Result, 1)
 	return &Query{
-		id:     id,
-		state:  Created,
-		c:      c,
-		now:    time.Now().UTC(),
-		ready:  ready,
-		Ready:  ready,
-		ctx:    cctx,
-		cancel: cancel,
+		id:        id,
+		state:     Created,
+		c:         c,
+		now:       time.Now().UTC(),
+		ready:     ready,
+		Ready:     ready,
+		parentCtx: cctx,
+		cancel:    cancel,
 	}
 }
 
 func (c *Controller) compileQuery(q *Query, queryStr string) error {
 	q.compile()
-	spec, err := query.Compile(queryStr)
+	spec, err := query.Compile(q.compilingCtx, queryStr)
 	if err != nil {
 		return errors.Wrap(err, "failed to compile query")
 	}
@@ -191,7 +191,7 @@ func (c *Controller) run() {
 
 				// Execute query
 				if q.tryExec() {
-					r, err := c.executor.Execute(q.ctx, q.plan)
+					r, err := c.executor.Execute(q.executeCtx, q.plan)
 					if err != nil {
 						q.setErr(errors.Wrap(err, "failed to execute query"))
 						continue
@@ -241,11 +241,16 @@ type Query struct {
 	// inspected for an error using Err().
 	Ready <-chan []execute.Result
 
-	ctx context.Context
-
 	mu     sync.Mutex
 	state  State
 	cancel func()
+
+	parentCtx,
+	compilingCtx,
+	queueCtx,
+	planCtx,
+	requeueCtx,
+	executeCtx context.Context
 
 	compilingSpan,
 	queueSpan,
@@ -365,7 +370,7 @@ func (q *Query) setResults(r []execute.Result) {
 // compile transitions the query into the Compiling state.
 func (q *Query) compile() {
 	q.mu.Lock()
-	q.compilingSpan, q.ctx = StartSpanFromContext(q.ctx, "compiling")
+	q.compilingSpan, q.compilingCtx = StartSpanFromContext(q.parentCtx, "compiling")
 	compilingGauge.Inc()
 
 	q.state = Compiling
@@ -379,7 +384,7 @@ func (q *Query) queue() {
 		q.compilingSpan.Finish()
 		compilingGauge.Dec()
 	}
-	q.queueSpan, q.ctx = StartSpanFromContext(q.ctx, "queueing")
+	q.queueSpan, q.queueCtx = StartSpanFromContext(q.parentCtx, "queueing")
 	queueingGauge.Inc()
 
 	q.state = Queueing
@@ -393,7 +398,7 @@ func (q *Query) tryRequeue() bool {
 		q.planSpan.Finish()
 		planningGauge.Dec()
 
-		q.requeueSpan, q.ctx = StartSpanFromContext(q.ctx, "requeueing")
+		q.requeueSpan, q.requeueCtx = StartSpanFromContext(q.parentCtx, "requeueing")
 		requeueingGauge.Inc()
 
 		q.state = Requeueing
@@ -411,7 +416,7 @@ func (q *Query) tryPlan() bool {
 		q.queueSpan.Finish()
 		queueingGauge.Dec()
 
-		q.planSpan, q.ctx = StartSpanFromContext(q.ctx, "planning")
+		q.planSpan, q.planCtx = StartSpanFromContext(q.parentCtx, "planning")
 		planningGauge.Inc()
 
 		q.state = Planning
@@ -435,7 +440,7 @@ func (q *Query) tryExec() bool {
 			planningGauge.Dec()
 		}
 
-		q.executeSpan, q.ctx = StartSpanFromContext(q.ctx, "executing")
+		q.executeSpan, q.executeCtx = StartSpanFromContext(q.parentCtx, "executing")
 		executingGauge.Inc()
 
 		q.state = Executing

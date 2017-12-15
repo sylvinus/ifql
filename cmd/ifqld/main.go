@@ -144,7 +144,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 
 		analyze := req.FormValue("analyze") != ""
 		if analyze {
-			spec, err := query.Compile(queryStr)
+			spec, err := query.Compile(ctx, queryStr)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(fmt.Sprintf("Error compiling query %s", err.Error())))
