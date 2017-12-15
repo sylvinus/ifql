@@ -3,14 +3,87 @@ syntax = "proto3";
 package api;
 
 service API {
-	rpc GetOrganizations() returns (Organizations) {}
+	// only these two functions don't require a token
+	rpc GetTokenByUser(string, string) returns(Token) {}
+	rpc GetTokenByApiKey(string, string)
+
+	// every function should have a token (for authorization)
+	// TODO: how to do authentication/authorization in gRPC?
+	rpc GetOrganizations() returns (OrganizationCollection) {}
 	rpc GetOrganization(uint32 id) returns (Organization) {}
 
-	// TODO add tests for all kapacitor notifier configs
-	rpc TestSlackConfig(SlackConfig, SlackNotifier, string) returns (Error) {}
+	// Write API
+
+	// Query API
+	rpc ValidateQuery(Query) returns (Error) {}
+	rpc RunQuery(QueryRequest) returns (stream QueryResponse) {}
+
+	// Background Query API (should throw error if there are no outputs)
+	rpc CreateBackgroundQuery(BackgroundQueryRequest) returns (Error) {}
+	rpc DeleteBackgroundQuery(BackgroundQueryRequest) returns (Error) {}
+	rpc GetBackgroundQueries(Organization) returns (BackGroundQueriesResponse) {}
+	rpc GetBackgroundQueryStatus(BackgroundQueryRequest) returns (BackgroundQueryStatusResponse) {}
 
 	// TODO 
 	rpc TestK8sConfig(K8sConfig) returns (Error) {}
+
+	rpc AddFunction(string, Query) returns (Error) {}
+	rpc DeleteFunction(string) returns (Error) {}
+
+	rpc GetSecretsByOrgID(uint32) returns (SecretCollection) {}
+
+	// Registry API (enterprise)
+	rpc RegisterPackage(Package) returns (Error) {}
+	rpc DeletePackage(Package) returns (Error) {}
+	rpc GetPackage(org, namespace) returns (Package) {}
+	rpc GetPackages(Organization) returns (GetPackagesResponse) {}
+}
+
+message GetPackagesResponse {
+	repeated Package packages = 1;
+	Error error = 2;
+}
+
+message QueryRequest {
+	enum ResponseType {
+		JSON_LINES = 1;
+		ARROW = 2;
+		CSV = 3;
+	}
+
+	Query query = 1;
+}
+
+message QueryResponse {
+	oneof Kind {
+		JSONLinesResponse json = 1;
+		ArrowResponse arrow = 2;
+		CSVResponse csv = 3;
+	}
+}
+
+message JSONLinesResponse {
+	// TODO
+}
+
+message ArrowResponse {
+	// TODO
+}
+
+message CSVResponse {
+	// TODO
+}
+
+message Package {
+	string organizationName = 1;
+	string namespace = 2;
+	string script = 3;
+	string version = 4;
+}
+
+message UserAuth {
+	string name = 1;
+	string password = 2;
 }
 
 message Error {
@@ -21,8 +94,8 @@ message Error {
 	string message = 2;
 }
 
-message Organizations {
-	repeated Organization
+message OrganizationCollection {
+	repeated Organization organizations = 1;
 }
 
 message Organization {
@@ -31,7 +104,6 @@ message Organization {
 	Bucket buckets = 3;
 	Limits limits = 4;
 	User users = 5;
-	repeated SlackConfig slack_configs = 6;
 }
 
 message Bucket {
@@ -42,6 +114,11 @@ message Bucket {
 	repeated RetentionRule retention_rules = 5;
 	AuthorizationScope default_scope = 6;
 	repeated ETLRule etl_rules = 7;
+	enum Kind {
+		PERSISTENT = 1;
+		CIRCULAR = 2;
+		STREAM = 3;
+	}
 }
 
 message User {
@@ -98,70 +175,100 @@ message RetentionRule {
 	string duration = 2;
 }
 
-message ETLRule {
-	Query query = 1;
-	repeated Bucket input_buckets = 2;
-	Bucket output_bucket = 3;
+message Query {
+	string script = 1;
 }
 
-message Query {
-	string query = 1;
+message BackgroundQueryRequest {
+	uint32 organization_id = 1;
+	BackgroundQuery query = 2;
+}
+
+message BackgroundQuery {
+	string name = 1;
+	Query query = 2;
+	Organization organization = 3;
+}
+
+message BackgroundQueryStatusResponse {
+	repeated BackgroundQueryRun runs = 1;
+}
+
+message BackgroundQueryRun {
+	int64 timestamp = 1;
+	string message = 2;
+	Error error = 3;
+}
+
+message QueryQuota {
 	int32 priority = 2;
 	int concurrency_quota = 3;
 	int64 memory_bytes_quota = 4;
 }
 
-/* Alert Handling */
-message AlertHandler {
-	string name = 1;
-	uint32 bucket_id = 2;
+// TODO: nathaniel to fill this out
+message QuerySpec {
 
-	// log_bucket_id is where the log that a notification was
-	//               sent will be written.
-	uint32 log_bucket_id = 3;
-	repeated NotificationTarget notification_targets = 4;
-
-	// rate limits. Will limit how many times notifications
-	//              get sent to the targets in this handler
-	uint32 max_count = 5;
-	uint32 duration = 6;
 }
 
-message NotificationTarget {
-	oneof kind {
-		SlackNotifier slack_notifier = 1;
-		EmailNotifier email_notifier = 2;
-		// TODO finish the notifiers
+/*
+    Managing secrets
+*/
+
+message Secret {
+	string name = 1;
+	string message = 2;
+}
+
+message SecretCollection {
+	repeated Secret secrets = 1;
+}
+
+message DiscoveryService {
+	oneof Kind {
+		EC2Discovery ec2 = 1;
+		K8SDiscovery k8s = 2;
+		// TODO: fill out the rest and create discovery service messages
 	}
-}
 
-message SlackNotifier {
 	string name = 1;
-	string username = 2;
-	string channel = 3;
-	string icon_emoji = 4;
+	int32 refresh_interval_seconds = 2;
+	bool enabled = 3;
 }
 
-message EmailNotifier {
+message EC2Discovery {
+
+}
+
+message K8SDiscovery {
+
+}
+
+message ScrapeTarget {
+	oneof Kind {
+		PrometheusTarget prometheus = 1;
+
+		// Telegraf plugins
+		SystemTarget system = 2;
+		RedisTarget redis = 3;
+		// TODO: fill out rest
+	}
 	string name = 1;
-	string from = 2;
-	repeated string to = 3;
+	string discover_service = 2;
+	bool enabled = 3;
+	int32 scrape_interval_seconds = 4;
+	int32 scrape_timeout_seconds = 5;
+	repeated Bucket output_buckets = 6;
+
+	// TODO: what other Telegraf agent config options are relevant here?
 }
 
-/*
-  Service Configs
-
-  ** Only service configs can contain secrets
-*/
-
-/*
-    Kapacitor configs
-*/
-
-message SlackConfig {
-	string name = 1;
-	bool enabled = 2;
+message PrometheusTarget {
+	uint16 port = 1;
+	string path = 2;
+	string host = 3;
 }
+
 
 /*
     Telegraf configs
