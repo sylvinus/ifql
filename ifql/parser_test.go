@@ -516,7 +516,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function called",
-			raw: `var plusOne = r => r + 1
+			raw: `var plusOne = (r) => r + 1
 			plusOne(r:5)
 			`,
 			want: &ast.Program{
@@ -560,7 +560,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function return map",
-			raw:  `var toMap = r =>({r:r})`,
+			raw:  `var toMap = (r) =>({r:r})`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -585,7 +585,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "arrow function called in binary expression",
 			raw: `
-            var plusOne = r => r + 1
+            var plusOne = (r) => r + 1
             plusOne(r:5) == 6 or die()
 			`,
 			want: &ast.Program{
@@ -639,7 +639,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function as single expression",
-			raw:  `var f = r => r["_measurement"] == "cpu"`,
+			raw:  `var f = (r) => r["_measurement"] == "cpu"`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -665,7 +665,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function as block",
-			raw: `var f = r => { 
+			raw: `var f = (r) => { 
                 var m = r["_measurement"]
                 return m == "cpu"
             }`,
@@ -708,7 +708,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "from with filter with no parens",
-			raw:  `from(db:"telegraf").filter(f: r => r["other"]=="mem" and r["this"]=="that" or r["these"]!="those")`,
+			raw:  `from(db:"telegraf").filter(fn: (r) => r["other"]=="mem" and r["this"]=="that" or r["these"]!="those")`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
@@ -735,7 +735,7 @@ func TestParse(t *testing.T) {
 								&ast.ObjectExpression{
 									Properties: []*ast.Property{
 										{
-											Key: &ast.Identifier{Name: "f"},
+											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
 												Params: []*ast.Identifier{{Name: "r"}},
 												Body: &ast.LogicalExpression{
@@ -996,7 +996,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "from with filter, range and count",
 			raw: `from(db:"mydb")
-                        .filter(f: r => r["_field"] == 10.1)
+                        .filter(fn: (r) => r["_field"] == 10.1)
                         .range(start:-4h, stop:-2h)
                         .count()`,
 			want: &ast.Program{
@@ -1027,7 +1027,7 @@ func TestParse(t *testing.T) {
 												&ast.ObjectExpression{
 													Properties: []*ast.Property{
 														{
-															Key: &ast.Identifier{Name: "f"},
+															Key: &ast.Identifier{Name: "fn"},
 															Value: &ast.ArrowFunctionExpression{
 																Params: []*ast.Identifier{{Name: "r"}},
 																Body: &ast.BinaryExpression{
@@ -1080,7 +1080,7 @@ func TestParse(t *testing.T) {
 			raw: `
 var a = from(db:"dbA").range(start:-1h)
 var b = from(db:"dbB").range(start:-1h)
-join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
+join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -1181,7 +1181,7 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 											},
 										},
 										{
-											Key: &ast.Identifier{Name: "f"},
+											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
 												Params: []*ast.Identifier{
 													{Name: "a"},
@@ -1210,9 +1210,9 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 		},
 		{
 			name: "from with join with complex expression",
-			raw: `var a = from(db:"ifql").filter(f: r => r["_measurement"] == "a").range(start:-1h)
-			var b = from(db:"ifql").filter(f: r => r["_measurement"] == "b").range(start:-1h)
-			join(tables:[a,b], on:["t1"], f: (a,b) => (a["_field"] - b["_field"]) / b["_field"])`,
+			raw: `var a = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "a").range(start:-1h)
+			var b = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "b").range(start:-1h)
+			join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_field"])`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -1243,7 +1243,7 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 											&ast.ObjectExpression{
 												Properties: []*ast.Property{
 													{
-														Key: &ast.Identifier{Name: "f"},
+														Key: &ast.Identifier{Name: "fn"},
 														Value: &ast.ArrowFunctionExpression{
 															Params: []*ast.Identifier{{Name: "r"}},
 															Body: &ast.BinaryExpression{
@@ -1306,7 +1306,7 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 											&ast.ObjectExpression{
 												Properties: []*ast.Property{
 													{
-														Key: &ast.Identifier{Name: "f"},
+														Key: &ast.Identifier{Name: "fn"},
 														Value: &ast.ArrowFunctionExpression{
 															Params: []*ast.Identifier{{Name: "r"}},
 															Body: &ast.BinaryExpression{
@@ -1367,7 +1367,7 @@ join(tables:[a,b], on:["host"], f: (a,b) => a["_field"] + b["_field"])`,
 											},
 										},
 										{
-											Key: &ast.Identifier{Name: "f"},
+											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
 												Params: []*ast.Identifier{
 													{Name: "a"},

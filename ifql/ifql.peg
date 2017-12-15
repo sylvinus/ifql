@@ -98,20 +98,17 @@ Arguments
     }
 
 ArrowFunctionExpression
-  = __ params:ArrowFunctionParams __ "=>" __ body:ArrowFunctionBody __  {
+  = __ "(" __ params:ArrowFunctionParams? __ ")" __ "=>" __ body:ArrowFunctionBody __  {
       return arrowfunc(params, body, c.text, c.pos), nil
     }
 
 ArrowFunctionParams
-  = "(" first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest+ ","? ")" {
+  = __ first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest* ","?  {
       return append([]interface{}{first}, toIfaceSlice(rest)...), nil
-    }
-  / first:ArrowFunctionParam {
-      return []interface{}{first}, nil
     }
 
 ArrowFunctionParamsRest
-  = "," __  arg:ArrowFunctionParam {
+  = "," __  arg:ArrowFunctionParam __ {
       return arg, nil
     }
 
@@ -228,10 +225,7 @@ UnaryExpression
   / Primary
 
 Primary
-  = "(" __ expr:Expr __ ")" {
-      return expr, nil
-    }
-  / Array
+  = Array
   / StringLiteral
   / BooleanLiteral
   / RegularExpressionLiteral
@@ -240,11 +234,16 @@ Primary
   / Number
   / Integer
   / CallExpression
-  / ArrowFunctionExpression
   / MemberExpressions
   / Identifier
   / ObjectExpression
+  / ArrowFunctionExpression
+  / Parens
 
+Parens
+  = "(" __ expr:Expr __ ")" {
+      return expr, nil
+    }
 
 Array
   = "[" __ elements:ArrayElements? __ "]" {
