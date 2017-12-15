@@ -45,7 +45,20 @@ func (l *hostList) Set(s string) error {
 
 var defaultStorageHosts = []string{"localhost:8082"}
 
+func usage() {
+	fmt.Println("Usage: ifql [OPTIONS] <query>")
+	fmt.Println()
+	fmt.Println("Runs a query using the IFQL engine.")
+	fmt.Println()
+	fmt.Println("The query argument is either a string query \nor a path to a file prefixed with an '@'.")
+	fmt.Println()
+	fmt.Println("Options:")
+
+	flag.PrintDefaults()
+}
+
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 	if tr := tracing.Open("ifql"); tr != nil {
 		defer tr.Close()
