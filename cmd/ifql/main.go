@@ -94,30 +94,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Running query", queryStr)
+	fmt.Println("Running query:\n", queryStr)
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts
 	}
-	results, querySpec, err := ifql.ExecuteQuery(
-		ctx,
-		queryStr,
-		&ifql.Options{
-			Verbose: *verbose,
-			Trace:   *trace,
-			Hosts:   hosts,
-		},
-	)
-
+	c, err := ifql.NewController(ifql.Config{
+		Hosts:            hosts,
+		ConcurrencyQuota: runtime.NumCPU() * 2,
+	})
 	if err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
+	q, err := c.QueryWithCompile(ctx, queryStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer q.Done()
 
 	if *verbose {
-		octets, err := json.MarshalIndent(querySpec, "", "    ")
+		octets, err := json.MarshalIndent(q.Spec, "", "    ")
 		if err != nil {
 			fmt.Println(string(octets))
 		}
+	}
+
+	results, ok := <-q.Ready
+	if !ok {
+		err := q.Err()
+		log.Fatal(err)
 	}
 
 	for _, r := range results {

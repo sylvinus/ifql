@@ -22,7 +22,7 @@ var opts = append(asttest.CompareOptions, cmp.AllowUnexported(query.QuerySpec{})
 func NewQueryTestHelper(t *testing.T, tc NewQueryTestCase) {
 	t.Helper()
 
-	got, err := query.NewQuery(tc.Raw, ifql.Debug(false))
+	got, err := query.Compile(tc.Raw, ifql.Debug(false))
 	if (err != nil) != tc.WantErr {
 		t.Errorf("ifql.NewQuery() error = %v, wantErr %v", err, tc.WantErr)
 		return

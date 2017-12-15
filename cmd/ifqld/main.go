@@ -79,7 +79,7 @@ func main() {
 		}
 		os.Exit(code)
 	}
-	c, err := ifql.NewController(ifql.Options{
+	c, err := ifql.NewController(ifql.Config{
 		Hosts:            opts.Hosts,
 		ConcurrencyQuota: opts.ConcurrencyQuota,
 		MemoryBytesQuota: opts.MemoryBytesQuota,
@@ -132,35 +132,33 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 
 		q, err = controller.Query(ctx, spec)
 	} else {
-		query := req.FormValue("q")
-		if query == "" {
+		queryStr := req.FormValue("q")
+		if queryStr == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("must pass query in q parameter"))
 			return
 		}
 		if opts.Verbose {
-			log.Print(query)
-		}
-
-		spec, err := ifql.QuerySpec(ctx, query)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
-			log.Println("Error:", err)
-			return
+			log.Print(queryStr)
 		}
 
 		analyze := req.FormValue("analyze") != ""
 		if analyze {
+			spec, err := query.Compile(queryStr)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(fmt.Sprintf("Error compiling query %s", err.Error())))
+				return
+			}
 			encodeJSON(w, http.StatusOK, spec)
 			return
 		}
-		q, err = controller.Query(ctx, spec)
+
+		q, err = controller.QueryWithCompile(ctx, queryStr)
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error constructing query %s", err.Error())))
-		log.Println("Error:", err)
 		return
 	}
 	defer q.Done()
@@ -169,7 +167,6 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error analyzing query %s", err.Error())))
-		log.Println("Error:", err)
 		return
 	}
 
@@ -188,7 +185,6 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		err := q.Err()
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error executing query %s", err.Error())))
-		log.Println("Error:", err)
 		return
 	}
 	switch req.Header.Get("Accept") {

@@ -12,8 +12,8 @@ const (
 	parentTableArg = "table"
 )
 
-// NewQuery parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
-func NewQuery(q string, opts ...ifql.Option) (*QuerySpec, error) {
+// Compile parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
+func Compile(q string, opts ...ifql.Option) (*QuerySpec, error) {
 	program, err := ifql.NewAST(q, opts...)
 	if err != nil {
 		return nil, err

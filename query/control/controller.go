@@ -55,32 +55,63 @@ func New(c Config) *Controller {
 	return ctrl
 }
 
-// Query submits a query for execution returning immediately.
-// The spec must not be modified while the query is still active.
-func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query, error) {
-	if err := qSpec.Validate(); err != nil {
+// QueryWithCompile submits a query for execution returning immediately.
+// The query will first be compiled before submitting for execution.
+// Done must be called on any returned Query objects.
+func (c *Controller) QueryWithCompile(ctx context.Context, queryStr string) (*Query, error) {
+	q := c.createQuery(ctx)
+	err := c.compileQuery(q, queryStr)
+	if err != nil {
 		return nil, err
 	}
+	err = c.enqueueQuery(q)
+	return q, err
+}
+
+// Query submits a query for execution returning immediately.
+// The spec must not be modified while the query is still active.
+// Done must be called on any returned Query objects.
+func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query, error) {
+	q := c.createQuery(ctx)
+	q.Spec = *qSpec
+	err := c.enqueueQuery(q)
+	return q, err
+}
+
+func (c *Controller) createQuery(ctx context.Context) *Query {
 	id := c.nextID()
 	cctx, cancel := context.WithCancel(ctx)
 	ready := make(chan []execute.Result, 1)
-	q := &Query{
+	return &Query{
 		id:     id,
+		state:  Created,
 		c:      c,
-		Spec:   *qSpec,
 		now:    time.Now().UTC(),
 		ready:  ready,
 		Ready:  ready,
-		state:  Queueing,
 		ctx:    cctx,
 		cancel: cancel,
 	}
-	q.queueSpan, q.ctx = StartSpanFromContext(q.ctx, "queueing")
-	queueingGauge.Inc()
+}
 
+func (c *Controller) compileQuery(q *Query, queryStr string) error {
+	q.compile()
+	spec, err := query.Compile(queryStr)
+	if err != nil {
+		return errors.Wrap(err, "failed to compile query")
+	}
+	q.Spec = *spec
+	return nil
+}
+
+func (c *Controller) enqueueQuery(q *Query) error {
+	q.queue()
+	if err := q.Spec.Validate(); err != nil {
+		return errors.Wrap(err, "invalid query")
+	}
 	// Add query to the queue
 	c.newQueries <- q
-	return q, nil
+	return nil
 }
 
 func (c *Controller) nextID() QueryID {
@@ -216,6 +247,7 @@ type Query struct {
 	state  State
 	cancel func()
 
+	compilingSpan,
 	queueSpan,
 	planSpan,
 	requeueSpan,
@@ -282,6 +314,9 @@ func (q *Query) Done() {
 }
 
 func (q *Query) recordMetrics() {
+	if q.compilingSpan != nil {
+		compilingHist.Observe(q.compilingSpan.Duration.Seconds())
+	}
 	queueingHist.Observe(q.queueSpan.Duration.Seconds())
 	if q.requeueSpan != nil {
 		requeueingHist.Observe(q.requeueSpan.Duration.Seconds())
@@ -324,6 +359,30 @@ func (q *Query) setResults(r []execute.Result) {
 	if q.state == Executing {
 		q.ready <- r
 	}
+	q.mu.Unlock()
+}
+
+// compile transitions the query into the Compiling state.
+func (q *Query) compile() {
+	q.mu.Lock()
+	q.compilingSpan, q.ctx = StartSpanFromContext(q.ctx, "compiling")
+	compilingGauge.Inc()
+
+	q.state = Compiling
+	q.mu.Unlock()
+}
+
+// queue transitions the query into the Queueing state.
+func (q *Query) queue() {
+	q.mu.Lock()
+	if q.state == Compiling {
+		q.compilingSpan.Finish()
+		compilingGauge.Dec()
+	}
+	q.queueSpan, q.ctx = StartSpanFromContext(q.ctx, "queueing")
+	queueingGauge.Inc()
+
+	q.state = Queueing
 	q.mu.Unlock()
 }
 
@@ -391,7 +450,9 @@ func (q *Query) tryExec() bool {
 type State int
 
 const (
-	Queueing State = iota
+	Created State = iota
+	Compiling
+	Queueing
 	Planning
 	Requeueing
 	Executing
@@ -402,6 +463,10 @@ const (
 
 func (s State) String() string {
 	switch s {
+	case Created:
+		return "created"
+	case Compiling:
+		return "compiling"
 	case Queueing:
 		return "queueing"
 	case Planning:
