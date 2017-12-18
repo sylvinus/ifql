@@ -26,7 +26,7 @@ func init() {
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
 }
 
-func createWindowOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createWindowOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(WindowOpSpec)
 	every, everySet, err := args.GetDuration("every")
 	if err != nil {
@@ -79,7 +79,7 @@ type WindowProcedureSpec struct {
 	Triggering query.TriggerSpec
 }
 
-func newWindowProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newWindowProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	s, ok := qs.(*WindowOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -113,28 +113,27 @@ func (s *WindowProcedureSpec) TriggerSpec() query.TriggerSpec {
 	return s.Triggering
 }
 
-func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*WindowProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
-	t := NewFixedWindowTransformation(d, cache, ctx.Bounds(), execute.Window{
+	t := NewFixedWindowTransformation(d, cache, a.Bounds(), execute.Window{
 		Every:  execute.Duration(s.Window.Every),
 		Period: execute.Duration(s.Window.Period),
 		Round:  execute.Duration(s.Window.Round),
-		Start:  ctx.ResolveTime(s.Window.Start),
+		Start:  a.ResolveTime(s.Window.Start),
 	})
 	return t, d, nil
 }
 
 type fixedWindowTransformation struct {
-	d       execute.Dataset
-	cache   execute.BlockBuilderCache
-	w       execute.Window
-	parents []execute.DatasetID
-	bounds  execute.Bounds
+	d      execute.Dataset
+	cache  execute.BlockBuilderCache
+	w      execute.Window
+	bounds execute.Bounds
 
 	offset execute.Duration
 }
@@ -240,7 +239,4 @@ func (t *fixedWindowTransformation) UpdateProcessingTime(id execute.DatasetID, p
 }
 func (t *fixedWindowTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *fixedWindowTransformation) SetParents(ids []execute.DatasetID) {
-	t.parents = ids
 }

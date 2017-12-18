@@ -18,7 +18,7 @@ func init() {
 	execute.RegisterTransformation(SpreadKind, createSpreadTransformation)
 }
 
-func createSpreadOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSpreadOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(SpreadOpSpec), nil
 }
 
@@ -35,7 +35,7 @@ func (s *SpreadOpSpec) Kind() query.OperationKind {
 	return SpreadKind
 }
 
-func newSpreadProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSpreadProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	_, ok := qs.(*SpreadOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -55,8 +55,8 @@ func (s *SpreadProcedureSpec) Copy() plan.ProcedureSpec {
 	return new(SpreadProcedureSpec)
 }
 
-func createSpreadTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SpreadAgg), ctx.Allocator())
+func createSpreadTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(SpreadAgg), a.Allocator())
 	return t, d, nil
 }
 

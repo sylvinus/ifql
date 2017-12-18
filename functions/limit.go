@@ -25,7 +25,7 @@ func init() {
 	execute.RegisterTransformation(LimitKind, createLimitTransformation)
 }
 
-func createLimitOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createLimitOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(LimitOpSpec)
 
 	n, err := args.GetRequiredInt("n")
@@ -50,7 +50,7 @@ type LimitProcedureSpec struct {
 	//Offset int64 `json:"offset"`
 }
 
-func newLimitProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newLimitProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*LimitOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -94,12 +94,12 @@ func (s *LimitProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 	selectSpec.SeriesOffset = 0
 }
 
-func createLimitTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createLimitTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*LimitProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewLimitTransformation(d, cache, s)
 	return t, d, nil
@@ -190,6 +190,4 @@ func (t *limitTransformation) UpdateProcessingTime(id execute.DatasetID, pt exec
 }
 func (t *limitTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *limitTransformation) SetParents(ids []execute.DatasetID) {
 }

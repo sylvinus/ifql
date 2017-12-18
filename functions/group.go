@@ -26,7 +26,7 @@ func init() {
 	execute.RegisterTransformation(GroupKind, createGroupTransformation)
 }
 
-func createGroupOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createGroupOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(GroupOpSpec)
 	if array, ok, err := args.GetArray("by", ifql.TString); err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ type GroupProcedureSpec struct {
 	Keep   []string
 }
 
-func newGroupProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newGroupProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*GroupOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -131,12 +131,12 @@ func (s *GroupProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 	selectSpec.GroupKeep = s.Keep
 }
 
-func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createGroupTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*GroupProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewGroupTransformation(d, cache, s)
 	return t, d, nil
@@ -372,8 +372,6 @@ func (t *groupTransformation) UpdateProcessingTime(id execute.DatasetID, pt exec
 }
 func (t *groupTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *groupTransformation) SetParents(ids []execute.DatasetID) {
 }
 
 type blockMetadata struct {

@@ -24,7 +24,7 @@ func init() {
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
-func createFilterOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createFilterOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ type FilterProcedureSpec struct {
 	Fn *ast.ArrowFunctionExpression
 }
 
-func newFilterProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newFilterProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*FilterOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -90,12 +90,12 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 	selectSpec.Filter = s.Fn
 }
 
-func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*FilterProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t, err := NewFilterTransformation(d, cache, s)
 	if err != nil {
@@ -246,6 +246,4 @@ func (t *filterTransformation) UpdateProcessingTime(id execute.DatasetID, pt exe
 }
 func (t *filterTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *filterTransformation) SetParents(ids []execute.DatasetID) {
 }

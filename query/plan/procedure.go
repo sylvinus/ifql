@@ -38,7 +38,11 @@ func (p *Procedure) Copy() *Procedure {
 	return np
 }
 
-type CreateProcedureSpec func(query.OperationSpec) (ProcedureSpec, error)
+type Administration interface {
+	ConvertID(query.OperationID) ProcedureID
+}
+
+type CreateProcedureSpec func(query.OperationSpec, Administration) (ProcedureSpec, error)
 
 // ProcedureSpec specifies an operation as part of a query.
 type ProcedureSpec interface {

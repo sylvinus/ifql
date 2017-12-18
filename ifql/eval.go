@@ -2,7 +2,6 @@ package ifql
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
@@ -828,20 +827,6 @@ func (m Map) Property(name string) (Value, error) {
 		return v, nil
 	}
 	return nil, fmt.Errorf("property %q does not exist", name)
-}
-
-func (m Map) SortedRange(f func(k string, v Value) error) error {
-	keys := make([]string, 0, len(m.Elements))
-	for k := range m.Elements {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if err := f(k, m.Elements[k]); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Arguments provides access to the keyword arguments passed to a function.

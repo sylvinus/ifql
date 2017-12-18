@@ -11,6 +11,8 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
+	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 	"github.com/influxdata/ifql/query/querytest"
 )
 
@@ -64,7 +66,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"host"},
-							TableNames: []string{"a", "b"},
+							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
@@ -158,7 +160,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"t1"},
-							TableNames: []string{"a", "b"},
+							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
@@ -222,7 +224,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"kind":"join",
 		"spec":{
 			"on":["t1","t2"],
-			"table_names": ["a","b"],
+			"table_names": {"sum1":"a","count3":"b"},
 			"fn":{
 				"params": [{"type":"Identifier","name":"t"}],
 				"body":{
@@ -252,7 +254,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
 			On:         []string{"t1", "t2"},
-			TableNames: []string{"a", "b"},
+			TableNames: map[query.OperationID]string{"sum1": "a", "count3": "b"},
 			Fn: &ast.ArrowFunctionExpression{
 				Params: []*ast.Identifier{{Name: "t"}},
 				Body: &ast.BinaryExpression{
@@ -301,7 +303,12 @@ func TestMergeJoin_Process(t *testing.T) {
 			},
 		},
 	}
-	addTableNames := []string{"a", "b"}
+	parentID0 := plantest.RandomProcedureID()
+	parentID1 := plantest.RandomProcedureID()
+	addTableNames := map[plan.ProcedureID]string{
+		parentID0: "a",
+		parentID1: "b",
+	}
 	testCases := []struct {
 		skip  bool
 		name  string
@@ -758,18 +765,21 @@ func TestMergeJoin_Process(t *testing.T) {
 			if tc.skip {
 				t.Skip()
 			}
+			parents := []execute.DatasetID{execute.DatasetID(parentID0), execute.DatasetID(parentID1)}
+
+			tableNames := make(map[execute.DatasetID]string, len(tc.spec.TableNames))
+			for pid, name := range tc.spec.TableNames {
+				tableNames[execute.DatasetID(pid)] = name
+			}
+
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			joinExpr, err := functions.NewJoinFunction(tc.spec.Fn, tc.spec.TableNames)
+			joinExpr, err := functions.NewJoinFunction(tc.spec.Fn, parents, tableNames)
 			if err != nil {
 				t.Fatal(err)
 			}
-			c := functions.NewMergeJoinCache(joinExpr, executetest.UnlimitedAllocator)
+			c := functions.NewMergeJoinCache(joinExpr, executetest.UnlimitedAllocator, parents[0], parents[1])
 			c.SetTriggerSpec(execute.DefaultTriggerSpec)
-			jt := functions.NewMergeJoinTransformation(d, c, tc.spec)
-
-			parentID0 := executetest.RandomDatasetID()
-			parentID1 := executetest.RandomDatasetID()
-			jt.SetParents([]execute.DatasetID{parentID0, parentID1})
+			jt := functions.NewMergeJoinTransformation(d, c, tc.spec, parents)
 
 			l := len(tc.data0)
 			if len(tc.data1) > l {
@@ -777,12 +787,12 @@ func TestMergeJoin_Process(t *testing.T) {
 			}
 			for i := 0; i < l; i++ {
 				if i < len(tc.data0) {
-					if err := jt.Process(parentID0, tc.data0[i]); err != nil {
+					if err := jt.Process(parents[0], tc.data0[i]); err != nil {
 						t.Fatal(err)
 					}
 				}
 				if i < len(tc.data1) {
-					if err := jt.Process(parentID1, tc.data1[i]); err != nil {
+					if err := jt.Process(parents[1], tc.data1[i]); err != nil {
 						t.Fatal(err)
 					}
 				}

@@ -168,7 +168,10 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("join"): {
 						ID: plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
-							TableNames: []string{"a", "b"},
+							TableNames: map[plan.ProcedureID]string{
+								plan.ProcedureIDFromOperationID("sum"):   "sum",
+								plan.ProcedureIDFromOperationID("count"): "count",
+							},
 							Fn: &ast.ArrowFunctionExpression{
 								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
@@ -178,7 +181,7 @@ func TestExecutor_Execute(t *testing.T) {
 											Object: &ast.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "a"},
+											Property: &ast.Identifier{Name: "sum"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -187,7 +190,7 @@ func TestExecutor_Execute(t *testing.T) {
 											Object: &ast.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "b"},
+											Property: &ast.Identifier{Name: "count"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -198,7 +201,9 @@ func TestExecutor_Execute(t *testing.T) {
 							plan.ProcedureIDFromOperationID("sum"),
 							plan.ProcedureIDFromOperationID("count"),
 						},
-						Children: nil}},
+						Children: nil,
+					},
+				},
 				Results: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("join"),
 				},
