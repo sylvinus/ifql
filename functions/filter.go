@@ -108,7 +108,7 @@ type filterTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
-	properties []execute.ObjectProperty
+	references []execute.Reference
 	scope      execute.Scope
 	scopeCols  map[string]int
 	ces        map[execute.DataType]expressionOrError
@@ -124,25 +124,26 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.Fn.Params)
 	}
 	objectName := spec.Fn.Params[0].Name
-	properties, err := execute.ObjectProperties(spec.Fn)
+	references, err := execute.FindReferences(spec.Fn)
 	if err != nil {
 		return nil, err
 	}
 
-	valueOP := execute.ObjectProperty{
-		Object:   objectName,
-		Property: "_value",
-	}
-	types := make(map[execute.ObjectProperty]execute.DataType, len(properties))
-	for _, op := range properties {
-		if op != valueOP {
-			types[op] = execute.TString
+	valueRP := execute.Reference{objectName, "_value"}.Path()
+	types := make(map[execute.ReferencePath]execute.DataType, len(references))
+	for _, r := range references {
+		if len(r) != 2 {
+			return nil, fmt.Errorf("found invalid reference in the filter function %q", r)
+		}
+		rp := r.Path()
+		if rp != valueRP {
+			types[rp] = execute.TString
 		}
 	}
 
 	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
 	for _, typ := range execute.ValueDataTypes {
-		types[valueOP] = typ
+		types[valueRP] = typ
 		ce, err := execute.CompileExpression(spec.Fn, types)
 		ces[typ] = expressionOrError{
 			Err:  err,
@@ -159,7 +160,7 @@ func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache,
 	return &filterTransformation{
 		d:          d,
 		cache:      cache,
-		properties: properties,
+		references: references,
 		scope:      make(execute.Scope),
 		scopeCols:  make(map[string]int),
 		ces:        ces,
@@ -183,8 +184,8 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 		if c.Label == execute.ValueColLabel {
 			t.scopeCols["_value"] = valueIdx
 		} else {
-			for _, op := range t.properties {
-				if op.Property == c.Label {
+			for _, r := range t.references {
+				if r[1] == c.Label {
 					t.scopeCols[c.Label] = j
 					break
 				}
@@ -202,8 +203,8 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 	// Append only matching rows to block
 	b.Times().DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i := range ts {
-			for _, op := range t.properties {
-				t.scope[op] = execute.ValueForRow(i, t.scopeCols[op.Property], rr)
+			for _, r := range t.references {
+				t.scope[r.Path()] = execute.ValueForRow(i, t.scopeCols[r[1]], rr)
 			}
 			if pass, err := ce.EvalBool(t.scope); !pass {
 				if err != nil {

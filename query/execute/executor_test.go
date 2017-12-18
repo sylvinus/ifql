@@ -168,22 +168,26 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("join"): {
 						ID: plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
+							TableNames: []string{"a", "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{
-									{Name: "a"},
-									{Name: "b"},
-								},
+								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "a",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "a"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
 									Right: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "b",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "b"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},

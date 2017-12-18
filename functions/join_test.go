@@ -21,7 +21,7 @@ func TestJoin_NewQuery(t *testing.T) {
 			Raw: `
 var a = from(db:"dbA").range(start:-1h)
 var b = from(db:"dbB").range(start:-1h)
-join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
+join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{
@@ -63,20 +63,27 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 					{
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
-							On: []string{"host"},
+							On:         []string{"host"},
+							TableNames: []string{"a", "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "a",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "a"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
 									Right: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "b",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "b"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -98,7 +105,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 			Raw: `
 				var a = from(db:"dbA").range(start:-1h)
 				var b = from(db:"dbB").range(start:-1h)
-				a.join(tables:[a,b], on:["host"], fn: r => a["_value"] + b["_value"])
+				a.join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])
 			`,
 			WantErr: true,
 		},
@@ -107,7 +114,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 			Raw: `
 				var a = from(db:"ifql").range(start:-1h)
 				var b = from(db:"ifql").range(start:-1h)
-				join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_value"]-b["_value"])/b["_value"])
+				join(tables:{a:a,b:b}, on:["t1"], fn: (t) => (t.a["_value"]-t.b["_value"])/t.b["_value"])
 			`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
@@ -150,29 +157,39 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_value"] + b["_value"])`,
 					{
 						ID: "join4",
 						Spec: &functions.JoinOpSpec{
-							On: []string{"t1"},
+							On:         []string{"t1"},
+							TableNames: []string{"a", "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+								Params: []*ast.Identifier{{Name: "t"}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &ast.BinaryExpression{
 										Operator: ast.SubtractionOperator,
 										Left: &ast.MemberExpression{
-											Object: &ast.Identifier{
-												Name: "a",
+											Object: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "t",
+												},
+												Property: &ast.Identifier{Name: "a"},
 											},
 											Property: &ast.StringLiteral{Value: "_value"},
 										},
 										Right: &ast.MemberExpression{
-											Object: &ast.Identifier{
-												Name: "b",
+											Object: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "t",
+												},
+												Property: &ast.Identifier{Name: "b"},
 											},
 											Property: &ast.StringLiteral{Value: "_value"},
 										},
 									},
 									Right: &ast.MemberExpression{
-										Object: &ast.Identifier{
-											Name: "b",
+										Object: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "t",
+											},
+											Property: &ast.Identifier{Name: "b"},
 										},
 										Property: &ast.StringLiteral{Value: "_value"},
 									},
@@ -205,8 +222,9 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		"kind":"join",
 		"spec":{
 			"on":["t1","t2"],
+			"table_names": ["a","b"],
 			"fn":{
-				"params": [{"type":"Identifier","name":"a"},{"type":"Identifier","name":"b"}],
+				"params": [{"type":"Identifier","name":"t"}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "+",
@@ -233,9 +251,10 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "join",
 		Spec: &functions.JoinOpSpec{
-			On: []string{"t1", "t2"},
+			On:         []string{"t1", "t2"},
+			TableNames: []string{"a", "b"},
 			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+				Params: []*ast.Identifier{{Name: "t"}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.AdditionOperator,
 					Left: &ast.MemberExpression{
@@ -258,24 +277,31 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 }
 
 func TestMergeJoin_Process(t *testing.T) {
-	addExpression := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+	addFunction := &ast.ArrowFunctionExpression{
+		Params: []*ast.Identifier{{Name: "t"}},
 		Body: &ast.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left: &ast.MemberExpression{
-				Object: &ast.Identifier{
-					Name: "a",
+				Object: &ast.MemberExpression{
+					Object: &ast.Identifier{
+						Name: "t",
+					},
+					Property: &ast.Identifier{Name: "a"},
 				},
 				Property: &ast.StringLiteral{Value: "_value"},
 			},
 			Right: &ast.MemberExpression{
-				Object: &ast.Identifier{
-					Name: "b",
+				Object: &ast.MemberExpression{
+					Object: &ast.Identifier{
+						Name: "t",
+					},
+					Property: &ast.Identifier{Name: "b"},
 				},
 				Property: &ast.StringLiteral{Value: "_value"},
 			},
 		},
 	}
+	addTableNames := []string{"a", "b"}
 	testCases := []struct {
 		skip  bool
 		name  string
@@ -287,7 +313,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -344,7 +371,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "simple inner with ints",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -401,7 +429,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with missing values",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -456,7 +485,8 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with multiple matches",
 			spec: &functions.MergeJoinProcedureSpec{
-				Fn: addExpression,
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -517,8 +547,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with common tags",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1"},
-				Fn: addExpression,
+				On:         []string{"t1"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -578,8 +609,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1"},
-				Fn: addExpression,
+				On:         []string{"t1"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -648,8 +680,9 @@ func TestMergeJoin_Process(t *testing.T) {
 		{
 			name: "inner with tags and extra attributes",
 			spec: &functions.MergeJoinProcedureSpec{
-				On: []string{"t1", "t2"},
-				Fn: addExpression,
+				On:         []string{"t1", "t2"},
+				Fn:         addFunction,
+				TableNames: addTableNames,
 			},
 			data0: []*executetest.Block{
 				{
@@ -726,7 +759,7 @@ func TestMergeJoin_Process(t *testing.T) {
 				t.Skip()
 			}
 			d := executetest.NewDataset(executetest.RandomDatasetID())
-			joinExpr, err := functions.NewExpressionSpec(tc.spec.Fn)
+			joinExpr, err := functions.NewJoinFunction(tc.spec.Fn, tc.spec.TableNames)
 			if err != nil {
 				t.Fatal(err)
 			}

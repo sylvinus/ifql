@@ -18,8 +18,9 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	On []string                     `json:"on"`
-	Fn *ast.ArrowFunctionExpression `json:"fn"`
+	On         []string                     `json:"on"`
+	Fn         *ast.ArrowFunctionExpression `json:"fn"`
+	TableNames []string                     `json:"table_names"`
 }
 
 func init() {
@@ -49,11 +50,19 @@ func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.Operation
 		spec.On = array.AsStrings()
 	}
 
-	if array, ok, err := args.GetArray("tables", query.TTable); err != nil {
+	if m, ok, err := args.GetMap("tables"); err != nil {
 		return nil, err
 	} else if ok {
-		for _, t := range array.Elements {
+		err := m.SortedRange(func(k string, t ifql.Value) error {
+			if t.Type() != query.TTable {
+				return fmt.Errorf("tables key %q must be a table: got %v", k, t.Type())
+			}
 			ctx.AddParent(t.Value().(query.Table).ID)
+			spec.TableNames = append(spec.TableNames, k)
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -69,8 +78,9 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On []string                     `json:"keys"`
-	Fn *ast.ArrowFunctionExpression `json:"f"`
+	On         []string                     `json:"keys"`
+	Fn         *ast.ArrowFunctionExpression `json:"f"`
+	TableNames []string
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
@@ -80,8 +90,9 @@ func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
 	}
 
 	p := &MergeJoinProcedureSpec{
-		On: spec.On,
-		Fn: spec.Fn,
+		On:         spec.On,
+		Fn:         spec.Fn,
+		TableNames: spec.TableNames,
 	}
 	sort.Strings(p.On)
 	return p, nil
@@ -106,11 +117,11 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinEval, err := NewExpressionSpec(s.Fn)
+	joinFn, err := NewJoinFunction(s.Fn, s.TableNames)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := NewMergeJoinCache(joinEval, ctx.Allocator())
+	cache := NewMergeJoinCache(joinFn, ctx.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewMergeJoinTransformation(d, cache, s)
 	return t, d, nil
@@ -129,7 +140,8 @@ type mergeJoinTransformation struct {
 
 	parentState map[execute.DatasetID]*mergeJoinParentState
 
-	keys []string
+	keys       []string
+	tableNames []string
 }
 
 func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec) *mergeJoinTransformation {
@@ -138,6 +150,7 @@ func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *M
 		cache:       cache,
 		parentState: make(map[execute.DatasetID]*mergeJoinParentState),
 		keys:        spec.On,
+		tableNames:  spec.TableNames,
 	}
 }
 
@@ -303,14 +316,14 @@ type mergeJoinCache struct {
 
 	triggerSpec query.TriggerSpec
 
-	joinEval *expressionSpec
+	joinFn *joinFunc
 }
 
-func NewMergeJoinCache(joinEval *expressionSpec, a *execute.Allocator) *mergeJoinCache {
+func NewMergeJoinCache(joinFn *joinFunc, a *execute.Allocator) *mergeJoinCache {
 	return &mergeJoinCache{
-		data:     make(map[execute.BlockKey]*joinTables),
-		joinEval: joinEval,
-		alloc:    a,
+		data:   make(map[execute.BlockKey]*joinTables),
+		joinFn: joinFn,
+		alloc:  a,
 	}
 }
 
@@ -355,13 +368,13 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 	tables := c.data[key]
 	if tables == nil {
 		tables = &joinTables{
-			tags:     bm.Tags(),
-			bounds:   bm.Bounds(),
-			alloc:    c.alloc,
-			left:     execute.NewColListBlockBuilder(c.alloc),
-			right:    execute.NewColListBlockBuilder(c.alloc),
-			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
-			joinEval: c.joinEval.Copy(),
+			tags:    bm.Tags(),
+			bounds:  bm.Bounds(),
+			alloc:   c.alloc,
+			left:    execute.NewColListBlockBuilder(c.alloc),
+			right:   execute.NewColListBlockBuilder(c.alloc),
+			trigger: execute.NewTriggerFromSpec(c.triggerSpec),
+			joinFn:  c.joinFn.Copy(),
 		}
 		tables.left.AddCol(execute.TimeCol)
 		tables.right.AddCol(execute.TimeCol)
@@ -380,7 +393,7 @@ type joinTables struct {
 
 	trigger execute.Trigger
 
-	joinEval *expressionSpec
+	joinFn *joinFunc
 }
 
 func (t *joinTables) Bounds() execute.Bounds {
@@ -401,12 +414,12 @@ func (t *joinTables) ClearData() {
 // Join performs a sort-merge join
 func (t *joinTables) Join() (execute.Block, error) {
 	// First determine new value type
-	newType, err := t.joinEval.Compile(
+	newType, err := t.joinFn.Compile(
 		execute.ValueCol(t.left.Cols()).Type,
 		execute.ValueCol(t.right.Cols()).Type,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to compile join function")
 	}
 	// Create a builder to the result of the join
 	builder := execute.NewColListBlockBuilder(t.alloc)
@@ -471,7 +484,7 @@ func (t *joinTables) Join() (execute.Block, error) {
 					rv := readValue(r, srcValueIdx, right)
 					v, err := t.eval(lv, rv)
 					if err != nil {
-						return nil, err
+						return nil, errors.Wrap(err, "failed to evaluate join function")
 					}
 					switch newType {
 					case execute.TBool:
@@ -604,12 +617,12 @@ func (k joinKey) Less(o joinKey) bool {
 }
 
 func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
-	return t.joinEval.Eval(l, r)
+	return t.joinFn.Eval(l, r)
 }
 
-type expressionSpec struct {
+type joinFunc struct {
 	f               *ast.ArrowFunctionExpression
-	leftOP, rightOP execute.ObjectProperty
+	leftRP, rightRP execute.ReferencePath
 
 	scope execute.Scope
 
@@ -617,41 +630,40 @@ type expressionSpec struct {
 	ce                  execute.CompiledExpression
 }
 
-func NewExpressionSpec(f *ast.ArrowFunctionExpression) (*expressionSpec, error) {
-	if len(f.Params) != 2 {
-		names := make([]string, len(f.Params))
-		for i := range f.Params {
-			names[i] = f.Params[i].Name
-		}
-		return nil, fmt.Errorf("join expression can only have two tables, got tables: %v", names)
+func NewJoinFunction(f *ast.ArrowFunctionExpression, tableNames []string) (*joinFunc, error) {
+	if len(f.Params) != 1 {
+		return nil, errors.New("join function should only have one parameter for the map of tables")
 	}
-	return &expressionSpec{
-		leftOP: execute.ObjectProperty{
-			Object:   f.Params[0].Name,
-			Property: "_value",
-		},
-		rightOP: execute.ObjectProperty{
-			Object:   f.Params[1].Name,
-			Property: "_value",
-		},
+	tableParam := f.Params[0].Name
+	return &joinFunc{
+		leftRP: execute.Reference{
+			tableParam,
+			tableNames[0],
+			"_value",
+		}.Path(),
+		rightRP: execute.Reference{
+			tableParam,
+			tableNames[1],
+			"_value",
+		}.Path(),
 		f:     f,
 		scope: make(execute.Scope, 2),
 	}, nil
 }
 
-func (s *expressionSpec) Copy() *expressionSpec {
-	cpy := new(expressionSpec)
+func (s *joinFunc) Copy() *joinFunc {
+	cpy := new(joinFunc)
 	*cpy = *s
 	cpy.scope = make(execute.Scope, 2)
 	return cpy
 }
 
-func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error) {
+func (s *joinFunc) Compile(l, r execute.DataType) (execute.DataType, error) {
 	if s.ce != nil && l == s.leftType && r == s.rightType {
 		// Nothing to do, we already have a compiled expression
-		return execute.TInvalid, nil
+		return s.ce.Type(), nil
 	}
-	ce, err := execute.CompileExpression(s.f, map[execute.ObjectProperty]execute.DataType{s.leftOP: l, s.rightOP: r})
+	ce, err := execute.CompileExpression(s.f, map[execute.ReferencePath]execute.DataType{s.leftRP: l, s.rightRP: r})
 	if err != nil {
 		s.ce = nil
 		return execute.TInvalid, err
@@ -662,11 +674,11 @@ func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error
 	return s.ce.Type(), nil
 }
 
-func (s *expressionSpec) Eval(l, r execute.Value) (execute.Value, error) {
+func (s *joinFunc) Eval(l, r execute.Value) (execute.Value, error) {
 	if s.ce == nil {
 		return execute.Value{}, errors.New("expression has not been compiled")
 	}
-	s.scope[s.leftOP] = l
-	s.scope[s.rightOP] = r
+	s.scope[s.leftRP] = l
+	s.scope[s.rightRP] = r
 	return s.ce.Eval(s.scope)
 }
