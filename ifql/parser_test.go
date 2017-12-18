@@ -1,4 +1,4 @@
-package ifql
+package ifql_test
 
 import (
 	"testing"
@@ -7,13 +7,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ast/asttest"
+	"github.com/influxdata/ifql/ifql"
 )
 
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		raw     string
-		want    interface{}
+		want    *ast.Program
 		wantErr bool
 	}{
 		{
@@ -1416,17 +1417,53 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := Parse("", []byte(tt.raw), Debug(false))
+			// Set the env var`GO_TAGS=parser_debug` in order
+			// to turn on parser debugging as it is turned off by default.
+			got, err := ifql.NewAST("", []byte(tt.raw))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ifql.NewAST() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
 				return
 			}
 			if !cmp.Equal(tt.want, got, asttest.CompareOptions...) {
-				t.Errorf("Parse() = -want/+got %s", cmp.Diff(tt.want, got, asttest.CompareOptions...))
+				t.Errorf("ifql.NewAST() = -want/+got %s", cmp.Diff(tt.want, got, asttest.CompareOptions...))
 			}
 		})
+	}
+}
+
+var benchmarkQuery = []byte(`
+var start = -10s
+
+var do = (cpu) =>
+    from(db:"telegraf")
+        .filter(fn: (r) =>
+             r["_measurement"] == "cpu"
+             and
+             r["cpu"] == cpu)
+        .range(start:start)
+
+var cpu0 = do(cpu:"cpu0")
+var cpu1 = do(cpu:"cpu1")
+
+join(
+    tables:[cpu0, cpu1],
+    on:["_measurement","_field","host"],
+    fn: (a,b) => a["_value"] - b["_value"],
+)
+`)
+
+var benchmarkProgram interface{}
+
+func BenchmarkParse(b *testing.B) {
+	b.ReportAllocs()
+	var err error
+	for n := 0; n < b.N; n++ {
+		benchmarkProgram, err = ifql.Parse("", benchmarkQuery)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }

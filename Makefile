@@ -1,8 +1,9 @@
 VERSION ?= $(shell git describe --always --tags)
 SUBDIRS := ast ifql promql
 GO_ARGS=-tags '$(GO_TAGS)'
-GO_BUILD=go build $(GO_ARGS)
-GO_TEST=go test $(GO_ARGS)
+export GO_BUILD=go build $(GO_ARGS)
+export GO_TEST=go test $(GO_ARGS)
+export GO_GENERATE=go generate $(GO_ARGS)
 
 SOURCES := $(shell find . -name '*.go' -not -name '*_test.go')
 SOURCES_NO_VENDOR := $(shell find . -path ./vendor -prune -o -name "*.go" -not -name '*_test.go' -print)
