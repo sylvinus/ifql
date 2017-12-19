@@ -372,7 +372,7 @@ BooleanLiteral
 
 Identifier
   // Allow any unicode letter possibly followed by any number of unicode letters, underscores and numbers.
-  = [\pL][_0-9\pL]* {
+  = [_\pL][_0-9\pL]* {
       return identifier(c.text, c.pos)
     }
 

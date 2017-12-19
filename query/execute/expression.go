@@ -269,7 +269,7 @@ func compile(n ast.Expression, types map[ObjectProperty]DataType) (DataTypeEvalu
 		if err != nil {
 			return nil, err
 		}
-		rt := l.Type()
+		rt := r.Type()
 		sig := binarySignature{
 			Operator: n.Operator,
 			Left:     lt,
@@ -277,7 +277,7 @@ func compile(n ast.Expression, types map[ObjectProperty]DataType) (DataTypeEvalu
 		}
 		f, ok := binaryFuncs[sig]
 		if !ok {
-			return nil, fmt.Errorf("unsupported binary ast with types %v %v %v", sig.Left, sig.Operator, sig.Right)
+			return nil, fmt.Errorf("unsupported binary expression with types %v %v %v", sig.Left, sig.Operator, sig.Right)
 		}
 		return &binaryEvaluator{
 			compiledType: compiledType(f.ResultType),

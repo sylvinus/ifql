@@ -96,8 +96,7 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.On = make([]string, len(s.On))
 	copy(ns.On, s.On)
 
-	// TODO Copy Expression
-	ns.Fn = s.Fn
+	ns.Fn = s.Fn.Copy().(*ast.ArrowFunctionExpression)
 
 	return ns
 }
