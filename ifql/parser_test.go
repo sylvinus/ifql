@@ -1419,7 +1419,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			t.Parallel()
 			// Set the env var`GO_TAGS=parser_debug` in order
 			// to turn on parser debugging as it is turned off by default.
-			got, err := ifql.NewAST("", []byte(tt.raw))
+			got, err := ifql.NewAST(tt.raw)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ifql.NewAST() error = %v, wantErr %v", err, tt.wantErr)
 				return
