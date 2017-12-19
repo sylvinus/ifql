@@ -123,6 +123,13 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
+func (s *MergeJoinProcedureSpec) ParentChanged(old, new plan.ProcedureID) {
+	if v, ok := s.TableNames[old]; ok {
+		delete(s.TableNames, old)
+		s.TableNames[new] = v
+	}
+}
+
 func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)
 	if !ok {

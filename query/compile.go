@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
@@ -109,6 +110,10 @@ func (d *queryDomain) nextID() int {
 }
 
 func (d *queryDomain) AddParentEdges(id OperationID, parents ...OperationID) {
+	if len(parents) > 1 {
+		// Always add parents in a consistent order
+		sort.Slice(parents, func(i, j int) bool { return parents[i] < parents[j] })
+	}
 	for _, p := range parents {
 		if p != id {
 			d.edges = append(d.edges, Edge{

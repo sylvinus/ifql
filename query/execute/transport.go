@@ -157,6 +157,10 @@ PROCESS:
 
 			// Transition to the finished state.
 			if t.tryTransition(running, finished) {
+				// Call Finish if we have not already
+				if !f {
+					t.t.Finish(m.SrcDatasetID(), err)
+				}
 				// We are finished
 				close(t.finished)
 				return

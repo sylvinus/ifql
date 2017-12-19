@@ -60,6 +60,10 @@ type BoundedProcedureSpec interface {
 	TimeBounds() BoundsSpec
 }
 
+type ParentAwareProcedureSpec interface {
+	ParentChanged(old, new ProcedureID)
+}
+
 // TODO(nathanielc): make this more formal using commute/associative properties
 type PushDownRule struct {
 	Root    ProcedureKind
