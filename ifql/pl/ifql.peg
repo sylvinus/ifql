@@ -1,0 +1,60 @@
+package pl
+
+type parser Peg {
+  types
+}
+
+
+Start
+  <- __ Program __ EOF {
+    p.PushProgram()
+  }
+
+Program
+  <- SourceElements
+
+SourceElements
+  <- (__ SourceElement)+
+
+SourceElement
+  <- Statement
+
+Statement
+  <- VariableDeclaration
+
+
+VariableDeclaration
+  <- __ 'var' __ VariableDeclarator  __ {
+      p.PushVariableDeclaration()
+  }
+
+VariableDeclarator
+  <- Identifier __ '=' __ Expr {
+      p.PushVariableDeclarator()
+    }
+
+Expr
+  <- StringLiteral 
+
+StringLiteral
+  <- < [0-9a-z]+ > {
+    p.PushStringLiteral(buffer[begin:end])
+  }
+
+Identifier
+  <- < 'a' > {
+    p.PushIdentifier(buffer[begin:end])
+  }
+
+# Indicates optional whitespace
+__
+  <- ( ws / EOL )*
+
+ws
+  <- [ \t\r\n]
+
+EOL
+  <- '\n'
+
+EOF
+  <- !.
