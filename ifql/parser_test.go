@@ -49,7 +49,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "declare variable as an int",
-			raw:  `var howdy = 1`,
+			raw:  `howdy = 1`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -63,7 +63,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "declare variable as a float",
-			raw:  `var howdy = 1.1`,
+			raw:  `howdy = 1.1`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -77,7 +77,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "declare variable as an array",
-			raw:  `var howdy = [1, 2, 3, 4]`,
+			raw:  `howdy = [1, 2, 3, 4]`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -98,7 +98,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "use variable to declare something",
-			raw: `var howdy = 1
+			raw: `howdy = 1
 			from()`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -120,7 +120,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "variable is from statement",
-			raw: `var howdy = from()
+			raw: `howdy = from()
 			howdy.count()`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -153,8 +153,8 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "two variables for two froms",
-			raw: `var howdy = from()
-			var doody = from()
+			raw: `howdy = from()
+			doody = from()
 			howdy.count()
 			doody.sum()`,
 			want: &ast.Program{
@@ -242,7 +242,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "map member expressions",
-			raw: `var m = {key1: 1, key2:"value2"}
+			raw: `m = {key1: 1, key2:"value2"}
 			m.key1
 			m["key2"]
 			`,
@@ -284,10 +284,10 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "var as binary expression of other vars",
-			raw: `var a = 1
-            var b = 2
-            var c = a + b
-            var d = a`,
+			raw: `a = 1
+            b = 2
+            c = a + b
+            d = a`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -331,8 +331,8 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "var as unary expression of other vars",
-			raw: `var a = 5
-            var c = -a`,
+			raw: `a = 5
+            c = -a`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -359,8 +359,8 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "var as both binary and unary expressions",
-			raw: `var a = 5
-            var c = 10 * -a`,
+			raw: `a = 5
+            c = 10 * -a`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -391,7 +391,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "unary expressions within logical expression",
-			raw: `var a = 5.0
+			raw: `a = 5.0
             10.0 * -a == -0.5 or a == 6.0`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -433,7 +433,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "expressions with function calls",
-			raw:  `var a = foo() == 10`,
+			raw:  `a = foo() == 10`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -517,7 +517,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function called",
-			raw: `var plusOne = (r) => r + 1
+			raw: `plusOne = (r) => r + 1
 			plusOne(r:5)
 			`,
 			want: &ast.Program{
@@ -561,7 +561,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function return map",
-			raw:  `var toMap = (r) =>({r:r})`,
+			raw:  `toMap = (r) =>({r:r})`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -586,7 +586,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "arrow function called in binary expression",
 			raw: `
-            var plusOne = (r) => r + 1
+            plusOne = (r) => r + 1
             plusOne(r:5) == 6 or die()
 			`,
 			want: &ast.Program{
@@ -640,7 +640,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function as single expression",
-			raw:  `var f = (r) => r["_measurement"] == "cpu"`,
+			raw:  `f = (r) => r["_measurement"] == "cpu"`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -666,8 +666,8 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "arrow function as block",
-			raw: `var f = (r) => { 
-                var m = r["_measurement"]
+			raw: `f = (r) => { 
+                m = r["_measurement"]
                 return m == "cpu"
             }`,
 			want: &ast.Program{
@@ -1079,8 +1079,8 @@ func TestParse(t *testing.T) {
 		{
 			name: "from with join",
 			raw: `
-var a = from(db:"dbA").range(start:-1h)
-var b = from(db:"dbB").range(start:-1h)
+a = from(db:"dbA").range(start:-1h)
+b = from(db:"dbB").range(start:-1h)
 join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -1211,8 +1211,8 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 		},
 		{
 			name: "from with join with complex expression",
-			raw: `var a = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "a").range(start:-1h)
-			var b = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "b").range(start:-1h)
+			raw: `a = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "a").range(start:-1h)
+			b = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "b").range(start:-1h)
 			join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_field"])`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -1435,9 +1435,9 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 }
 
 var benchmarkQuery = []byte(`
-var start = -10s
+start = -10s
 
-var do = (cpu) =>
+do = (cpu) =>
     from(db:"telegraf")
         .filter(fn: (r) =>
              r["_measurement"] == "cpu"
@@ -1445,8 +1445,8 @@ var do = (cpu) =>
              r["cpu"] == cpu)
         .range(start:start)
 
-var cpu0 = do(cpu:"cpu0")
-var cpu1 = do(cpu:"cpu1")
+cpu0 = do(cpu:"cpu0")
+cpu1 = do(cpu:"cpu1")
 
 join(
     tables:[cpu0, cpu1],
