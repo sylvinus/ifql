@@ -17,7 +17,6 @@ type CovarianceOpSpec struct {
 }
 
 func init() {
-	query.RegisterBuiltIn(covarianceBuiltIn)
 	query.RegisterMethod(CovarianceKind, createCovarianceOpSpec)
 	query.RegisterOpSpec(CovarianceKind, newCovarianceOp)
 	plan.RegisterProcedureSpec(CovarianceKind, newCovarianceProcedure, CovarianceKind)

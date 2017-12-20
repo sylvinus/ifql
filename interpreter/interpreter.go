@@ -1,33 +1,79 @@
 package interpreter
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/pkg/errors"
 )
 
-func Eval(program *ast.Program, scope *Scope, d Domain) error {
+func Eval(program *ast.Program, scope *Scope, d Domain, imp Importer) error {
 	itrp := interpreter{
-		d: d,
+		d:   d,
+		imp: imp,
 	}
 	return itrp.eval(program, scope)
+}
+
+type Importer interface {
+	Import(path, dir string) (Package, error)
+}
+
+type Package interface {
+	Name() string
+	Path() string
+
+	Complete() bool
+	Scope() *Scope
+	SetScope(scope *Scope)
+
+	Program() *ast.Program
 }
 
 // Domain represents any specific domain being used during evaluation.
 type Domain interface{}
 
 type interpreter struct {
-	d Domain
+	imp Importer
+	d   Domain
 }
 
 func (itrp interpreter) eval(program *ast.Program, scope *Scope) error {
+	for _, imp := range program.Imports {
+		if err := itrp.doImport(imp, scope); err != nil {
+			return err
+		}
+	}
 	for _, stmt := range program.Body {
 		if err := itrp.doStatement(stmt, scope); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+func (itrp interpreter) doImport(imp *ast.ImportDeclaration, scope *Scope) error {
+	p, err := itrp.imp.Import(imp.Path.Value, ".")
+	if err != nil {
+		return errors.Wrapf(err, "failed to import %q", imp.Path.Value)
+	}
+	if !p.Complete() {
+		s := scope.Nest()
+		if err := itrp.eval(p.Program(), s); err != nil {
+			return err
+		}
+		p.SetScope(s)
+	}
+	name := p.Name()
+	if imp.As != nil {
+		name = imp.As.Name
+	}
+	scope.Set(name, PackageValue{p: p})
 	return nil
 }
 
@@ -90,14 +136,13 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 	case *ast.Identifier:
 		value, ok := scope.Lookup(e.Name)
 		if !ok {
-			return nil, fmt.Errorf("undefined identifier %q", e.Name)
+			return nil, fmt.Errorf("undefined identifier %q %v", e.Name, scope)
 		}
 		return value, nil
 	case *ast.CallExpression:
 		v, err := itrp.callFunction(e, scope)
 		if err != nil {
-			// Determine function name
-			return nil, errors.Wrapf(err, "error calling funcion %q", functionName(e))
+			return nil, errors.Wrapf(err, "error calling function %q", functionName(e))
 		}
 		return v, nil
 	case *ast.MemberExpression:
@@ -198,7 +243,7 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 			t: TFunction,
 			v: arrowFunc{
 				e:     e,
-				scope: scope.Nest(),
+				scope: scope.Copy(),
 			},
 		}, nil
 	default:
@@ -417,6 +462,68 @@ func (s *Scope) Nest() *Scope {
 	return c
 }
 
+// Copy returns a copy of the scope.
+// The return value is not copied as the copy operation is not supported generally.
+func (s *Scope) Copy() *Scope {
+	c := NewScope()
+	for k, v := range s.values {
+		c.values[k] = v
+	}
+	if s.parent != nil {
+		c.parent = s.parent.Copy()
+	}
+	return c
+}
+
+func (s *Scope) String() string {
+	var buf bytes.Buffer
+	s.WriteTo(&buf, 0, true, true)
+	return buf.String()
+}
+
+func (s *Scope) WriteTo(w io.Writer, n int, recurse, terminate bool) int {
+	const ind = ".  "
+	if recurse {
+		if s.parent != nil {
+			n = s.parent.WriteTo(w, n, recurse, false)
+			n++
+		}
+		fmt.Fprintln(w)
+	}
+
+	indn := strings.Repeat(ind, n)
+
+	fmt.Fprintf(w, "%sscope %p {", indn, s)
+
+	indn1 := indn + ind
+	keys := make([]string, 0, len(s.values))
+
+	for k := range s.values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Fprintln(w)
+		v := s.values[k]
+		fmt.Fprintf(w, "%s%s=%v: %v", indn1, k, v.Type(), v.Value())
+	}
+
+	if terminate {
+		fmt.Fprintf(w, "\n%s}", indn)
+		if recurse {
+			p := s.parent
+			for p != nil && n > 0 {
+				p = p.parent
+				n--
+				fmt.Fprintf(w, "\n%s}", strings.Repeat(ind, n))
+			}
+		}
+	}
+
+	return n
+}
+
 // Value represents any value that can be the result of evaluating any expression.
 type Value interface {
 	// Type reports the type of value
@@ -457,6 +564,7 @@ const (
 	TFunction             // Go type Function
 	TArray                // Go type Array
 	TMap                  // Go type Map
+	TPackage              // Go type PackageValue
 	endBuiltInTypes
 )
 
@@ -540,6 +648,8 @@ func (t Type) String() string {
 		return "array"
 	case TMap:
 		return "map"
+	case TPackage:
+		return "package"
 	default:
 		name, ok := extraTypesLookup[t]
 		if !ok {
@@ -562,6 +672,19 @@ type arrowFunc struct {
 	call  func(Arguments, Domain) (Value, error)
 
 	itrp interpreter
+}
+
+func (f arrowFunc) String() string {
+	var buf bytes.Buffer
+	buf.WriteRune('(')
+	for i, p := range f.e.Params {
+		if i != 0 {
+			buf.WriteRune(',')
+		}
+		fmt.Fprintf(&buf, p.Key.Name)
+	}
+	fmt.Fprintf(&buf, ") => ... scope: %p", f.scope)
+	return buf.String()
 }
 
 func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
@@ -851,7 +974,25 @@ func (m Map) Property(name string) (Value, error) {
 	if ok {
 		return v, nil
 	}
-	return nil, fmt.Errorf("property %q does not exist", name)
+	return nil, fmt.Errorf("property %q does not exist in map", name)
+}
+
+type PackageValue struct {
+	p Package
+}
+
+func (pv PackageValue) Type() Type {
+	return TPackage
+}
+func (pv PackageValue) Value() interface{} {
+	return pv.p
+}
+func (pv PackageValue) Property(name string) (Value, error) {
+	v, ok := pv.p.Scope().Lookup(name)
+	if !ok {
+		return nil, fmt.Errorf("property %q does not exist in package %q", name, pv.p.Name())
+	}
+	return v, nil
 }
 
 // Arguments provides access to the keyword arguments passed to a function.
@@ -1448,4 +1589,11 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		r := rv.Value().(float64)
 		return NewBoolValue(l != r)
 	},
+}
+
+func positionStr(p ast.Position) string {
+	return fmt.Sprintf("at line %d and column %d", p.Line, p.Column)
+}
+func sourceSnippet(loc *ast.SourceLocation) string {
+	return fmt.Sprintf("in %q", *loc.Source)
 }

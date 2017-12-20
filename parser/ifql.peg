@@ -11,21 +11,48 @@ Start
     }
 
 Program
-  = body:SourceElements {
-      return program(body, c.text, c.pos)
+  = pkg:PackageDeclaration? __ imprts:Imports  __ body:Statements {
+      return program(pkg, imprts, body, c.text, c.pos)
     }
 
-SourceElements
-  = head:SourceElement tail:(__ SourceElement __)* {
-      return srcElems(head, tail)
+PackageDeclaration
+  = "package" __ name:Identifier {
+      return packageDecl(name, c.text, c.pos)
     }
 
-SourceElement
-  = Statement
+Imports
+  = imprts:(__ ImportDeclaration __)* {
+      return imports(imprts)
+    }
+
+ImportDeclaration
+  = "import" __ path:StringLiteral __ version:VersionDeclaration? __ as:("as" __ Identifier)? {
+      return importDecl(path, version, as, c.text, c.pos)
+    }
+
+VersionDeclaration
+  = op:VersionOperator num:VersionNumber {
+      return versionDecl(op, num, c.text, c.pos)
+    }
+
+VersionOperator
+  = ("=" / "~" / "^") {
+      return versionOp(c.text)
+    }
+
+VersionNumber
+  =  "v"? Digit+ "." Digit+ "." Digit+ {
+      return versionNumber(c.text, c.pos)
+    }
+
+Statements
+  = stmts:(__ Statement __ )* {
+      return statements(stmts)
+    }
 
 Statement
   = VariableStatement
-  / ReturnStatement 
+  / ReturnStatement
   / ExpressionStatement
   / BlockStatement
 
@@ -51,7 +78,7 @@ BlockStatement
   }
 
 VariableDeclaration
-  = id:Identifier __ "=" __ init:Expr {
+  = __ id:Identifier __ "=" __ init:Expr  __ {
       return vardecl(id, init, c.text, c.pos)
     }
 
@@ -346,6 +373,7 @@ Duration
   = SingleDuration+ {
       return durationLiteral(c.text, c.pos)
     }
+
 
 StringLiteral
   = ( '"' DoubleStringChar* '"' ) {

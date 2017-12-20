@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -44,11 +45,11 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := interpreter.Eval(program, scope, d); err != nil {
+	if err := interpreter.Eval(program, scope, d, interpreter.NewFileImporter()); err != nil {
 		return nil, err
 	}
 	spec := d.ToSpec()
-	//log.Println(Formatted(spec, FmtJSON))
+	log.Println(Formatted(spec, FmtJSON))
 	return spec, nil
 }
 
@@ -93,7 +94,7 @@ func RegisterBuiltIn(script string) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := interpreter.Eval(program, builtinScope, d); err != nil {
+	if err := interpreter.Eval(program, builtinScope, d, interpreter.NewFileImporter()); err != nil {
 		panic(err)
 	}
 }
@@ -198,6 +199,10 @@ type function struct {
 
 func (f function) Type() interpreter.Type {
 	return interpreter.TFunction
+}
+
+func (f function) String() string {
+	return fmt.Sprintf("%s()", f.name)
 }
 
 func (f function) Value() interface{} {

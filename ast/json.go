@@ -23,13 +23,29 @@ func (p *Program) UnmarshalJSON(data []byte) error {
 	type Alias Program
 	raw := struct {
 		*Alias
-		Body []json.RawMessage `json:"body"`
+		Imports []json.RawMessage `json:"imports"`
+		Body    []json.RawMessage `json:"body"`
 	}{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	if raw.Alias != nil {
 		*p = *(*Program)(raw.Alias)
+	}
+
+	if len(raw.Imports) > 0 {
+		p.Imports = make([]*ImportDeclaration, len(raw.Imports))
+		for i, r := range raw.Imports {
+			n, err := unmarshalNode(r)
+			if err != nil {
+				return err
+			}
+			id, ok := n.(*ImportDeclaration)
+			if !ok {
+				return fmt.Errorf("unexpected import node", n)
+			}
+			p.Imports[i] = id
+		}
 	}
 
 	p.Body = make([]Statement, len(raw.Body))
@@ -41,6 +57,58 @@ func (p *Program) UnmarshalJSON(data []byte) error {
 		p.Body[i] = s
 	}
 	return nil
+}
+func (d *PackageDeclaration) MarshalJSON() ([]byte, error) {
+	type Alias PackageDeclaration
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  d.Type(),
+		Alias: (*Alias)(d),
+	}
+	return json.Marshal(raw)
+}
+func (d *ImportDeclaration) MarshalJSON() ([]byte, error) {
+	type Alias ImportDeclaration
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  d.Type(),
+		Alias: (*Alias)(d),
+	}
+	return json.Marshal(raw)
+}
+func (d *VersionDeclaration) MarshalJSON() ([]byte, error) {
+	type Alias VersionDeclaration
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  d.Type(),
+		Alias: (*Alias)(d),
+	}
+	return json.Marshal(raw)
+}
+func (o *VersionOperatorKind) UnmarshalText(data []byte) error {
+	var ok bool
+	*o, ok = versionOperators[string(data)]
+	if !ok {
+		return fmt.Errorf("unknown operator %q", string(data))
+	}
+	return nil
+}
+func (n *VersionNumber) MarshalJSON() ([]byte, error) {
+	type Alias VersionNumber
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  n.Type(),
+		Alias: (*Alias)(n),
+	}
+	return json.Marshal(raw)
 }
 func (s *BlockStatement) MarshalJSON() ([]byte, error) {
 	type Alias BlockStatement
@@ -771,6 +839,14 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 	switch typ.Type {
 	case "Program":
 		node = new(Program)
+	case "PackageDeclaration":
+		node = new(PackageDeclaration)
+	case "ImportDeclaration":
+		node = new(ImportDeclaration)
+	case "VersionDeclaration":
+		node = new(VersionDeclaration)
+	case "VersionNumber":
+		node = new(VersionNumber)
 	case "BlockStatement":
 		node = new(BlockStatement)
 	case "ExpressionStatement":
