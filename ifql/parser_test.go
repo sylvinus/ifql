@@ -1429,6 +1429,115 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			},
 		},
 		{
+			name: "import simple",
+			raw: `
+import "boolean" 1.0.0
+boolean.true
+`,
+			want: &ast.Program{
+				Imports: []*ast.ImportDeclaration{
+					{
+						Path: &ast.StringLiteral{Value: "boolean"},
+						Version: &ast.VersionDeclaration{
+							Operator: ast.ExactMatchOperator,
+							Number: &ast.VersionNumber{
+								Literal: "1.0.0",
+								Major:   1,
+								Minor:   0,
+								Patch:   0,
+							},
+						},
+					},
+				},
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.MemberExpression{
+							Object:   &ast.Identifier{Name: "boolean"},
+							Property: &ast.Identifier{Name: "true"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "imports",
+			raw: `
+import "a" =1.0.1
+import "b" ~1.0.0
+import "c" ^2.3.10
+import "d"
+import "e" =v3.2.1 as f
+
+from()
+`,
+			want: &ast.Program{
+				Imports: []*ast.ImportDeclaration{
+					{
+						Path: &ast.StringLiteral{Value: "a"},
+						Version: &ast.VersionDeclaration{
+							Operator: ast.ExactMatchOperator,
+							Number: &ast.VersionNumber{
+								Literal: "1.0.1",
+								Major:   1,
+								Minor:   0,
+								Patch:   1,
+							},
+						},
+					},
+					{
+						Path: &ast.StringLiteral{Value: "b"},
+						Version: &ast.VersionDeclaration{
+							Operator: ast.PatchMatchOperator,
+							Number: &ast.VersionNumber{
+								Literal: "1.0.0",
+								Major:   1,
+								Minor:   0,
+								Patch:   0,
+							},
+						},
+					},
+					{
+						Path: &ast.StringLiteral{Value: "c"},
+						Version: &ast.VersionDeclaration{
+							Operator: ast.MinorMatchOperator,
+							Number: &ast.VersionNumber{
+								Literal: "2.3.10",
+								Major:   2,
+								Minor:   3,
+								Patch:   10,
+							},
+						},
+					},
+					{
+						Path:    &ast.StringLiteral{Value: "d"},
+						Version: nil,
+					},
+					{
+						Path: &ast.StringLiteral{Value: "e"},
+						Version: &ast.VersionDeclaration{
+							Operator: ast.ExactMatchOperator,
+							Number: &ast.VersionNumber{
+								Literal: "v3.2.1",
+								Major:   3,
+								Minor:   2,
+								Patch:   1,
+							},
+						},
+						As: &ast.Identifier{Name: "f"},
+					},
+				},
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "from",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:    "parse error extra gibberish",
 			raw:     `from(db:"ifql") &^*&H#IUJBN`,
 			wantErr: true,

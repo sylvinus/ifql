@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/ast"
+	"github.com/pkg/errors"
 )
 
 func toIfaceSlice(v interface{}) []interface{} {
@@ -16,18 +17,102 @@ func toIfaceSlice(v interface{}) []interface{} {
 	return v.([]interface{})
 }
 
-func program(body interface{}, text []byte, pos position) (*ast.Program, error) {
+func program(imports, body interface{}, text []byte, pos position) (*ast.Program, error) {
 	return &ast.Program{
+		Imports:  imports.([]*ast.ImportDeclaration),
 		Body:     body.([]ast.Statement),
 		BaseNode: base(text, pos),
 	}, nil
 }
 
-func srcElems(head, tails interface{}) ([]ast.Statement, error) {
-	elems := []ast.Statement{head.(ast.Statement)}
-	for _, tail := range toIfaceSlice(tails) {
-		elem := toIfaceSlice(tail)[1] // Skip whitespace
-		elems = append(elems, elem.(ast.Statement))
+func packageDecl(name interface{}, text []byte, pos position) (*ast.PackageDeclaration, error) {
+	return &ast.PackageDeclaration{
+		ID:       name.(*ast.Identifier),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func imports(imprts interface{}) ([]*ast.ImportDeclaration, error) {
+	list := toIfaceSlice(imprts)
+	if len(list) == 0 {
+		return nil, nil
+	}
+	elems := make([]*ast.ImportDeclaration, len(list))
+	for i, s := range list {
+		elems[i] = toIfaceSlice(s)[1].(*ast.ImportDeclaration)
+	}
+	return elems, nil
+}
+
+func importDecl(path, version, as interface{}, text []byte, pos position) (*ast.ImportDeclaration, error) {
+	var asIdent *ast.Identifier
+	if as != nil {
+		asIdent = toIfaceSlice(as)[2].(*ast.Identifier)
+	}
+	var versionDecl *ast.VersionDeclaration
+	if version != nil {
+		versionDecl = version.(*ast.VersionDeclaration)
+	}
+	return &ast.ImportDeclaration{
+		Path:     path.(*ast.StringLiteral),
+		Version:  versionDecl,
+		As:       asIdent,
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func versionDecl(op, num interface{}, text []byte, pos position) (*ast.VersionDeclaration, error) {
+	vop := ast.ExactMatchOperator
+	if op != nil {
+		vop = op.(ast.VersionOperatorKind)
+	}
+
+	return &ast.VersionDeclaration{
+		Operator: vop,
+		Number:   num.(*ast.VersionNumber),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func versionNumber(text []byte, pos position) (*ast.VersionNumber, error) {
+	vStr := string(text)
+	if vStr[0] == 'v' {
+		vStr = vStr[1:]
+	}
+	var version [3]int
+	for i := range version {
+		n := strings.IndexRune(vStr, '.')
+		if n == -1 {
+			n = len(vStr)
+		}
+		v, err := strconv.ParseInt(vStr[:n], 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid version")
+		}
+		version[i] = int(v)
+		if n < len(vStr) {
+			vStr = vStr[n+1:]
+		}
+	}
+
+	return &ast.VersionNumber{
+		Literal:  string(text),
+		Major:    version[0],
+		Minor:    version[1],
+		Patch:    version[2],
+		BaseNode: base(text, pos),
+	}, nil
+}
+
+func versionOp(text []byte) (ast.VersionOperatorKind, error) {
+	return ast.VersionOperatorLookup(string(text)), nil
+}
+
+func statements(stmts interface{}) ([]ast.Statement, error) {
+	list := toIfaceSlice(stmts)
+	elems := make([]ast.Statement, len(list))
+	for i, s := range list {
+		elems[i] = toIfaceSlice(s)[1].(ast.Statement)
 	}
 	return elems, nil
 }

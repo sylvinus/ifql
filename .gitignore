@@ -4,3 +4,5 @@
 /dist/
 ifqld.id
 .*.swp
+ifql_pkgs
+/*.ifql

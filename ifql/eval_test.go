@@ -3,6 +3,7 @@ package ifql_test
 import (
 	"errors"
 	"fmt"
+	"path"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -139,6 +140,29 @@ func TestEval(t *testing.T) {
             not m.b or fail()
 			`,
 		},
+		{
+			name: "import",
+			query: `
+            import "boolean" 1.0.0
+            boolean.true or fail()
+            boolean.false and fail()
+			`,
+		},
+		{
+			name: "import as",
+			query: `
+            import "boolean" 1.0.0 as b
+            b.true or fail()
+            b.false and fail()
+			`,
+		},
+		{
+			name: "import err",
+			query: `
+            import "nonexistant" 1.0.0
+			`,
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -149,7 +173,7 @@ func TestEval(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = ifql.Eval(program, testScope.Nest(), nil)
+			err = ifql.Eval(program, testScope.Nest(), nil, testImporter{})
 			if !tc.wantErr && err != nil {
 				t.Fatal(err)
 			} else if tc.wantErr && err == nil {
@@ -157,8 +181,53 @@ func TestEval(t *testing.T) {
 			}
 		})
 	}
-
 }
+
+type testImporter struct{}
+
+func (i testImporter) Import(importPath, dir string) (ifql.Package, error) {
+	scope := ifql.NewScope()
+	// Define some test packages to import
+	switch importPath {
+	case "boolean":
+		scope.Set("true", ifql.NewBoolValue(true))
+		scope.Set("false", ifql.NewBoolValue(false))
+	default:
+		return nil, fmt.Errorf("unknown package %q", importPath)
+	}
+	return &pkg{
+		name:  path.Base(importPath),
+		path:  importPath,
+		scope: scope,
+	}, nil
+}
+
+type pkg struct {
+	name  string
+	path  string
+	scope *ifql.Scope
+}
+
+func (p *pkg) Name() string {
+	return p.name
+}
+func (p *pkg) Path() string {
+	return p.path
+}
+func (p *pkg) Scope() *ifql.Scope {
+	return p.scope
+}
+func (p *pkg) SetScope(s *ifql.Scope) {
+	p.scope = s
+}
+
+func (p *pkg) Complete() bool {
+	return true
+}
+func (p *pkg) Program() *ast.Program {
+	return nil
+}
+
 func TestFunction_Resolve(t *testing.T) {
 	var got *ast.ArrowFunctionExpression
 	scope := ifql.NewScope()
@@ -185,7 +254,7 @@ func TestFunction_Resolve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ifql.Eval(program, scope, nil); err != nil {
+	if err := ifql.Eval(program, scope, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

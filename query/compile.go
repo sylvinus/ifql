@@ -11,10 +11,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-const (
-	parentTableArg = "table"
-)
-
 // Compile parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
 func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
@@ -32,7 +28,7 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) 
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := ifql.Eval(program, scope, d); err != nil {
+	if err := ifql.Eval(program, scope, d, ifql.NewFileImporter()); err != nil {
 		return nil, err
 	}
 	spec := d.ToSpec()
@@ -81,7 +77,7 @@ func RegisterBuiltIn(script string) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := ifql.Eval(program, builtinScope, d); err != nil {
+	if err := ifql.Eval(program, builtinScope, d, ifql.NewFileImporter()); err != nil {
 		panic(err)
 	}
 }
@@ -182,6 +178,10 @@ type function struct {
 	createOpSpec CreateOperationSpec
 	chainable    bool
 	parentID     OperationID
+}
+
+func (f function) String() string {
+	return fmt.Sprintf("%s()", f.name)
 }
 
 func (f function) Type() ifql.Type {

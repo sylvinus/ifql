@@ -33,6 +33,11 @@ type Node interface {
 
 func (*Program) node() {}
 
+func (*PackageDeclaration) node() {}
+func (*ImportDeclaration) node()  {}
+func (*VersionDeclaration) node() {}
+func (*VersionNumber) node()      {}
+
 func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
 func (*ReturnStatement) node()     {}
@@ -72,7 +77,8 @@ func (b *BaseNode) Location() *SourceLocation { return b.Loc }
 // Program represents a complete program source tree
 type Program struct {
 	*BaseNode
-	Body []Statement `json:"body"`
+	Imports []*ImportDeclaration `json:"imports,omitempty"`
+	Body    []Statement          `json:"body"`
 }
 
 // Type is the abstract type
@@ -81,6 +87,12 @@ func (*Program) Type() string { return "Program" }
 func (p *Program) Copy() Node {
 	np := new(Program)
 	*np = *p
+	if len(p.Imports) > 0 {
+		np.Imports = make([]*ImportDeclaration, len(p.Body))
+		for i, s := range p.Imports {
+			np.Imports[i] = s.Copy().(*ImportDeclaration)
+		}
+	}
 	if len(p.Body) > 0 {
 		np.Body = make([]Statement, len(p.Body))
 		for i, s := range p.Body {
@@ -88,6 +100,108 @@ func (p *Program) Copy() Node {
 		}
 	}
 	return np
+}
+
+// PackageDeclaration represents a complete program source tree
+type PackageDeclaration struct {
+	*BaseNode
+	ID *Identifier `json:"id"`
+}
+
+// Type is the abstract type
+func (*PackageDeclaration) Type() string { return "PackageDeclaration" }
+
+func (d *PackageDeclaration) Copy() Node {
+	nd := new(PackageDeclaration)
+	*nd = *d
+	nd.ID = d.ID.Copy().(*Identifier)
+	return nd
+}
+
+// ImportDeclaration represents a complete program source tree
+type ImportDeclaration struct {
+	*BaseNode
+	Path    *StringLiteral      `json:"path"`
+	Version *VersionDeclaration `json:"version"`
+	As      *Identifier         `json:"as,omitempty"`
+}
+
+// Type is the abstract type
+func (*ImportDeclaration) Type() string { return "ImportDeclaration" }
+
+func (d *ImportDeclaration) Copy() Node {
+	nd := new(ImportDeclaration)
+	*nd = *d
+	nd.Path = d.Path.Copy().(*StringLiteral)
+	nd.Version = d.Version.Copy().(*VersionDeclaration)
+	nd.As = d.As.Copy().(*Identifier)
+	return nd
+}
+
+type VersionOperatorKind int
+
+const (
+	versionOpBegin VersionOperatorKind = iota
+	ExactMatchOperator
+	PatchMatchOperator
+	MinorMatchOperator
+	versionOpEnd
+)
+
+// VersionOperatorTokens converts VersionOperatorKind to string
+var VersionOperatorTokens = map[VersionOperatorKind]string{
+	ExactMatchOperator: "=",
+	PatchMatchOperator: "~",
+	MinorMatchOperator: "^",
+}
+
+func (o VersionOperatorKind) String() string {
+	return VersionOperatorTokens[o]
+}
+func (o VersionOperatorKind) MarshalText() ([]byte, error) {
+	text, ok := VersionOperatorTokens[o]
+	if !ok {
+		return nil, fmt.Errorf("unknown version operator %d", int(o))
+	}
+	return []byte(text), nil
+}
+
+// VersionOperatorLookup converts the operators to VersionOperatorKind
+func VersionOperatorLookup(op string) VersionOperatorKind {
+	return versionOperators[op]
+}
+
+type VersionDeclaration struct {
+	*BaseNode
+	Operator VersionOperatorKind `json:"operator"`
+	Number   *VersionNumber      `json:"number"`
+}
+
+// Type is the abstract type
+func (*VersionDeclaration) Type() string { return "VersionDeclaration" }
+
+func (d *VersionDeclaration) Copy() Node {
+	nd := new(VersionDeclaration)
+	*nd = *d
+	nd.Number = d.Number.Copy().(*VersionNumber)
+	return nd
+}
+
+type VersionNumber struct {
+	*BaseNode
+	Literal string `json:"literal"`
+	Major   int    `json:"major"`
+	Minor   int    `json:"minor"`
+	Patch   int    `json:"pamatchtch"`
+}
+
+// Type is the abstract type
+func (*VersionNumber) Type() string { return "VersionNumber" }
+
+func (n *VersionNumber) Copy() Node {
+	nn := new(VersionNumber)
+	*nn = *n
+	return nn
 }
 
 // Statement Perhaps we don't even want statements nor expression statements
@@ -796,6 +910,7 @@ var LogicalOperatorTokens = map[LogicalOperatorKind]string{
 
 var operators map[string]OperatorKind
 var logOperators map[string]LogicalOperatorKind
+var versionOperators map[string]VersionOperatorKind
 
 func init() {
 	operators = make(map[string]OperatorKind)
@@ -806,5 +921,10 @@ func init() {
 	logOperators = make(map[string]LogicalOperatorKind)
 	for op := logOpBegin + 1; op < logOpEnd; op++ {
 		logOperators[LogicalOperatorTokens[op]] = op
+	}
+
+	versionOperators = make(map[string]VersionOperatorKind)
+	for op := versionOpBegin + 1; op < versionOpEnd; op++ {
+		versionOperators[VersionOperatorTokens[op]] = op
 	}
 }

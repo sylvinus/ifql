@@ -24,15 +24,17 @@ type JoinOpSpec struct {
 	// Fn is a function accepting a single parameter.
 	// The parameter is map if records for each of the parent operations.
 	Fn *ast.ArrowFunctionExpression `json:"fn"`
-	// TableNames are the names to give to each parent when populating the parameter for the function.
-	// The first parent is referenced by the first name and so forth.
-	// TODO(nathanielc): Change this to a map of parent operation IDs to names.
-	// Then make it possible for the transformation to map operation IDs to parent IDs.
+	// TableNames is a mapping of operation ID to table name for each parent.
 	TableNames map[query.OperationID]string `json:"table_names"`
 }
 
 func init() {
 	query.RegisterFunction(JoinKind, createJoinOpSpec)
+
+	// The covarianceBuiltIn requires that join be defined
+	// TODO(nathanielc): Make it so RegisterBuiltIn order doesn't matter
+	query.RegisterBuiltIn(covarianceBuiltIn)
+
 	query.RegisterOpSpec(JoinKind, newJoinOp)
 	//TODO(nathanielc): Allow for other types of join implementations
 	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)

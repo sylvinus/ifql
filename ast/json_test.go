@@ -221,6 +221,30 @@ func TestJSONMarshal(t *testing.T) {
 			},
 			want: `{"type":"DateTimeLiteral","value":"2017-08-08T08:08:08.000000008Z"}`,
 		},
+		{
+			name: "package declaration",
+			node: &ast.PackageDeclaration{
+				ID: &ast.Identifier{Name: "foo"},
+			},
+			want: `{"type":"PackageDeclaration","id":{"type":"Identifier","name":"foo"}}`,
+		},
+		{
+			name: "import declaration",
+			node: &ast.ImportDeclaration{
+				Path: &ast.StringLiteral{Value: "foo"},
+				Version: &ast.VersionDeclaration{
+					Operator: ast.ExactMatchOperator,
+					Number: &ast.VersionNumber{
+						Literal: "v1.1.1",
+						Major:   1,
+						Minor:   1,
+						Patch:   1,
+					},
+				},
+				As: &ast.Identifier{Name: "bar"},
+			},
+			want: `{"type":"ImportDeclaration","path":{"type":"StringLiteral","value":"foo"},"version":{"type":"VersionDeclaration","operator":"=","number":{"type","literal":"v1.1.1","major":1,"minor":1,"patch":1}}}`,
+		},
 	}
 	for _, tc := range testCases {
 		tc := tc
