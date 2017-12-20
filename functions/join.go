@@ -2,6 +2,7 @@ package functions
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"sync"
@@ -140,22 +141,22 @@ func createMergeJoinTransformation(id execute.DatasetID, mode execute.Accumulati
 		//TODO(nathanielc): Support n-way joins
 		return nil, nil, errors.New("joins currently must only have two parents")
 	}
-	leftID := parents[0]
-	rightID := parents[1]
 
 	tableNames := make(map[execute.DatasetID]string, len(s.TableNames))
 	for pid, name := range s.TableNames {
 		id := a.ConvertID(pid)
 		tableNames[id] = name
 	}
+	leftName := tableNames[parents[0]]
+	rightName := tableNames[parents[1]]
 
-	joinFn, err := NewJoinFunction(s.Fn, parents, tableNames)
+	joinFn, err := NewRowJoinFunction(s.Fn, parents, tableNames)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := NewMergeJoinCache(joinFn, a.Allocator(), leftID, rightID)
+	cache := NewMergeJoinCache(joinFn, a.Allocator(), leftName, rightName)
 	d := execute.NewDataset(id, mode, cache)
-	t := NewMergeJoinTransformation(d, cache, s, parents)
+	t := NewMergeJoinTransformation(d, cache, s, parents, tableNames)
 	return t, d, nil
 }
 
@@ -167,21 +168,23 @@ type mergeJoinTransformation struct {
 	d     execute.Dataset
 	cache MergeJoinCache
 
-	leftID  execute.DatasetID
-	rightID execute.DatasetID
+	leftID, rightID     execute.DatasetID
+	leftName, rightName string
 
 	parentState map[execute.DatasetID]*mergeJoinParentState
 
 	keys []string
 }
 
-func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec, parents []execute.DatasetID) *mergeJoinTransformation {
+func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec, parents []execute.DatasetID, tableNames map[execute.DatasetID]string) *mergeJoinTransformation {
 	t := &mergeJoinTransformation{
-		d:       d,
-		cache:   cache,
-		keys:    spec.On,
-		leftID:  parents[0],
-		rightID: parents[1],
+		d:         d,
+		cache:     cache,
+		keys:      spec.On,
+		leftID:    parents[0],
+		rightID:   parents[1],
+		leftName:  tableNames[parents[0]],
+		rightName: tableNames[parents[1]],
 	}
 	t.parentState = make(map[execute.DatasetID]*mergeJoinParentState)
 	for _, id := range parents {
@@ -245,8 +248,8 @@ func (t *mergeJoinTransformation) addNewCols(b execute.Block, builder execute.Bl
 	colMap := make([]int, len(existing))
 	for j, c := range cols {
 		// Skip common tags or tags that are not one of the join keys.
-		if c.IsTag {
-			if c.IsCommon {
+		if c.IsTag() {
+			if c.Common {
 				continue
 			}
 			found := false
@@ -335,20 +338,20 @@ type mergeJoinCache struct {
 	data  map[execute.BlockKey]*joinTables
 	alloc *execute.Allocator
 
-	leftID, rightID execute.DatasetID
+	leftName, rightName string
 
 	triggerSpec query.TriggerSpec
 
 	joinFn *joinFunc
 }
 
-func NewMergeJoinCache(joinFn *joinFunc, a *execute.Allocator, leftID, rightID execute.DatasetID) *mergeJoinCache {
+func NewMergeJoinCache(joinFn *joinFunc, a *execute.Allocator, leftName, rightName string) *mergeJoinCache {
 	return &mergeJoinCache{
-		data:    make(map[execute.BlockKey]*joinTables),
-		joinFn:  joinFn,
-		alloc:   a,
-		leftID:  leftID,
-		rightID: rightID,
+		data:      make(map[execute.BlockKey]*joinTables),
+		joinFn:    joinFn,
+		alloc:     a,
+		leftName:  leftName,
+		rightName: rightName,
 	}
 }
 
@@ -393,15 +396,15 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 	tables := c.data[key]
 	if tables == nil {
 		tables = &joinTables{
-			tags:    bm.Tags(),
-			bounds:  bm.Bounds(),
-			alloc:   c.alloc,
-			left:    execute.NewColListBlockBuilder(c.alloc),
-			right:   execute.NewColListBlockBuilder(c.alloc),
-			leftID:  c.leftID,
-			rightID: c.rightID,
-			trigger: execute.NewTriggerFromSpec(c.triggerSpec),
-			joinFn:  c.joinFn.Copy(),
+			tags:      bm.Tags(),
+			bounds:    bm.Bounds(),
+			alloc:     c.alloc,
+			left:      execute.NewColListBlockBuilder(c.alloc),
+			right:     execute.NewColListBlockBuilder(c.alloc),
+			leftName:  c.leftName,
+			rightName: c.rightName,
+			trigger:   execute.NewTriggerFromSpec(c.triggerSpec),
+			joinFn:    c.joinFn,
 		}
 		tables.left.AddCol(execute.TimeCol)
 		tables.right.AddCol(execute.TimeCol)
@@ -416,8 +419,8 @@ type joinTables struct {
 
 	alloc *execute.Allocator
 
-	left, right     *execute.ColListBlockBuilder
-	leftID, rightID execute.DatasetID
+	left, right         *execute.ColListBlockBuilder
+	leftName, rightName string
 
 	trigger execute.Trigger
 
@@ -441,45 +444,44 @@ func (t *joinTables) ClearData() {
 
 // Join performs a sort-merge join
 func (t *joinTables) Join() (execute.Block, error) {
-	// First determine new value type
-	newType, err := t.joinFn.Compile(map[execute.DatasetID]execute.DataType{
-		t.leftID:  execute.ValueCol(t.left.Cols()).Type,
-		t.rightID: execute.ValueCol(t.right.Cols()).Type,
+	// First prepare the join function
+	left := t.left.RawBlock()
+	right := t.right.RawBlock()
+	err := t.joinFn.Prepare(map[string]*execute.ColListBlock{
+		t.leftName:  left,
+		t.rightName: right,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to compile join function")
+		return nil, errors.Wrap(err, "failed to prepare join function")
 	}
 	// Create a builder to the result of the join
 	builder := execute.NewColListBlockBuilder(t.alloc)
 	builder.SetBounds(t.bounds)
 	builder.AddCol(execute.TimeCol)
-	builder.AddCol(execute.ColMeta{
-		Label: execute.ValueColLabel,
-		Type:  newType,
-	})
+
+	// Add new value columns
+	meta := t.joinFn.MapMeta()
+	for _, p := range meta.Properties {
+		builder.AddCol(execute.ColMeta{
+			Label: p.Key,
+			Type:  p.Type,
+			Kind:  execute.ValueColKind,
+		})
+	}
+
+	// Add common tags
 	execute.AddTags(t.tags, builder)
+
 	// Add non common tags
 	cols := t.left.Cols()
 	for _, c := range cols {
-		if c.IsTag {
+		if c.IsTag() && !c.Common {
 			builder.AddCol(c)
 		}
 	}
 
-	// Build colMap from t.left.Cols() to builder.Cols()
-	colMap := make([]int, len(cols))
-	for j, c := range cols {
-		for bj, bc := range builder.Cols() {
-			if bc == c {
-				colMap[j] = bj
-				break
-			}
-		}
-	}
-
-	timeIdx := execute.TimeIdx(builder.Cols())
-	valueIdx := execute.ValueIdx(builder.Cols())
-	srcValueIdx := execute.ValueIdx(cols)
+	// Now that all columns have been added, keep a reference.
+	bCols := builder.Cols()
 
 	// Determine sort order for the joining tables
 	sortOrder := make([]string, len(cols))
@@ -490,12 +492,14 @@ func (t *joinTables) Join() (execute.Block, error) {
 	t.right.Sort(sortOrder, false)
 
 	var (
-		left, right       *execute.ColListBlock
 		leftSet, rightSet subset
 		leftKey, rightKey joinKey
 	)
-	left = t.left.RawBlock()
-	right = t.right.RawBlock()
+
+	rows := map[string]int{
+		t.leftName:  -1,
+		t.rightName: -1,
+	}
 
 	leftSet, leftKey = t.advance(leftSet.Stop, left)
 	rightSet, rightKey = t.advance(rightSet.Stop, right)
@@ -504,36 +508,43 @@ func (t *joinTables) Join() (execute.Block, error) {
 			// Inner join
 			for l := leftSet.Start; l < leftSet.Stop; l++ {
 				for r := rightSet.Start; r < rightSet.Stop; r++ {
-					// Add time value
-					builder.AppendTime(timeIdx, leftKey.Time)
-
 					// Evaluate expression and add to block
-					lv := readValue(l, srcValueIdx, left)
-					rv := readValue(r, srcValueIdx, right)
-					v, err := t.joinFn.Eval(map[execute.DatasetID]execute.Value{
-						t.leftID:  lv,
-						t.rightID: rv,
-					})
+					rows[t.leftName] = l
+					rows[t.rightName] = r
+					m, err := t.joinFn.Eval(rows)
 					if err != nil {
 						return nil, errors.Wrap(err, "failed to evaluate join function")
 					}
-					switch newType {
-					case execute.TBool:
-						builder.AppendBool(valueIdx, v.Bool())
-					case execute.TInt:
-						builder.AppendInt(valueIdx, v.Int())
-					case execute.TUInt:
-						builder.AppendUInt(valueIdx, v.UInt())
-					case execute.TFloat:
-						builder.AppendFloat(valueIdx, v.Float())
-					case execute.TString:
-						builder.AppendString(valueIdx, v.Str())
-					}
+					for j, c := range bCols {
+						switch c.Kind {
+						case execute.TimeColKind:
+							builder.AppendTime(j, leftKey.Time)
+						case execute.TagColKind:
+							if c.Common {
+								continue
+							}
 
-					// Append noncommon tags
-					for j, c := range cols {
-						if c.IsTag && !c.IsCommon {
-							builder.AppendString(colMap[j], leftKey.Tags[j-2])
+							builder.AppendString(j, leftKey.Tags[c.Label])
+						case execute.ValueColKind:
+							v := m.Values[c.Label]
+							switch val := v.Value.(type) {
+							case bool:
+								builder.AppendBool(j, val)
+							case int64:
+								builder.AppendInt(j, val)
+							case uint64:
+								builder.AppendUInt(j, val)
+							case float64:
+								builder.AppendFloat(j, val)
+							case string:
+								builder.AppendString(j, val)
+							case execute.Time:
+								builder.AppendTime(j, val)
+							default:
+								execute.PanicUnknownType(v.Type)
+							}
+						default:
+							log.Printf("unexpected column %v", c)
 						}
 					}
 				}
@@ -574,11 +585,13 @@ func (s subset) Empty() bool {
 }
 
 func rowKey(i int, table *execute.ColListBlock) (k joinKey) {
+	k.Tags = make(map[string]string)
 	for j, c := range table.Cols() {
-		if c.Label == execute.TimeColLabel {
+		switch c.Kind {
+		case execute.TimeColKind:
 			k.Time = table.AtTime(i, j)
-		} else if c.IsTag {
-			k.Tags = append(k.Tags, table.AtString(i, j))
+		case execute.TagColKind:
+			k.Tags[c.Label] = table.AtString(i, j)
 		}
 	}
 	return
@@ -590,7 +603,7 @@ func equalRowKeys(x, y int, table *execute.ColListBlock) bool {
 			if table.AtTime(x, j) != table.AtTime(y, j) {
 				return false
 			}
-		} else if c.IsTag {
+		} else if c.IsTag() {
 			if table.AtString(x, j) != table.AtString(y, j) {
 				return false
 			}
@@ -599,36 +612,15 @@ func equalRowKeys(x, y int, table *execute.ColListBlock) bool {
 	return true
 }
 
-func readValue(i, valueIdx int, table *execute.ColListBlock) execute.Value {
-	var v interface{}
-	cols := table.Cols()
-	switch cols[valueIdx].Type {
-	case execute.TBool:
-		v = table.AtBool(i, valueIdx)
-	case execute.TInt:
-		v = table.AtInt(i, valueIdx)
-	case execute.TUInt:
-		v = table.AtUInt(i, valueIdx)
-	case execute.TFloat:
-		v = table.AtFloat(i, valueIdx)
-	case execute.TString:
-		v = table.AtString(i, valueIdx)
-	}
-	return execute.Value{
-		Type:  cols[valueIdx].Type,
-		Value: v,
-	}
-}
-
 type joinKey struct {
 	Time execute.Time
-	Tags []string
+	Tags map[string]string
 }
 
 func (k joinKey) Equal(o joinKey) bool {
 	if k.Time == o.Time {
-		for i := range k.Tags {
-			if k.Tags[i] != o.Tags[i] {
+		for t := range k.Tags {
+			if k.Tags[t] != o.Tags[t] {
 				return false
 			}
 		}
@@ -638,99 +630,139 @@ func (k joinKey) Equal(o joinKey) bool {
 }
 func (k joinKey) Less(o joinKey) bool {
 	if k.Time == o.Time {
-		for i := range k.Tags {
-			if k.Tags[i] != o.Tags[i] {
-				return k.Tags[i] < o.Tags[i]
+		for t := range k.Tags {
+			if k.Tags[t] != o.Tags[t] {
+				return k.Tags[t] < o.Tags[t]
 			}
 		}
 	}
 	return k.Time < o.Time
 }
 
-func (t *joinTables) eval(values map[execute.DatasetID]execute.Value) (execute.Value, error) {
-	return t.joinFn.Eval(values)
-}
-
 type joinFunc struct {
-	f              *ast.ArrowFunctionExpression
-	referencePaths map[execute.DatasetID]execute.ReferencePath
+	references       []execute.Reference
+	referencePaths   []execute.ReferencePath
+	compilationCache *execute.CompilationCache
+	scope            execute.Scope
 
-	scope execute.Scope
+	scopeCols map[execute.ReferencePath]int
+	types     map[execute.ReferencePath]execute.DataType
 
-	ce    execute.CompiledExpression
-	types map[execute.DatasetID]execute.DataType
+	tables     map[string]*execute.ColListBlock
+	preparedFn execute.CompiledFn
+
+	isWrap  bool
+	wrapMap execute.Map
 }
 
-func NewJoinFunction(f *ast.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
-	if len(f.Params) != 1 {
+func NewRowJoinFunction(fn *ast.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
+	if len(fn.Params) != 1 {
 		return nil, errors.New("join function should only have one parameter for the map of tables")
 	}
-	tableParam := f.Params[0].Name
-	referencePaths := make(map[execute.DatasetID]execute.ReferencePath, len(parentIDs))
-	for _, pid := range parentIDs {
-		referencePaths[pid] = execute.Reference{
-			tableParam,
-			tableNames[pid],
-			"_value",
-		}.Path()
+	references, err := execute.FindReferences(fn)
+	if err != nil {
+		return nil, err
+	}
+	referencePaths := make([]execute.ReferencePath, len(references))
+	for i, r := range references {
+		if len(r) != 3 {
+			return nil, fmt.Errorf("unknown reference %v", r.Path())
+		}
+		referencePaths[i] = r.Path()
 	}
 	return &joinFunc{
-		f:              f,
-		scope:          make(execute.Scope, 2),
-		referencePaths: referencePaths,
+		references:       references,
+		referencePaths:   referencePaths,
+		compilationCache: execute.NewCompilationCache(fn, referencePaths),
+		scope:            make(execute.Scope, len(references)),
+		scopeCols:        make(map[execute.ReferencePath]int, len(references)),
+		types:            make(map[execute.ReferencePath]execute.DataType, len(references)),
+		wrapMap: execute.Map{
+			Meta: execute.MapMeta{
+				Properties: []execute.MapPropertyMeta{{Key: execute.DefaultValueColLabel}},
+			},
+			Values: make(map[string]execute.Value, 1),
+		},
 	}, nil
 }
 
-func (s *joinFunc) Copy() *joinFunc {
-	cpy := new(joinFunc)
-	*cpy = *s
-	cpy.scope = make(execute.Scope, 2)
-	return cpy
-}
-
-func (s *joinFunc) Compile(types map[execute.DatasetID]execute.DataType) (execute.DataType, error) {
-	if s.ce != nil && equalTypes(types, s.types) {
-		// Nothing to do, we already have a compiled expression
-		return s.ce.Type(), nil
-	}
-	referenceTypes := make(map[execute.ReferencePath]execute.DataType, len(types))
-	for pid, typ := range types {
-		referenceTypes[s.referencePaths[pid]] = typ
-	}
-	ce, err := execute.CompileExpression(s.f, referenceTypes)
-	if err != nil {
-		s.ce = nil
-		s.types = nil
-		return execute.TInvalid, err
-	}
-	s.ce = ce
-	// Copy types
-	s.types = make(map[execute.DatasetID]execute.DataType, len(types))
-	for k, v := range types {
-		s.types[k] = v
-	}
-	return s.ce.Type(), nil
-}
-
-func equalTypes(a, b map[execute.DatasetID]execute.DataType) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for k, v := range a {
-		if b[k] != v {
-			return false
+func (f *joinFunc) Prepare(tables map[string]*execute.ColListBlock) error {
+	f.tables = tables
+	// Prepare types and scopeCols
+	for i, r := range f.references {
+		rp := f.referencePaths[i]
+		found := false
+		tableName := r[1]
+		cols := tables[tableName].Cols()
+		for j, c := range cols {
+			if r[2] == c.Label {
+				f.scopeCols[rp] = j
+				f.types[rp] = c.Type
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("function references unknown value %q", rp)
 		}
 	}
-	return true
+	// Compile fn for given types
+	fn, err := f.compilationCache.Compile(f.types)
+	if err != nil {
+		return err
+	}
+	f.preparedFn = fn
+
+	t := f.preparedFn.Type()
+	f.isWrap = t != execute.TMap
+	if f.isWrap {
+		f.wrapMap.Meta.Properties[0].Type = t
+	}
+	return nil
 }
 
-func (s *joinFunc) Eval(values map[execute.DatasetID]execute.Value) (execute.Value, error) {
-	if s.ce == nil {
-		return execute.Value{}, errors.New("expression has not been compiled")
+func (f *joinFunc) MapMeta() execute.MapMeta {
+	if f.isWrap {
+		return f.wrapMap.Meta
 	}
-	for pid, v := range values {
-		s.scope[s.referencePaths[pid]] = v
+	return f.preparedFn.MapMeta()
+}
+
+func (f *joinFunc) Eval(rows map[string]int) (execute.Map, error) {
+	for i, r := range f.references {
+		rp := f.referencePaths[i]
+		tableName := r[1]
+		row := rows[tableName]
+		f.scope[rp] = readValue(row, f.scopeCols[rp], f.tables[tableName])
 	}
-	return s.ce.Eval(s.scope)
+	v, err := f.preparedFn.Eval(f.scope)
+	if err != nil {
+		return execute.Map{}, err
+	}
+	if f.isWrap {
+		f.wrapMap.Values[execute.DefaultValueColLabel] = v
+		return f.wrapMap, nil
+	}
+	return v.Map(), nil
+}
+
+func readValue(i, j int, table *execute.ColListBlock) execute.Value {
+	var v interface{}
+	cols := table.Cols()
+	switch cols[j].Type {
+	case execute.TBool:
+		v = table.AtBool(i, j)
+	case execute.TInt:
+		v = table.AtInt(i, j)
+	case execute.TUInt:
+		v = table.AtUInt(i, j)
+	case execute.TFloat:
+		v = table.AtFloat(i, j)
+	case execute.TString:
+		v = table.AtString(i, j)
+	}
+	return execute.Value{
+		Type:  cols[j].Type,
+		Value: v,
+	}
 }

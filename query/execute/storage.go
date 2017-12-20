@@ -361,24 +361,25 @@ func newStorageBlock(bounds Bounds, tags, keptTags Tags, tagKey key, ms *mergedS
 	colMeta := make([]ColMeta, 2, 2+len(tags)+len(keptTags))
 	colMeta[0] = TimeCol
 	colMeta[1] = ColMeta{
-		Label: ValueColLabel,
+		Label: DefaultValueColLabel,
 		Type:  typ,
+		Kind:  ValueColKind,
 	}
 
 	for _, k := range tags.Keys() {
 		colMeta = append(colMeta, ColMeta{
-			Label:    k,
-			Type:     TString,
-			IsTag:    true,
-			IsCommon: true,
+			Label:  k,
+			Type:   TString,
+			Kind:   TagColKind,
+			Common: true,
 		})
 	}
 	for _, k := range keptTags.Keys() {
 		colMeta = append(colMeta, ColMeta{
-			Label:    k,
-			Type:     TString,
-			IsTag:    true,
-			IsCommon: false,
+			Label:  k,
+			Type:   TString,
+			Kind:   TagColKind,
+			Common: false,
 		})
 	}
 	return &storageBlock{
@@ -423,8 +424,8 @@ func (b *storageBlock) Col(c int) ValueIterator {
 func (b *storageBlock) Times() ValueIterator {
 	return b.Col(0)
 }
-func (b *storageBlock) Values() ValueIterator {
-	return b.Col(1)
+func (b *storageBlock) Values() (ValueIterator, error) {
+	return b.Col(1), nil
 }
 
 func (b *storageBlock) DoBool(f func([]bool, RowReader)) {
@@ -460,11 +461,11 @@ func (b *storageBlock) DoString(f func([]string, RowReader)) {
 
 	meta := b.colMeta[b.col]
 	checkColType(meta, TString)
-	if meta.IsTag {
+	if meta.IsTag() {
 		// Handle creating a strs slice that can be ranged according to actual data received.
 		var strs []string
 		var value string
-		if meta.IsCommon {
+		if meta.Common {
 			value = b.tags[meta.Label]
 		} else {
 			value = b.keptTags[meta.Label]
@@ -521,8 +522,8 @@ func (b *storageBlock) AtFloat(i, j int) float64 {
 func (b *storageBlock) AtString(i, j int) string {
 	meta := b.colMeta[j]
 	checkColType(meta, TString)
-	if meta.IsTag {
-		if meta.IsCommon {
+	if meta.IsTag() {
+		if meta.Common {
 			return b.tags[meta.Label]
 		}
 		return b.keptTags[meta.Label]

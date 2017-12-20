@@ -14,7 +14,7 @@ func ParsePromQL(promql string, opts ...Option) (interface{}, error) {
 	return f, nil
 }
 
-func Build(promql string, opts ...Option) (*query.QuerySpec, error) {
+func Build(promql string, opts ...Option) (*query.Spec, error) {
 	parsed, err := ParsePromQL(promql, opts...)
 	if err != nil {
 		return nil, err

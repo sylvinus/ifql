@@ -355,13 +355,13 @@ func TestBuild(t *testing.T) {
 		name    string
 		promql  string
 		opts    []Option
-		want    *query.QuerySpec
+		want    *query.Spec
 		wantErr bool
 	}{
 		{
 			name:   "aggregate with count without a group by",
 			promql: `count(node_cpu{mode="user",cpu="cpu2"})`,
-			want: &query.QuerySpec{
+			want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("from"),
@@ -436,7 +436,7 @@ func TestBuild(t *testing.T) {
 		{
 			name:   "range of time but no aggregates",
 			promql: `node_cpu{mode="user"}[2m] offset 5m`,
-			want: &query.QuerySpec{
+			want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("from"),
@@ -500,7 +500,7 @@ func TestBuild(t *testing.T) {
 		{
 			name:   "sum over a range",
 			promql: `sum(node_cpu{_measurement="m0"}[170h])`,
-			want: &query.QuerySpec{
+			want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID:   query.OperationID("from"),
@@ -576,7 +576,7 @@ func TestBuild(t *testing.T) {
 				t.Errorf("Build() %s error = %v, wantErr %v", tt.promql, err, tt.wantErr)
 				return
 			}
-			opts := []cmp.Option{cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{})}
+			opts := []cmp.Option{cmp.AllowUnexported(query.Spec{}), cmpopts.IgnoreUnexported(query.Spec{})}
 			if !cmp.Equal(tt.want, got, opts...) {
 				t.Errorf("Build() = %s -want/+got\n%s", tt.promql, cmp.Diff(tt.want, got, opts...))
 			}

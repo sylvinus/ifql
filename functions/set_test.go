@@ -42,8 +42,8 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 2.0},
@@ -56,9 +56,9 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 2.0, "bob"},
@@ -78,9 +78,9 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "jim"},
@@ -93,9 +93,9 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "bob"},
@@ -115,10 +115,10 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "alice", "a"},
@@ -131,10 +131,10 @@ func TestSet_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "bob", "a"},
@@ -155,9 +155,9 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 1.0, "alice"},
@@ -170,9 +170,9 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0, "sue"},
@@ -186,9 +186,9 @@ func TestSet_Process(t *testing.T) {
 					Stop:  5,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "bob"},
@@ -211,9 +211,9 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 1.0, "alice"},
@@ -226,9 +226,9 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0, "sue"},
@@ -243,10 +243,10 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-						{Label: "t2", Type: execute.TString, IsTag: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+						{Label: "t2", Type: execute.TString, Kind: execute.TagColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 1.0, "alice", "bob"},
@@ -259,10 +259,10 @@ func TestSet_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
-						{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-						{Label: "t2", Type: execute.TString, IsTag: true},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+						{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+						{Label: "t2", Type: execute.TString, Kind: execute.TagColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0, "sue", "bob"},

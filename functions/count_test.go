@@ -17,7 +17,7 @@ func TestCount_NewQuery(t *testing.T) {
 		{
 			Name: "from with range and count",
 			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",

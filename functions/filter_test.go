@@ -20,7 +20,7 @@ func TestFilter_NewQuery(t *testing.T) {
 		{
 			Name: "from with database filter and range",
 			Raw:  `from(db:"mydb").filter(fn: (r) => r["t1"]=="val1" and r["t2"]=="val2").range(start:-4h, stop:-2h).count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -98,7 +98,7 @@ func TestFilter_NewQuery(t *testing.T) {
 							)
 						.range(start:-4h, stop:-2h)
 						.count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -185,7 +185,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						)
 						.range(start:-4h, stop:-2h)
 						.count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -259,7 +259,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						)
 						.range(start:-4h, stop:-2h)
 						.count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -333,7 +333,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						)
 						.range(start:-4h, stop:-2h)
 						.count()`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -403,7 +403,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						.filter(fn: (r) => 
 							r["t1"]==/va\/l1/
 						)`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -443,7 +443,7 @@ func TestFilter_NewQuery(t *testing.T) {
 							and
 							r["t2"] != /val2/
 						)`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -577,8 +577,8 @@ func TestFilter_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0},
@@ -591,8 +591,8 @@ func TestFilter_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(2), 6.0},
@@ -625,8 +625,8 @@ func TestFilter_Process(t *testing.T) {
 						Stop:  3,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 3.0},
@@ -640,8 +640,8 @@ func TestFilter_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0},
@@ -657,8 +657,8 @@ func TestFilter_Process(t *testing.T) {
 						Stop:  3,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(2), 6.0},
@@ -670,8 +670,8 @@ func TestFilter_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+						{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 					},
 					Data: [][]interface{}{
 						{execute.Time(4), 8.0},
@@ -734,10 +734,10 @@ func TestFilter_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0, "a", "x"},
@@ -751,10 +751,10 @@ func TestFilter_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(3), 8.0, "a", "y"},

@@ -267,21 +267,29 @@ func (o orderedCols) Less(i int, j int) bool {
 	}
 
 	// Value column is always last
-	if o.cols[i].Label == ValueColLabel {
+	if o.cols[i].Label == DefaultValueColLabel {
 		return false
 	}
-	if o.cols[j].Label == ValueColLabel {
+	if o.cols[j].Label == DefaultValueColLabel {
 		return true
 	}
 
 	// Common tags before other tags
-	if o.cols[i].IsTag && o.cols[i].IsCommon && o.cols[j].IsTag && !o.cols[j].IsCommon {
+	if o.cols[i].IsTag() && o.cols[i].Common && o.cols[j].IsTag() && !o.cols[j].Common {
 		return true
 	}
-	if o.cols[i].IsTag && !o.cols[i].IsCommon && o.cols[j].IsTag && o.cols[j].IsCommon {
+	if o.cols[i].IsTag() && !o.cols[i].Common && o.cols[j].IsTag() && o.cols[j].Common {
 		return false
 	}
 
-	// within a class sort be label
+	// Tags before values
+	if o.cols[i].IsTag() && !o.cols[j].IsTag() {
+		return true
+	}
+	if !o.cols[i].IsTag() && o.cols[j].IsTag() {
+		return false
+	}
+
+	// within a class sort by label
 	return o.cols[i].Label < o.cols[j].Label
 }

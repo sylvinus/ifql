@@ -2,10 +2,169 @@ package execute
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/influxdata/ifql/ast"
+	"github.com/pkg/errors"
 )
+
+type rowFn struct {
+	references       []Reference
+	referencePaths   []ReferencePath
+	compilationCache *CompilationCache
+	scope            Scope
+
+	scopeCols map[ReferencePath]int
+	types     map[ReferencePath]DataType
+
+	preparedFn CompiledFn
+}
+
+func newRowFn(fn *ast.ArrowFunctionExpression) (rowFn, error) {
+	if len(fn.Params) != 1 {
+		return rowFn{}, fmt.Errorf("function should only have a single parameter, got %v", fn.Params)
+	}
+	references, err := FindReferences(fn)
+	if err != nil {
+		return rowFn{}, err
+	}
+
+	referencePaths := make([]ReferencePath, len(references))
+	for i, r := range references {
+		referencePaths[i] = r.Path()
+	}
+
+	return rowFn{
+		references:       references,
+		referencePaths:   referencePaths,
+		compilationCache: NewCompilationCache(fn, referencePaths),
+		scope:            make(Scope, len(references)),
+		scopeCols:        make(map[ReferencePath]int, len(references)),
+		types:            make(map[ReferencePath]DataType, len(references)),
+	}, nil
+}
+
+func (f *rowFn) prepare(cols []ColMeta) error {
+	// Prepare types and scopeCols
+	for i, r := range f.references {
+		rp := f.referencePaths[i]
+		found := false
+		for j, c := range cols {
+			if r[1] == c.Label {
+				f.scopeCols[rp] = j
+				f.types[rp] = c.Type
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("function references unknown value %q", rp)
+		}
+	}
+	// Compile fn for given types
+	fn, err := f.compilationCache.Compile(f.types)
+	if err != nil {
+		return err
+	}
+	f.preparedFn = fn
+	return nil
+}
+
+func (f *rowFn) eval(row int, rr RowReader) (Value, error) {
+	for _, rp := range f.referencePaths {
+		f.scope[rp] = ValueForRow(row, f.scopeCols[rp], rr)
+	}
+	return f.preparedFn.Eval(f.scope)
+}
+
+type RowPredicateFn struct {
+	rowFn
+}
+
+func NewRowPredicateFn(fn *ast.ArrowFunctionExpression) (*RowPredicateFn, error) {
+	r, err := newRowFn(fn)
+	if err != nil {
+		return nil, err
+	}
+	return &RowPredicateFn{
+		rowFn: r,
+	}, nil
+}
+
+func (f *RowPredicateFn) Prepare(cols []ColMeta) error {
+	err := f.rowFn.prepare(cols)
+	if err != nil {
+		return err
+	}
+	if f.preparedFn.Type() != TBool {
+		return errors.New("row predicate function does not evaluate to a boolean")
+	}
+	return nil
+}
+
+func (f *RowPredicateFn) Eval(row int, rr RowReader) (bool, error) {
+	v, err := f.rowFn.eval(row, rr)
+	if err != nil {
+		return false, err
+	}
+	return v.Bool(), nil
+}
+
+type RowMapFn struct {
+	rowFn
+
+	isWrap  bool
+	wrapMap Map
+}
+
+func NewRowMapFn(fn *ast.ArrowFunctionExpression) (*RowMapFn, error) {
+	r, err := newRowFn(fn)
+	if err != nil {
+		return nil, err
+	}
+	return &RowMapFn{
+		rowFn: r,
+		wrapMap: Map{
+			Meta: MapMeta{
+				Properties: []MapPropertyMeta{{Key: DefaultValueColLabel}},
+			},
+			Values: make(map[string]Value, 1),
+		},
+	}, nil
+}
+
+func (f *RowMapFn) Prepare(cols []ColMeta) error {
+	err := f.rowFn.prepare(cols)
+	if err != nil {
+		return err
+	}
+	t := f.preparedFn.Type()
+	f.isWrap = t != TMap
+	if f.isWrap {
+		f.wrapMap.Meta.Properties[0].Type = t
+	}
+	return nil
+}
+
+func (f *RowMapFn) MapMeta() MapMeta {
+	if f.isWrap {
+		return f.wrapMap.Meta
+	}
+	return f.preparedFn.MapMeta()
+}
+
+func (f *RowMapFn) Eval(row int, rr RowReader) (Map, error) {
+	v, err := f.rowFn.eval(row, rr)
+	if err != nil {
+		return Map{}, err
+	}
+	if f.isWrap {
+		f.wrapMap.Values[DefaultValueColLabel] = v
+		return f.wrapMap, nil
+	}
+	return v.Map(), nil
+}
 
 // FindReferences returns all references in the expression.
 func FindReferences(f *ast.ArrowFunctionExpression) ([]Reference, error) {
@@ -14,6 +173,16 @@ func FindReferences(f *ast.ArrowFunctionExpression) ([]Reference, error) {
 
 func findReferences(n ast.Expression) ([]Reference, error) {
 	switch n := n.(type) {
+	case *ast.ObjectExpression:
+		var refs []Reference
+		for _, p := range n.Properties {
+			r, err := findReferences(p.Value)
+			if err != nil {
+				return nil, err
+			}
+			refs = append(refs, r...)
+		}
+		return refs, nil
 	case *ast.MemberExpression:
 		r, err := determineReference(n)
 		if err != nil {
@@ -84,7 +253,7 @@ func propertyName(m *ast.MemberExpression) (string, error) {
 	}
 }
 
-func CompileExpression(f *ast.ArrowFunctionExpression, types map[ReferencePath]DataType) (CompiledExpression, error) {
+func CompileFn(f *ast.ArrowFunctionExpression, types map[ReferencePath]DataType) (CompiledFn, error) {
 	references, err := FindReferences(f)
 	if err != nil {
 		return nil, err
@@ -97,7 +266,7 @@ func CompileExpression(f *ast.ArrowFunctionExpression, types map[ReferencePath]D
 		}
 	}
 
-	root, err := compile(f.Body.(ast.Expression), types)
+	root, err := compile(f.Body, types)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +274,7 @@ func CompileExpression(f *ast.ArrowFunctionExpression, types map[ReferencePath]D
 	for k, v := range types {
 		cpy[k] = v
 	}
-	return compiledExpression{
+	return compiledFn{
 		root:  root,
 		types: cpy,
 	}, nil
@@ -123,12 +292,12 @@ func (r Reference) String() string {
 	return string(r.Path())
 }
 
-type compiledExpression struct {
+type compiledFn struct {
 	root  DataTypeEvaluator
 	types map[ReferencePath]DataType
 }
 
-func (c compiledExpression) validate(scope Scope) error {
+func (c compiledFn) validate(scope Scope) error {
 	// Validate scope
 	for k, t := range c.types {
 		if scope.Type(k) != t {
@@ -138,10 +307,13 @@ func (c compiledExpression) validate(scope Scope) error {
 	return nil
 }
 
-func (c compiledExpression) Type() DataType {
+func (c compiledFn) Type() DataType {
 	return c.root.Type()
 }
-func (c compiledExpression) Eval(scope Scope) (Value, error) {
+func (c compiledFn) MapMeta() MapMeta {
+	return c.root.MapMeta()
+}
+func (c compiledFn) Eval(scope Scope) (Value, error) {
 	if err := c.validate(scope); err != nil {
 		return Value{}, err
 	}
@@ -159,6 +331,8 @@ func (c compiledExpression) Eval(scope Scope) (Value, error) {
 		val = c.root.EvalString(scope)
 	case TTime:
 		val = c.root.EvalTime(scope)
+	case TMap:
+		val = c.root.EvalMap(scope)
 	default:
 		return Value{}, fmt.Errorf("unsupported type %s", c.Type())
 	}
@@ -168,45 +342,136 @@ func (c compiledExpression) Eval(scope Scope) (Value, error) {
 	}, nil
 }
 
-func (c compiledExpression) EvalBool(scope Scope) (bool, error) {
+func (c compiledFn) EvalBool(scope Scope) (bool, error) {
 	if err := c.validate(scope); err != nil {
 		return false, err
 	}
 	return c.root.EvalBool(scope), nil
 }
-func (c compiledExpression) EvalInt(scope Scope) (int64, error) {
+func (c compiledFn) EvalInt(scope Scope) (int64, error) {
 	if err := c.validate(scope); err != nil {
 		return 0, err
 	}
 	return c.root.EvalInt(scope), nil
 }
-func (c compiledExpression) EvalUInt(scope Scope) (uint64, error) {
+func (c compiledFn) EvalUInt(scope Scope) (uint64, error) {
 	if err := c.validate(scope); err != nil {
 		return 0, err
 	}
 	return c.root.EvalUInt(scope), nil
 }
-func (c compiledExpression) EvalFloat(scope Scope) (float64, error) {
+func (c compiledFn) EvalFloat(scope Scope) (float64, error) {
 	if err := c.validate(scope); err != nil {
 		return 0, err
 	}
 	return c.root.EvalFloat(scope), nil
 }
-func (c compiledExpression) EvalString(scope Scope) (string, error) {
+func (c compiledFn) EvalString(scope Scope) (string, error) {
 	if err := c.validate(scope); err != nil {
 		return "", err
 	}
 	return c.root.EvalString(scope), nil
 }
-func (c compiledExpression) EvalTime(scope Scope) (Time, error) {
+func (c compiledFn) EvalTime(scope Scope) (Time, error) {
 	if err := c.validate(scope); err != nil {
 		return 0, err
 	}
 	return c.root.EvalTime(scope), nil
 }
+func (c compiledFn) EvalMap(scope Scope) (Map, error) {
+	if err := c.validate(scope); err != nil {
+		return Map{}, err
+	}
+	return c.root.EvalMap(scope), nil
+}
 
-func compile(n ast.Expression, types map[ReferencePath]DataType) (DataTypeEvaluator, error) {
+func compile(n ast.Node, types map[ReferencePath]DataType) (DataTypeEvaluator, error) {
 	switch n := n.(type) {
+	case *ast.BlockStatement:
+		body := make([]DataTypeEvaluator, len(n.Body))
+		hasReturn := false
+		for i, s := range n.Body {
+			node, err := compile(s, types)
+			if err != nil {
+				return nil, err
+			}
+			body[i] = node
+			if _, ok := node.(returnEvaluator); ok {
+				// The returnEvaluator indicates the last statement
+				hasReturn = true
+				break
+			}
+		}
+		if !hasReturn {
+			return nil, errors.New("block has no return statement")
+		}
+		return &blockEvaluator{
+			compiledType: compiledType(TBool),
+			body:         body,
+		}, nil
+	case *ast.ExpressionStatement:
+		//TODO(nathanielc): I belive sideffects are not possible in record functions.
+		// Maybe we can skip these or throw an error?
+		return compile(n.Expression, types)
+	case *ast.ReturnStatement:
+		node, err := compile(n.Argument, types)
+		if err != nil {
+			return nil, err
+		}
+		return returnEvaluator{
+			DataTypeEvaluator: node,
+		}, nil
+	case *ast.VariableDeclaration:
+		if len(n.Declarations) != 1 {
+			return nil, errors.New("var declaration must have exactly one declaration")
+		}
+		d := n.Declarations[0]
+		node, err := compile(d.Init, types)
+		if err != nil {
+			return nil, err
+		}
+		r, err := determineReference(d.ID)
+		if err != nil {
+			return nil, err
+		}
+		rp := r.Path()
+		// Update type information with new type
+		types[rp] = node.Type()
+		return &declarationEvaluator{
+			compiledType: compiledType(node.Type()),
+			id:           rp,
+			init:         node,
+		}, nil
+	case *ast.ObjectExpression:
+		meta := MapMeta{
+			Properties: make([]MapPropertyMeta, len(n.Properties)),
+		}
+		properties := make(map[string]DataTypeEvaluator, len(n.Properties))
+		for i, p := range n.Properties {
+			node, err := compile(p.Value, types)
+			if err != nil {
+				return nil, err
+			}
+			meta.Properties[i].Key = p.Key.Name
+			meta.Properties[i].Type = node.Type()
+
+			properties[p.Key.Name] = node
+		}
+		return &mapEvaluator{
+			compiledType: compiledType(TMap),
+			meta:         meta,
+			properties:   properties,
+		}, nil
+	case *ast.Identifier:
+		r, err := determineReference(n)
+		if err != nil {
+			return nil, err
+		}
+		rp := r.Path()
+		return &referenceEvaluator{
+			compiledType:  compiledType(types[rp]),
+			referencePath: rp,
+		}, nil
 	case *ast.MemberExpression:
 		r, err := determineReference(n)
 		if err != nil {
@@ -312,6 +577,9 @@ type Scope map[ReferencePath]Value
 func (s Scope) Type(rp ReferencePath) DataType {
 	return s[rp].Type
 }
+func (s Scope) Set(rp ReferencePath, v Value) {
+	s[rp] = v
+}
 func (s Scope) GetBool(rp ReferencePath) bool {
 	return s[rp].Bool()
 }
@@ -330,18 +598,25 @@ func (s Scope) GetString(rp ReferencePath) string {
 func (s Scope) GetTime(rp ReferencePath) Time {
 	return s[rp].Time()
 }
+func (s Scope) GetMap(rp ReferencePath) Map {
+	return s[rp].Map()
+}
 
 type DataTypeEvaluator interface {
 	Type() DataType
+	MapMeta() MapMeta
 	EvalBool(scope Scope) bool
 	EvalInt(scope Scope) int64
 	EvalUInt(scope Scope) uint64
 	EvalFloat(scope Scope) float64
 	EvalString(scope Scope) string
 	EvalTime(scope Scope) Time
+	EvalMap(scope Scope) Map
 }
-type CompiledExpression interface {
+
+type CompiledFn interface {
 	Type() DataType
+	MapMeta() MapMeta
 	Eval(scope Scope) (Value, error)
 	EvalBool(scope Scope) (bool, error)
 	EvalInt(scope Scope) (int64, error)
@@ -349,12 +624,80 @@ type CompiledExpression interface {
 	EvalFloat(scope Scope) (float64, error)
 	EvalString(scope Scope) (string, error)
 	EvalTime(scope Scope) (Time, error)
+	EvalMap(scope Scope) (Map, error)
+}
+
+type MapMeta struct {
+	Properties []MapPropertyMeta
+}
+
+type MapPropertyMeta struct {
+	Key  string
+	Type DataType
+}
+
+// CompilationCache caches compilation results based on the types of the input parameters.
+type CompilationCache struct {
+	fn        *ast.ArrowFunctionExpression
+	pathOrder []ReferencePath
+	root      *compilationCacheNode
+}
+
+func NewCompilationCache(fn *ast.ArrowFunctionExpression, referencePaths []ReferencePath) *CompilationCache {
+	pathOrder := make([]ReferencePath, len(referencePaths))
+	copy(pathOrder, referencePaths)
+	sort.Slice(pathOrder, func(i, j int) bool { return pathOrder[i] < pathOrder[j] })
+	return &CompilationCache{
+		fn:        fn,
+		pathOrder: pathOrder,
+		root:      new(compilationCacheNode),
+	}
+}
+
+// Compile returnes a compiled function bsaed on the provided types.
+// The result will be cached for subsequent calls.
+func (c *CompilationCache) Compile(types map[ReferencePath]DataType) (CompiledFn, error) {
+	return c.root.compile(c.fn, c.pathOrder, types)
+}
+
+type compilationCacheNode struct {
+	children map[DataType]*compilationCacheNode
+
+	fn  CompiledFn
+	err error
+}
+
+// compile recursively searches for a matching child node that has compiled the function.
+// If the compilation has not been performed previously its result is cached and returned.
+func (c *compilationCacheNode) compile(fn *ast.ArrowFunctionExpression, order []ReferencePath, types map[ReferencePath]DataType) (CompiledFn, error) {
+	if len(order) == 0 {
+		// We are the matching child, return the cached result or do the compilation.
+		if c.fn == nil && c.err == nil {
+			c.fn, c.err = CompileFn(fn, types)
+		}
+		return c.fn, c.err
+	}
+	// Find the matching child based on the order.
+	next := order[0]
+	t := types[next]
+	child := c.children[t]
+	if child == nil {
+		child = new(compilationCacheNode)
+		if c.children == nil {
+			c.children = make(map[DataType]*compilationCacheNode)
+		}
+		c.children[t] = child
+	}
+	return child.compile(fn, order[1:], types)
 }
 
 type compiledType DataType
 
 func (c compiledType) Type() DataType {
 	return DataType(c)
+}
+func (c compiledType) MapMeta() MapMeta {
+	panic(c.error(TMap))
 }
 func (c compiledType) error(exp DataType) error {
 	return typeErr{Actual: DataType(c), Expected: exp}
@@ -395,6 +738,192 @@ func (v Value) Str() string {
 func (v Value) Time() Time {
 	return v.Value.(Time)
 }
+func (v Value) Map() Map {
+	return v.Value.(Map)
+}
+
+func eval(e DataTypeEvaluator, scope Scope) (v Value) {
+	v.Type = e.Type()
+	switch v.Type {
+	case TBool:
+		v.Value = e.EvalBool(scope)
+	case TInt:
+		v.Value = e.EvalInt(scope)
+	case TUInt:
+		v.Value = e.EvalUInt(scope)
+	case TFloat:
+		v.Value = e.EvalFloat(scope)
+	case TString:
+		v.Value = e.EvalString(scope)
+	case TTime:
+		v.Value = e.EvalTime(scope)
+	}
+	return
+}
+
+type blockEvaluator struct {
+	compiledType
+	body  []DataTypeEvaluator
+	value Value
+}
+
+func (e *blockEvaluator) eval(scope Scope) {
+	for _, b := range e.body {
+		e.value = eval(b, scope)
+	}
+}
+
+func (e *blockEvaluator) EvalBool(scope Scope) bool {
+	if DataType(e.compiledType) != TBool {
+		panic(e.error(TBool))
+	}
+	e.eval(scope)
+	return e.value.Bool()
+}
+
+func (e *blockEvaluator) EvalInt(scope Scope) int64 {
+	if DataType(e.compiledType) != TInt {
+		panic(e.error(TInt))
+	}
+	e.eval(scope)
+	return e.value.Int()
+}
+
+func (e *blockEvaluator) EvalUInt(scope Scope) uint64 {
+	if DataType(e.compiledType) != TUInt {
+		panic(e.error(TUInt))
+	}
+	e.eval(scope)
+	return e.value.UInt()
+}
+
+func (e *blockEvaluator) EvalFloat(scope Scope) float64 {
+	if DataType(e.compiledType) != TFloat {
+		panic(e.error(TFloat))
+	}
+	e.eval(scope)
+	return e.value.Float()
+}
+
+func (e *blockEvaluator) EvalString(scope Scope) string {
+	if DataType(e.compiledType) != TString {
+		panic(e.error(TString))
+	}
+	e.eval(scope)
+	return e.value.Str()
+}
+
+func (e *blockEvaluator) EvalTime(scope Scope) Time {
+	if DataType(e.compiledType) != TTime {
+		panic(e.error(TTime))
+	}
+	e.eval(scope)
+	return e.value.Time()
+}
+func (e *blockEvaluator) EvalMap(scope Scope) Map {
+	if DataType(e.compiledType) != TMap {
+		panic(e.error(TMap))
+	}
+	e.eval(scope)
+	return e.value.Map()
+}
+
+type returnEvaluator struct {
+	DataTypeEvaluator
+}
+type declarationEvaluator struct {
+	compiledType
+	id   ReferencePath
+	init DataTypeEvaluator
+}
+
+func (e *declarationEvaluator) eval(scope Scope) {
+	scope.Set(e.id, eval(e.init, scope))
+}
+
+func (e *declarationEvaluator) EvalBool(scope Scope) bool {
+	e.eval(scope)
+	return scope.GetBool(e.id)
+}
+
+func (e *declarationEvaluator) EvalInt(scope Scope) int64 {
+	e.eval(scope)
+	return scope.GetInt(e.id)
+}
+
+func (e *declarationEvaluator) EvalUInt(scope Scope) uint64 {
+	e.eval(scope)
+	return scope.GetUInt(e.id)
+}
+
+func (e *declarationEvaluator) EvalFloat(scope Scope) float64 {
+	e.eval(scope)
+	return scope.GetFloat(e.id)
+}
+
+func (e *declarationEvaluator) EvalString(scope Scope) string {
+	e.eval(scope)
+	return scope.GetString(e.id)
+}
+
+func (e *declarationEvaluator) EvalTime(scope Scope) Time {
+	e.eval(scope)
+	return scope.GetTime(e.id)
+}
+
+func (e *declarationEvaluator) EvalMap(scope Scope) Map {
+	e.eval(scope)
+	return scope.GetMap(e.id)
+}
+
+type mapEvaluator struct {
+	compiledType
+	meta       MapMeta
+	properties map[string]DataTypeEvaluator
+}
+
+func (e *mapEvaluator) MapMeta() MapMeta {
+	return e.meta
+}
+
+func (e *mapEvaluator) EvalBool(scope Scope) bool {
+	panic(e.error(TBool))
+}
+
+func (e *mapEvaluator) EvalInt(scope Scope) int64 {
+	panic(e.error(TInt))
+}
+
+func (e *mapEvaluator) EvalUInt(scope Scope) uint64 {
+	panic(e.error(TUInt))
+}
+
+func (e *mapEvaluator) EvalFloat(scope Scope) float64 {
+	panic(e.error(TFloat))
+}
+
+func (e *mapEvaluator) EvalString(scope Scope) string {
+	panic(e.error(TString))
+}
+
+func (e *mapEvaluator) EvalTime(scope Scope) Time {
+	panic(e.error(TTime))
+}
+func (e *mapEvaluator) EvalMap(scope Scope) Map {
+	values := make(map[string]Value, len(e.properties))
+	for k, node := range e.properties {
+		values[k] = eval(node, scope)
+	}
+	return Map{
+		Meta:   e.meta,
+		Values: values,
+	}
+}
+
+type Map struct {
+	Meta   MapMeta
+	Values map[string]Value
+}
 
 type logicalEvaluator struct {
 	compiledType
@@ -431,6 +960,9 @@ func (e *logicalEvaluator) EvalString(scope Scope) string {
 
 func (e *logicalEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
+}
+func (e *logicalEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
 }
 
 type binaryFunc func(scope Scope, left, right DataTypeEvaluator) Value
@@ -469,6 +1001,9 @@ func (e *binaryEvaluator) EvalString(scope Scope) string {
 func (e *binaryEvaluator) EvalTime(scope Scope) Time {
 	return e.f(scope, e.left, e.right).Time()
 }
+func (e *binaryEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
+}
 
 type unaryEvaluator struct {
 	compiledType
@@ -501,6 +1036,9 @@ func (e *unaryEvaluator) EvalString(scope Scope) string {
 func (e *unaryEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
 }
+func (e *unaryEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
+}
 
 type integerEvaluator struct {
 	compiledType
@@ -529,6 +1067,9 @@ func (e *integerEvaluator) EvalString(scope Scope) string {
 
 func (e *integerEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
+}
+func (e *integerEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
 }
 
 type stringEvaluator struct {
@@ -559,6 +1100,9 @@ func (e *stringEvaluator) EvalString(scope Scope) string {
 func (e *stringEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
 }
+func (e *stringEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
+}
 
 type booleanEvaluator struct {
 	compiledType
@@ -587,6 +1131,9 @@ func (e *booleanEvaluator) EvalString(scope Scope) string {
 
 func (e *booleanEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
+}
+func (e *booleanEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
 }
 
 type floatEvaluator struct {
@@ -617,6 +1164,9 @@ func (e *floatEvaluator) EvalString(scope Scope) string {
 func (e *floatEvaluator) EvalTime(scope Scope) Time {
 	panic(e.error(TTime))
 }
+func (e *floatEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
+}
 
 type timeEvaluator struct {
 	compiledType
@@ -646,6 +1196,9 @@ func (e *timeEvaluator) EvalString(scope Scope) string {
 func (e *timeEvaluator) EvalTime(scope Scope) Time {
 	return e.t
 }
+func (e *timeEvaluator) EvalMap(scope Scope) Map {
+	panic(e.error(TMap))
+}
 
 type referenceEvaluator struct {
 	compiledType
@@ -674,6 +1227,9 @@ func (e *referenceEvaluator) EvalString(scope Scope) string {
 
 func (e *referenceEvaluator) EvalTime(scope Scope) Time {
 	return scope.GetTime(e.referencePath)
+}
+func (e *referenceEvaluator) EvalMap(scope Scope) Map {
+	return scope.GetMap(e.referencePath)
 }
 
 // Map of binary functions
@@ -1515,4 +2071,61 @@ var binaryFuncs = map[binarySignature]struct {
 		},
 		ResultType: TBool,
 	},
+}
+
+func FindValueKeys(f *ast.ArrowFunctionExpression) ([]string, error) {
+	switch n := f.Body.(type) {
+	case ast.Expression:
+		if o, ok := n.(*ast.ObjectExpression); ok {
+			return determineObjectKeys(o), nil
+		}
+		// No Key was specified, use default ValueColLabel
+		return []string{DefaultValueColLabel}, nil
+	case *ast.BlockStatement:
+		if len(n.Body) == 0 {
+			return nil, errors.New("arrow function has empty body")
+		}
+
+		//TODO(nathanielc): When we have conditional this needs to actually follow the program flow, not just skip to the last statement.
+		last := n.Body[len(n.Body)-1]
+		returnStmt, ok := last.(*ast.ReturnStatement)
+		if !ok {
+			return nil, fmt.Errorf("arrow function does not end with return statement, found %T", last)
+		}
+		return findValueKeys(returnStmt, n)
+	default:
+		return nil, fmt.Errorf("unsupported arrow body node %T", f.Body)
+	}
+}
+
+// findValueKeys is a form of static analysis of the code. It searches the block for the ObjectExpression that will be returned.
+func findValueKeys(n ast.Node, block *ast.BlockStatement) ([]string, error) {
+	switch n := n.(type) {
+	case *ast.ObjectExpression:
+		return determineObjectKeys(n), nil
+	case *ast.Identifier:
+		// Search back for var def of the Identifier.
+		for i := len(block.Body) - 1; i >= 0; i-- {
+			if vd, ok := block.Body[i].(*ast.VariableDeclaration); ok {
+				for _, d := range vd.Declarations {
+					if d.ID.Name == n.Name {
+						return findValueKeys(d.Init, block)
+					}
+				}
+			}
+		}
+		return nil, fmt.Errorf("could not find identifier %q", n.Name)
+	case *ast.ReturnStatement:
+		return findValueKeys(n.Argument, block)
+	default:
+		return nil, fmt.Errorf("cannot find value keys from %T", n)
+	}
+}
+
+func determineObjectKeys(m *ast.ObjectExpression) []string {
+	keys := make([]string, len(m.Properties))
+	for i, p := range m.Properties {
+		keys[i] = p.Key.Name
+	}
+	return keys
 }

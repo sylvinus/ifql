@@ -23,7 +23,7 @@ const (
 )
 
 type QueryBuilder interface {
-	QuerySpec() (*query.QuerySpec, error)
+	QuerySpec() (*query.Spec, error)
 }
 
 type Arg interface {
@@ -139,7 +139,7 @@ type Selector struct {
 	LabelMatchers []*LabelMatcher `json:"label_matchers,omitempty"`
 }
 
-func (s *Selector) QuerySpec() (*query.QuerySpec, error) {
+func (s *Selector) QuerySpec() (*query.Spec, error) {
 	parent := "from"
 	ops := []*query.Operation{
 		{
@@ -179,7 +179,7 @@ func (s *Selector) QuerySpec() (*query.QuerySpec, error) {
 	parent = "where"
 	edges = append(edges, edge)
 
-	return &query.QuerySpec{
+	return &query.Spec{
 		Operations: ops,
 		Edges:      edges,
 	}, nil
@@ -422,7 +422,7 @@ type AggregateExpr struct {
 	Aggregate *Aggregate `json:"aggregate,omitempty"`
 }
 
-func (a *AggregateExpr) QuerySpec() (*query.QuerySpec, error) {
+func (a *AggregateExpr) QuerySpec() (*query.Spec, error) {
 	spec, err := a.Selector.QuerySpec()
 	if err != nil {
 		return nil, err
@@ -480,7 +480,7 @@ type Comment struct {
 	Source string `json:"source,omitempty"`
 }
 
-func (c *Comment) QuerySpec() (*query.QuerySpec, error) {
+func (c *Comment) QuerySpec() (*query.Spec, error) {
 	return nil, fmt.Errorf("Unable to represent comments in the AST")
 }
 

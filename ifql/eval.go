@@ -12,7 +12,7 @@ func Eval(program *ast.Program, scope *Scope, d Domain) error {
 	ev := evaluator{
 		d: d,
 	}
-	return ev.eval(program, scope.Nest())
+	return ev.eval(program, scope)
 }
 
 // Domain represents any specific domain being used during evaluation.
@@ -196,8 +196,7 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 	case *ast.ArrowFunctionExpression:
 		return value{
 			t: TFunction,
-			v: &arrowFunc{
-				ev:    ev,
+			v: arrowFunc{
 				e:     e,
 				scope: scope.Nest(),
 			},
@@ -320,6 +319,14 @@ func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value,
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if the function is an arrowFunc and rebind it.
+	if af, ok := f.(arrowFunc); ok {
+		af.ev = ev
+		f = af
+	}
+
+	// Call the function
 	v, err := f.Call(arguments, ev.d)
 	if err != nil {
 		return nil, err
@@ -550,10 +557,11 @@ type Function interface {
 }
 
 type arrowFunc struct {
-	ev    evaluator
 	e     *ast.ArrowFunctionExpression
 	scope *Scope
 	call  func(Arguments, Domain) (Value, error)
+
+	ev evaluator
 }
 
 func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {

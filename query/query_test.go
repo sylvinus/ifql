@@ -13,7 +13,7 @@ import (
 	"github.com/influxdata/ifql/query"
 )
 
-var ignoreUnexportedQuerySpec = cmpopts.IgnoreUnexported(query.QuerySpec{})
+var ignoreUnexportedQuerySpec = cmpopts.IgnoreUnexported(query.Spec{})
 
 func TestQuery_JSON(t *testing.T) {
 	srcData := []byte(`
@@ -47,11 +47,11 @@ func TestQuery_JSON(t *testing.T) {
 	`)
 
 	// Ensure we can properly unmarshal a query
-	gotQ := query.QuerySpec{}
+	gotQ := query.Spec{}
 	if err := json.Unmarshal(srcData, &gotQ); err != nil {
 		t.Fatal(err)
 	}
-	expQ := query.QuerySpec{
+	expQ := query.Spec{
 		Operations: []*query.Operation{
 			{
 				ID: "from",
@@ -100,16 +100,16 @@ func TestQuery_JSON(t *testing.T) {
 
 func TestQuery_Walk(t *testing.T) {
 	testCases := []struct {
-		query     *query.QuerySpec
+		query     *query.Spec
 		walkOrder []query.OperationID
 		err       error
 	}{
 		{
-			query: &query.QuerySpec{},
+			query: &query.Spec{},
 			err:   errors.New("query has no root nodes"),
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -122,7 +122,7 @@ func TestQuery_Walk(t *testing.T) {
 			err: errors.New("edge references unknown child operation \"c\""),
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -136,7 +136,7 @@ func TestQuery_Walk(t *testing.T) {
 			err: errors.New("found duplicate operation ID \"b\""),
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -151,7 +151,7 @@ func TestQuery_Walk(t *testing.T) {
 			err: errors.New("found cycle in query"),
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -168,7 +168,7 @@ func TestQuery_Walk(t *testing.T) {
 			err: errors.New("found cycle in query"),
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -186,7 +186,7 @@ func TestQuery_Walk(t *testing.T) {
 			},
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -205,7 +205,7 @@ func TestQuery_Walk(t *testing.T) {
 			},
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},
@@ -223,7 +223,7 @@ func TestQuery_Walk(t *testing.T) {
 			},
 		},
 		{
-			query: &query.QuerySpec{
+			query: &query.Spec{
 				Operations: []*query.Operation{
 					{ID: "a"},
 					{ID: "b"},

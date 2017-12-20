@@ -39,10 +39,10 @@ func TestSample_Process(t *testing.T) {
 			name: "everything in separate Do calls",
 			data: &executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -78,10 +78,10 @@ func TestSample_Process(t *testing.T) {
 			name: "everything in single Do call",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -117,10 +117,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-other-even",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -151,10 +151,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-other-odd",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -185,10 +185,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-third-0",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -218,10 +218,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-third-1",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -250,10 +250,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-third-2",
 			data: execute.CopyBlock(&executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},
@@ -282,10 +282,10 @@ func TestSample_Process(t *testing.T) {
 			name: "every-third-2 in separate Do calls",
 			data: &executetest.Block{
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
-					{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true},
-					{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
+					{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true},
+					{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false},
 				},
 				Data: [][]interface{}{
 					{execute.Time(0), 7.0, "a", "y"},

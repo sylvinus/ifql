@@ -13,11 +13,11 @@ import (
 
 func TestLogicalPlanner_Plan(t *testing.T) {
 	testCases := []struct {
-		q  *query.QuerySpec
+		q  *query.Spec
 		ap *plan.LogicalPlanSpec
 	}{
 		{
-			q: &query.QuerySpec{
+			q: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "0",
@@ -182,7 +182,7 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 	}
 }
 
-var benchmarkQuery = &query.QuerySpec{
+var benchmarkQuery = &query.Spec{
 	Operations: []*query.Operation{
 		{
 			ID: "select0",

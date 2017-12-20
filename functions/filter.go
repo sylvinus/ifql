@@ -8,7 +8,6 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
-	"github.com/pkg/errors"
 )
 
 const FilterKind = "filter"
@@ -108,62 +107,19 @@ type filterTransformation struct {
 	d     execute.Dataset
 	cache execute.BlockBuilderCache
 
-	references []execute.Reference
-	scope      execute.Scope
-	scopeCols  map[string]int
-	ces        map[execute.DataType]expressionOrError
-}
-
-type expressionOrError struct {
-	Err  error
-	Expr execute.CompiledExpression
+	fn *execute.RowPredicateFn
 }
 
 func NewFilterTransformation(d execute.Dataset, cache execute.BlockBuilderCache, spec *FilterProcedureSpec) (*filterTransformation, error) {
-	if len(spec.Fn.Params) != 1 {
-		return nil, fmt.Errorf("filter functions should only have a single parameter, got %v", spec.Fn.Params)
-	}
-	objectName := spec.Fn.Params[0].Name
-	references, err := execute.FindReferences(spec.Fn)
+	fn, err := execute.NewRowPredicateFn(spec.Fn)
 	if err != nil {
 		return nil, err
 	}
 
-	valueRP := execute.Reference{objectName, "_value"}.Path()
-	types := make(map[execute.ReferencePath]execute.DataType, len(references))
-	for _, r := range references {
-		if len(r) != 2 {
-			return nil, fmt.Errorf("found invalid reference in the filter function %q", r)
-		}
-		rp := r.Path()
-		if rp != valueRP {
-			types[rp] = execute.TString
-		}
-	}
-
-	ces := make(map[execute.DataType]expressionOrError, len(execute.ValueDataTypes))
-	for _, typ := range execute.ValueDataTypes {
-		types[valueRP] = typ
-		ce, err := execute.CompileExpression(spec.Fn, types)
-		ces[typ] = expressionOrError{
-			Err:  err,
-			Expr: ce,
-		}
-		if err == nil && ce.Type() != execute.TBool {
-			ces[typ] = expressionOrError{
-				Err:  errors.New("expression does not evaluate to boolean"),
-				Expr: nil,
-			}
-		}
-	}
-
 	return &filterTransformation{
-		d:          d,
-		cache:      cache,
-		references: references,
-		scope:      make(execute.Scope),
-		scopeCols:  make(map[string]int),
-		ces:        ces,
+		d:     d,
+		cache: cache,
+		fn:    fn,
 	}, nil
 }
 
@@ -177,43 +133,25 @@ func (t *filterTransformation) Process(id execute.DatasetID, b execute.Block) er
 		execute.AddBlockCols(b, builder)
 	}
 
-	// Prepare scope
+	// Prepare the function for the column types.
 	cols := b.Cols()
-	valueIdx := execute.ValueIdx(cols)
-	for j, c := range cols {
-		if c.Label == execute.ValueColLabel {
-			t.scopeCols["_value"] = valueIdx
-		} else {
-			for _, r := range t.references {
-				if r[1] == c.Label {
-					t.scopeCols[c.Label] = j
-					break
-				}
-			}
-		}
+	if err := t.fn.Prepare(cols); err != nil {
+		// TODO(nathanielc): Should we not fail the query for failed compilation?
+		return err
 	}
-
-	valueCol := cols[valueIdx]
-	exprErr := t.ces[valueCol.Type]
-	if exprErr.Err != nil {
-		return errors.Wrapf(exprErr.Err, "expression does not support type %v", valueCol.Type)
-	}
-	ce := exprErr.Expr
 
 	// Append only matching rows to block
 	b.Times().DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		for i := range ts {
-			for _, r := range t.references {
-				t.scope[r.Path()] = execute.ValueForRow(i, t.scopeCols[r[1]], rr)
-			}
-			if pass, err := ce.EvalBool(t.scope); !pass {
-				if err != nil {
-					log.Printf("failed to evaluate expression: %v", err)
-				}
+			if pass, err := t.fn.Eval(i, rr); err != nil {
+				log.Printf("failed to evaluate filter expression: %v", err)
+				continue
+			} else if !pass {
+				// No match, skipping
 				continue
 			}
 			for j, c := range cols {
-				if c.IsCommon {
+				if c.Common {
 					continue
 				}
 				switch c.Type {

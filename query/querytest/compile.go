@@ -13,11 +13,11 @@ import (
 type NewQueryTestCase struct {
 	Name    string
 	Raw     string
-	Want    *query.QuerySpec
+	Want    *query.Spec
 	WantErr bool
 }
 
-var opts = append(asttest.CompareOptions, cmp.AllowUnexported(query.QuerySpec{}), cmpopts.IgnoreUnexported(query.QuerySpec{}))
+var opts = append(asttest.CompareOptions, cmp.AllowUnexported(query.Spec{}), cmpopts.IgnoreUnexported(query.Spec{}))
 
 func NewQueryTestHelper(t *testing.T, tc NewQueryTestCase) {
 	t.Helper()

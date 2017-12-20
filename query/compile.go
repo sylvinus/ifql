@@ -16,7 +16,7 @@ const (
 )
 
 // Compile parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
-func Compile(ctx context.Context, q string, opts ...ifql.Option) (*QuerySpec, error) {
+func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
 	program, err := ifql.NewAST(q, opts...)
 	if err != nil {
@@ -27,7 +27,7 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*QuerySpec, er
 	defer s.Finish()
 
 	// Create top-level builtin scope
-	scope := newBuiltInScope()
+	scope := builtinScope.Nest()
 
 	// Create new query domain
 	d := new(queryDomain)
@@ -35,10 +35,12 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*QuerySpec, er
 	if err := ifql.Eval(program, scope, d); err != nil {
 		return nil, err
 	}
-	return d.ToSpec(), nil
+	spec := d.ToSpec()
+	//log.Println(Formatted(spec, FmtJSON))
+	return spec, nil
 }
 
-type CreateOperationSpec func(args Arguments, ctx *Administration) (OperationSpec, error)
+type CreateOperationSpec func(args Arguments, a *Administration) (OperationSpec, error)
 
 var functionsMap = make(map[string]function)
 
@@ -56,36 +58,55 @@ func registerFunction(name string, c CreateOperationSpec, chainable bool) {
 	if _, ok := functionsMap[name]; ok {
 		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
-	functionsMap[name] = function{
+	f := function{
 		name:         name,
 		createOpSpec: c,
 		chainable:    chainable,
 	}
+	functionsMap[name] = f
+	if !chainable {
+		builtinScope.Set(name, f)
+	}
 }
 
-// newBuiltInScope returns a scope populated with the builtin values.
-func newBuiltInScope() *ifql.Scope {
-	s := ifql.NewScope()
-	for n, f := range functionsMap {
-		s.Set(n, f)
+var builtinScope = ifql.NewScope()
+
+// RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
+func RegisterBuiltIn(script string) {
+	program, err := ifql.NewAST(script)
+	if err != nil {
+		panic(err)
 	}
-	return s
+
+	// Create new query domain
+	d := new(queryDomain)
+
+	if err := ifql.Eval(program, builtinScope, d); err != nil {
+		panic(err)
+	}
 }
 
 type Administration struct {
+	id      OperationID
 	parents []OperationID
+	d       *queryDomain
 }
 
 // AddParent instructs the evaluation Context that a new edge should be created from the parent to the current operation.
 // Duplicate parents will be removed, so the caller need not concern itself with which parents have already been added.
-func (c *Administration) AddParent(id OperationID) {
+func (a *Administration) AddParent(id OperationID) {
 	// Check for duplicates
-	for _, p := range c.parents {
+	for _, p := range a.parents {
 		if p == id {
 			return
 		}
 	}
-	c.parents = append(c.parents, id)
+	a.parents = append(a.parents, id)
+}
+
+func (a *Administration) finalize() {
+	// Add parents
+	a.d.AddParentEdges(a.id, a.parents...)
 }
 
 type queryDomain struct {
@@ -124,8 +145,8 @@ func (d *queryDomain) AddParentEdges(id OperationID, parents ...OperationID) {
 	}
 }
 
-func (d *queryDomain) ToSpec() *QuerySpec {
-	return &QuerySpec{
+func (d *queryDomain) ToSpec() *Spec {
+	return &Spec{
 		Operations: d.operations,
 		Edges:      d.edges,
 	}
@@ -178,19 +199,21 @@ func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
 	qd := d.(*queryDomain)
 	o := qd.AddOperation(f.name)
 
+	a := &Administration{
+		id: o.ID,
+		d:  qd,
+	}
 	if f.chainable {
-		qd.AddParentEdges(o.ID, f.parentID)
+		a.parents = append(a.parents, f.parentID)
 	}
 
-	ctx := new(Administration)
-	spec, err := f.createOpSpec(Arguments{Arguments: args}, ctx)
+	spec, err := f.createOpSpec(Arguments{Arguments: args}, a)
 	if err != nil {
 		return nil, err
 	}
 	o.Spec = spec
 
-	// Add any additional parents
-	qd.AddParentEdges(o.ID, ctx.parents...)
+	a.finalize()
 
 	return Table{
 		ID: o.ID,
@@ -243,6 +266,24 @@ func (a Arguments) GetRequiredDuration(name string) (Duration, error) {
 	}
 	if !ok {
 		return 0, fmt.Errorf("missing required keyword argument %q", name)
+	}
+	return d, nil
+}
+func (a Arguments) GetTable(name string) (Table, bool, error) {
+	v, ok := a.Get(name)
+	if !ok {
+		return Table{}, false, nil
+	}
+	return v.Value().(Table), ok, nil
+}
+
+func (a Arguments) GetRequiredTable(name string) (Table, error) {
+	d, ok, err := a.GetTable(name)
+	if err != nil {
+		return Table{}, err
+	}
+	if !ok {
+		return Table{}, fmt.Errorf("missing required keyword argument %q", name)
 	}
 	return d, nil
 }

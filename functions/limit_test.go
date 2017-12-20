@@ -42,8 +42,8 @@ func TestLimit_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime},
+					{Label: "_value", Type: execute.TFloat},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 2.0},
@@ -56,8 +56,8 @@ func TestLimit_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime},
+					{Label: "_value", Type: execute.TFloat},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 2.0},
@@ -76,8 +76,8 @@ func TestLimit_Process(t *testing.T) {
 						Stop:  3,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime},
+						{Label: "_value", Type: execute.TFloat},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 3.0},
@@ -91,8 +91,8 @@ func TestLimit_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime},
+						{Label: "_value", Type: execute.TFloat},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0},
@@ -108,8 +108,8 @@ func TestLimit_Process(t *testing.T) {
 						Stop:  3,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime},
+						{Label: "_value", Type: execute.TFloat},
 					},
 					Data: [][]interface{}{
 						{execute.Time(1), 3.0},
@@ -122,8 +122,8 @@ func TestLimit_Process(t *testing.T) {
 						Stop:  5,
 					},
 					ColMeta: []execute.ColMeta{
-						{Label: "time", Type: execute.TTime},
-						{Label: "value", Type: execute.TFloat},
+						{Label: "_time", Type: execute.TTime},
+						{Label: "_value", Type: execute.TFloat},
 					},
 					Data: [][]interface{}{
 						{execute.Time(3), 3.0},
