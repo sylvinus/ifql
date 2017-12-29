@@ -27,3 +27,7 @@ func (b Bounds) Overlaps(o Bounds) bool {
 func (b Bounds) Equal(o Bounds) bool {
 	return b == o
 }
+
+func (b Bounds) Shift(d Duration) Bounds {
+	return Bounds{Start: b.Start.Add(d), Stop: b.Stop.Add(d)}
+}
