@@ -2,6 +2,10 @@ package control
 
 import "github.com/prometheus/client_golang/prometheus"
 
+var compilingGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "ifql_control_current_compiling",
+	Help: "Number of queries currently compiling",
+})
 var queueingGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "ifql_control_current_queueing",
 	Help: "Number of queries currently queueing",
@@ -19,6 +23,11 @@ var executingGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Number of queries currently executing",
 })
 
+var compilingHist = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:    "ifql_control_compiling",
+	Help:    "Histogram of compiling durations",
+	Buckets: prometheus.ExponentialBuckets(1e-3, 5, 7),
+})
 var queueingHist = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:    "ifql_control_queueing",
 	Help:    "Histogram of queueing durations",
