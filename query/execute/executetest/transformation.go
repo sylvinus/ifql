@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query/execute"
 )
 
@@ -34,7 +35,7 @@ func ProcessTestHelper(
 	sort.Sort(SortedBlocks(got))
 	sort.Sort(SortedBlocks(want))
 
-	if !cmp.Equal(want, got) {
+	if !cmp.Equal(want, got, cmpopts.EquateNaNs()) {
 		t.Errorf("unexpected blocks -want/+got\n%s", cmp.Diff(want, got))
 	}
 }
