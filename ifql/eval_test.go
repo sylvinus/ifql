@@ -100,6 +100,14 @@ func TestEval(t *testing.T) {
 			`,
 		},
 		{
+			name: "arrow function with default param",
+			query: `
+            addN = (r,n=4) => r + n
+            addN(r:2) == 6 or fail()
+			addN(r:3,n:1) == 4 or fail()
+			`,
+		},
+		{
 			name: "extra statements after return",
 			query: `
             f = (r) => {
@@ -182,7 +190,7 @@ func TestFunction_Resolve(t *testing.T) {
 	}
 
 	want := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "r"}},
+		Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 		Body: &ast.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left:     &ast.Identifier{Name: "r"},

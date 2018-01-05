@@ -133,13 +133,13 @@ func callexprs(head, tail interface{}, text []byte, pos position) (ast.Expressio
 
 func arrowfunc(params interface{}, body interface{}, text []byte, pos position) *ast.ArrowFunctionExpression {
 	paramsSlice := toIfaceSlice(params)
-	idents := make([]*ast.Identifier, len(paramsSlice))
+	paramsList := make([]*ast.Property, len(paramsSlice))
 	for i, p := range paramsSlice {
-		idents[i] = p.(*ast.Identifier)
+		paramsList[i] = p.(*ast.Property)
 	}
 	return &ast.ArrowFunctionExpression{
 		BaseNode: base(text, pos),
-		Params:   idents,
+		Params:   paramsList,
 		Body:     body.(ast.Node),
 	}
 }
@@ -159,9 +159,13 @@ func objectexpr(first, rest interface{}, text []byte, pos position) (*ast.Object
 }
 
 func property(key, value interface{}, text []byte, pos position) (*ast.Property, error) {
+	var v ast.Expression
+	if value != nil {
+		v = value.(ast.Expression)
+	}
 	return &ast.Property{
 		Key:      key.(*ast.Identifier),
-		Value:    value.(ast.Expression),
+		Value:    v,
 		BaseNode: base(text, pos),
 	}, nil
 }

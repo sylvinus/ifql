@@ -68,7 +68,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 							On:         []string{"host"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "t"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &ast.MemberExpression{
@@ -162,7 +162,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 							On:         []string{"t1"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "t"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &ast.BinaryExpression{
@@ -226,7 +226,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 			"on":["t1","t2"],
 			"table_names": {"sum1":"a","count3":"b"},
 			"fn":{
-				"params": [{"type":"Identifier","name":"t"}],
+				"params": [{"type":"Property","key":{"type":"Identifier","name":"t"}}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "+",
@@ -256,7 +256,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 			On:         []string{"t1", "t2"},
 			TableNames: map[query.OperationID]string{"sum1": "a", "count3": "b"},
 			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "t"}},
+				Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.AdditionOperator,
 					Left: &ast.MemberExpression{
@@ -280,7 +280,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 
 func TestMergeJoin_Process(t *testing.T) {
 	addFunction := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "t"}},
+		Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 		Body: &ast.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left: &ast.MemberExpression{
@@ -304,7 +304,7 @@ func TestMergeJoin_Process(t *testing.T) {
 		},
 	}
 	passThroughFunc := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "t"}},
+		Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 		Body: &ast.ObjectExpression{
 			Properties: []*ast.Property{
 				{

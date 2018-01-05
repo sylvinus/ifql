@@ -27,7 +27,7 @@ func init() {
 // covarianceBuiltIn defines a `covariance` function with an automatic join.
 //TODO(nathanielc): Add support for default values to IFQL arrow functions (i.e. pearsonr=false).
 var covarianceBuiltIn = `
-covariance = (x,y,on,pearsonr) =>
+covariance = (x,y,on,pearsonr=false) =>
     join(
         tables:{x:x, y:y},
         on:on,

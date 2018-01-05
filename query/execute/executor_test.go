@@ -176,7 +176,7 @@ func TestExecutor_Execute(t *testing.T) {
 								plan.ProcedureIDFromOperationID("count"): "count",
 							},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "t"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &ast.MemberExpression{

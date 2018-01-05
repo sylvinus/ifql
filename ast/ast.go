@@ -299,8 +299,8 @@ func (e *MemberExpression) Copy() Node {
 
 type ArrowFunctionExpression struct {
 	*BaseNode
-	Params []*Identifier `json:"params"`
-	Body   Node          `json:"body"`
+	Params []*Property `json:"params"`
+	Body   Node        `json:"body"`
 }
 
 // Type is the abstract type
@@ -314,9 +314,9 @@ func (e *ArrowFunctionExpression) Copy() Node {
 	*ne = *e
 
 	if len(e.Params) > 0 {
-		ne.Params = make([]*Identifier, len(e.Params))
+		ne.Params = make([]*Property, len(e.Params))
 		for i, param := range e.Params {
-			ne.Params[i] = param.Copy().(*Identifier)
+			ne.Params[i] = param.Copy().(*Property)
 		}
 	}
 
@@ -577,7 +577,9 @@ func (p *Property) Copy() Node {
 	np := new(Property)
 	*np = *p
 
-	np.Value = p.Value.Copy().(Expression)
+	if p.Value != nil {
+		np.Value = p.Value.Copy().(Expression)
+	}
 
 	return np
 }

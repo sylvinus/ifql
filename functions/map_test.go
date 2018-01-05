@@ -28,7 +28,7 @@ func TestMap_NewQuery(t *testing.T) {
 						ID: "map1",
 						Spec: &functions.MapOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &ast.MemberExpression{
@@ -63,7 +63,7 @@ func TestMap_NewQuery(t *testing.T) {
 						ID: "map1",
 						Spec: &functions.MapOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &ast.MemberExpression{
@@ -100,7 +100,7 @@ func TestMapOperation_Marshaling(t *testing.T) {
 		"spec":{
 			"fn":{
 				"type": "ArrowFunctionExpression",
-				"params": [{"type":"Identifier","name":"r"}],
+				"params": [{"type":"Property","key":{"type":"Identifier","name":"r"}}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "-",
@@ -124,7 +124,7 @@ func TestMapOperation_Marshaling(t *testing.T) {
 		ID: "map",
 		Spec: &functions.MapOpSpec{
 			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "r"}},
+				Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.SubtractionOperator,
 					Left: &ast.MemberExpression{
@@ -151,7 +151,7 @@ func TestMap_Process(t *testing.T) {
 			name: `_value+5`,
 			spec: &functions.MapProcedureSpec{
 				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Identifier{{Name: "r"}},
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.AdditionOperator,
 						Left: &ast.MemberExpression{
@@ -199,7 +199,7 @@ func TestMap_Process(t *testing.T) {
 			name: `_value*_value`,
 			spec: &functions.MapProcedureSpec{
 				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Identifier{{Name: "r"}},
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.MultiplicationOperator,
 						Left: &ast.MemberExpression{
