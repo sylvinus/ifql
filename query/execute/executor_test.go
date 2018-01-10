@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -168,16 +168,24 @@ func TestExecutor_Execute(t *testing.T) {
 					plan.ProcedureIDFromOperationID("join"): {
 						ID: plan.ProcedureIDFromOperationID("join"),
 						Spec: &functions.MergeJoinProcedureSpec{
-							Eval: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.DivisionOperator,
-									Left: &expression.ReferenceNode{
-										Name: "$",
-										Kind: "field",
+							Fn: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{
+									{Name: "a"},
+									{Name: "b"},
+								},
+								Body: &ast.BinaryExpression{
+									Operator: ast.DivisionOperator,
+									Left: &ast.MemberExpression{
+										Object: &ast.Identifier{
+											Name: "a",
+										},
+										Property: &ast.StringLiteral{Value: "_value"},
 									},
-									Right: &expression.ReferenceNode{
-										Name: "b",
-										Kind: "identifier",
+									Right: &ast.MemberExpression{
+										Object: &ast.Identifier{
+											Name: "b",
+										},
+										Property: &ast.StringLiteral{Value: "_value"},
 									},
 								},
 							},

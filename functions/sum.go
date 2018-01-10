@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -13,13 +12,13 @@ type SumOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(SumKind, createSumOpSpec)
+	query.RegisterMethod(SumKind, createSumOpSpec)
 	query.RegisterOpSpec(SumKind, newSumOp)
 	plan.RegisterProcedureSpec(SumKind, newSumProcedure, SumKind)
 	execute.RegisterTransformation(SumKind, createSumTransformation)
 }
 
-func createSumOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSumOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(SumOpSpec), nil
 }
 

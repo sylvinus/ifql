@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"time"
 )
@@ -23,33 +25,41 @@ type Node interface {
 	node()
 	Type() string // Type property is a string that contains the variant type of the node
 	Location() *SourceLocation
+	Copy() Node
+
+	// All node must support json marshalling
+	json.Marshaler
 }
 
-func (*BaseNode) node() {}
+func (*Program) node() {}
 
+func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
+func (*ReturnStatement) node()     {}
 func (*VariableDeclaration) node() {}
 func (*VariableDeclarator) node()  {}
 
-func (*CallExpression) node()        {}
-func (*MemberExpression) node()      {}
-func (*SequenceExpression) node()    {}
-func (*BinaryExpression) node()      {}
-func (*LogicalExpression) node()     {}
-func (*ObjectExpression) node()      {}
-func (*ConditionalExpression) node() {}
-func (*ArrayExpression) node()       {}
+func (*ArrayExpression) node()         {}
+func (*ArrowFunctionExpression) node() {}
+func (*BinaryExpression) node()        {}
+func (*CallExpression) node()          {}
+func (*ConditionalExpression) node()   {}
+func (*LogicalExpression) node()       {}
+func (*MemberExpression) node()        {}
+func (*ObjectExpression) node()        {}
+func (*UnaryExpression) node()         {}
 
 func (*Property) node()   {}
 func (*Identifier) node() {}
 
-func (*StringLiteral) node()   {}
-func (*BooleanLiteral) node()  {}
-func (*NumberLiteral) node()   {}
-func (*RegexpLiteral) node()   {}
-func (*DurationLiteral) node() {}
-func (*DateTimeLiteral) node() {}
-func (*FieldLiteral) node()    {}
+func (*BooleanLiteral) node()         {}
+func (*DateTimeLiteral) node()        {}
+func (*DurationLiteral) node()        {}
+func (*IntegerLiteral) node()         {}
+func (*FloatLiteral) node()           {}
+func (*RegexpLiteral) node()          {}
+func (*StringLiteral) node()          {}
+func (*UnsignedIntegerLiteral) node() {}
 
 // BaseNode holds the attributes every expression or statement should have
 type BaseNode struct {
@@ -68,14 +78,50 @@ type Program struct {
 // Type is the abstract type
 func (*Program) Type() string { return "Program" }
 
+func (p *Program) Copy() Node {
+	np := new(Program)
+	*np = *p
+	if len(p.Body) > 0 {
+		np.Body = make([]Statement, len(p.Body))
+		for i, s := range p.Body {
+			np.Body[i] = s.Copy().(Statement)
+		}
+	}
+	return np
+}
+
 // Statement Perhaps we don't even want statements nor expression statements
 type Statement interface {
 	Node
 	stmt()
 }
 
+func (*BlockStatement) stmt()      {}
 func (*ExpressionStatement) stmt() {}
+func (*ReturnStatement) stmt()     {}
 func (*VariableDeclaration) stmt() {}
+
+// BlockStatement is a set of statements
+type BlockStatement struct {
+	*BaseNode
+	Body []Statement `json:"body"`
+}
+
+// Type is the abstract type
+func (*BlockStatement) Type() string { return "BlockStatement" }
+
+func (s *BlockStatement) Copy() Node {
+	ns := new(BlockStatement)
+	*ns = *s
+
+	if len(s.Body) > 0 {
+		ns.Body = make([]Statement, len(s.Body))
+		for i, stmt := range s.Body {
+			ns.Body[i] = stmt.Copy().(Statement)
+		}
+	}
+	return ns
+}
 
 // ExpressionStatement may consist of an expression that does not return a value and is executed solely for its side-effects.
 type ExpressionStatement struct {
@@ -85,6 +131,38 @@ type ExpressionStatement struct {
 
 // Type is the abstract type
 func (*ExpressionStatement) Type() string { return "ExpressionStatement" }
+
+func (s *ExpressionStatement) Copy() Node {
+	if s == nil {
+		return s
+	}
+	ns := new(ExpressionStatement)
+	*ns = *s
+
+	ns.Expression = s.Expression.Copy().(Expression)
+
+	return ns
+}
+
+// ReturnStatement defines an Expression to return
+type ReturnStatement struct {
+	*BaseNode
+	Argument Expression `json:"argument"`
+}
+
+// Type is the abstract type
+func (*ReturnStatement) Type() string { return "ReturnStatement" }
+func (s *ReturnStatement) Copy() Node {
+	if s == nil {
+		return s
+	}
+	ns := new(ReturnStatement)
+	*ns = *s
+
+	ns.Argument = s.Argument.Copy().(Expression)
+
+	return ns
+}
 
 // Declaration statements are used to declare the type of one or more local variables.
 type Declaration interface {
@@ -103,6 +181,23 @@ type VariableDeclaration struct {
 // Type is the abstract type
 func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
 
+func (d *VariableDeclaration) Copy() Node {
+	if d == nil {
+		return d
+	}
+	nd := new(VariableDeclaration)
+	*nd = *d
+
+	if len(d.Declarations) > 0 {
+		nd.Declarations = make([]*VariableDeclarator, len(d.Declarations))
+		for i, decl := range d.Declarations {
+			nd.Declarations[i] = decl.Copy().(*VariableDeclarator)
+		}
+	}
+
+	return nd
+}
+
 // VariableDeclarator represents the declaration of a variable
 type VariableDeclarator struct {
 	*BaseNode
@@ -113,30 +208,42 @@ type VariableDeclarator struct {
 // Type is the abstract type
 func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
 
+func (d *VariableDeclarator) Copy() Node {
+	if d == nil {
+		return d
+	}
+	nd := new(VariableDeclarator)
+	*nd = *d
+
+	nd.Init = d.Init.Copy().(Expression)
+
+	return nd
+}
+
 // Expression represents an action that can be performed by InfluxDB that can be evaluated to a value.
 type Expression interface {
 	Node
 	expression()
 }
 
-func (*CallExpression) expression()        {}
-func (*MemberExpression) expression()      {}
-func (*SequenceExpression) expression()    {}
-func (*BinaryExpression) expression()      {}
-func (*LogicalExpression) expression()     {}
-func (*ObjectExpression) expression()      {}
-func (*ConditionalExpression) expression() {}
-func (*ArrayExpression) expression()       {}
-func (*Identifier) expression()            {}
-func (*StringLiteral) expression()         {}
-func (*BooleanLiteral) expression()        {}
-func (*NumberLiteral) expression()         {}
-func (*IntegerLiteral) expression()        {}
-func (*RegexpLiteral) expression()         {}
-func (*DurationLiteral) expression()       {}
-func (*DateTimeLiteral) expression()       {}
-func (*FieldLiteral) expression()          {}
-func (*FunctionExpression) expression()    {}
+func (*CallExpression) expression()          {}
+func (*MemberExpression) expression()        {}
+func (*BinaryExpression) expression()        {}
+func (*UnaryExpression) expression()         {}
+func (*LogicalExpression) expression()       {}
+func (*ObjectExpression) expression()        {}
+func (*ConditionalExpression) expression()   {}
+func (*ArrayExpression) expression()         {}
+func (*Identifier) expression()              {}
+func (*StringLiteral) expression()           {}
+func (*BooleanLiteral) expression()          {}
+func (*FloatLiteral) expression()            {}
+func (*IntegerLiteral) expression()          {}
+func (*UnsignedIntegerLiteral) expression()  {}
+func (*RegexpLiteral) expression()           {}
+func (*DurationLiteral) expression()         {}
+func (*DateTimeLiteral) expression()         {}
+func (*ArrowFunctionExpression) expression() {}
 
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
@@ -148,34 +255,75 @@ type CallExpression struct {
 // Type is the abstract type
 func (*CallExpression) Type() string { return "CallExpression" }
 
+func (e *CallExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(CallExpression)
+	*ne = *e
+
+	ne.Callee = e.Callee.Copy().(Expression)
+
+	if len(e.Arguments) > 0 {
+		ne.Arguments = make([]Expression, len(e.Arguments))
+		for i, arg := range e.Arguments {
+			ne.Arguments[i] = arg.Copy().(Expression)
+		}
+	}
+
+	return ne
+}
+
 // MemberExpression represents calling a property of a CallExpression
 type MemberExpression struct {
 	*BaseNode
-	Object   Expression  `json:"object"`
-	Property *Identifier `json:"property"`
+	Object   Expression `json:"object"`
+	Property Expression `json:"property"`
 }
 
 // Type is the abstract type
 func (*MemberExpression) Type() string { return "MemberExpression" }
 
-// SequenceExpression uses comma operator to include multiple expressions
-// in a location that requires a single expression.  Typically, multiple
-// select statements on one line.
-type SequenceExpression struct {
+func (e *MemberExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(MemberExpression)
+	*ne = *e
+
+	ne.Object = e.Object.Copy().(Expression)
+	ne.Property = e.Property.Copy().(Expression)
+
+	return ne
+}
+
+type ArrowFunctionExpression struct {
 	*BaseNode
-	Expressions []Expression `json:"expressions"`
+	Params []*Identifier `json:"params"`
+	Body   Node          `json:"body"`
 }
 
 // Type is the abstract type
-func (*SequenceExpression) Type() string { return "SequenceExpression" }
+func (*ArrowFunctionExpression) Type() string { return "ArrowFunctionExpression" }
 
-type FunctionExpression struct {
-	*BaseNode
-	Function Expression `json:"function"`
+func (e *ArrowFunctionExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ArrowFunctionExpression)
+	*ne = *e
+
+	if len(e.Params) > 0 {
+		ne.Params = make([]*Identifier, len(e.Params))
+		for i, param := range e.Params {
+			ne.Params[i] = param.Copy().(*Identifier)
+		}
+	}
+
+	ne.Body = e.Body.Copy()
+
+	return ne
 }
-
-// Type is the abstract type
-func (*FunctionExpression) Type() string { return "FunctionExpression" }
 
 // OperatorKind are Equality and Arithmatic operators.
 // Result of evaluating an equality operator is always of type Boolean based on whether the
@@ -196,6 +344,7 @@ const (
 	GreaterThanOperator
 	StartsWithOperator
 	InOperator
+	NotOperator
 	NotEmptyOperator
 	EmptyOperator
 	EqualOperator
@@ -212,6 +361,22 @@ func OperatorLookup(op string) OperatorKind {
 	return operators[op]
 }
 
+func (o OperatorKind) MarshalText() ([]byte, error) {
+	text, ok := OperatorTokens[o]
+	if !ok {
+		return nil, fmt.Errorf("unknown operator %d", int(o))
+	}
+	return []byte(text), nil
+}
+func (o *OperatorKind) UnmarshalText(data []byte) error {
+	var ok bool
+	*o, ok = operators[string(data)]
+	if !ok {
+		return fmt.Errorf("unknown operator %q", string(data))
+	}
+	return nil
+}
+
 // BinaryExpression use binary operators act on two operands in an expression.
 // BinaryExpression includes relational and arithmatic operators
 type BinaryExpression struct {
@@ -223,6 +388,41 @@ type BinaryExpression struct {
 
 // Type is the abstract type
 func (*BinaryExpression) Type() string { return "BinaryExpression" }
+
+func (e *BinaryExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(BinaryExpression)
+	*ne = *e
+
+	ne.Left = e.Left.Copy().(Expression)
+	ne.Right = e.Right.Copy().(Expression)
+
+	return ne
+}
+
+// UnaryExpression use operators act on a single operand in an expression.
+type UnaryExpression struct {
+	*BaseNode
+	Operator OperatorKind `json:"operator"`
+	Argument Expression   `json:"argument"`
+}
+
+// Type is the abstract type
+func (*UnaryExpression) Type() string { return "UnaryExpression" }
+
+func (e *UnaryExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(UnaryExpression)
+	*ne = *e
+
+	ne.Argument = e.Argument.Copy().(Expression)
+
+	return ne
+}
 
 // LogicalOperatorKind are used with boolean (logical) values
 type LogicalOperatorKind int
@@ -243,6 +443,22 @@ func LogicalOperatorLookup(op string) LogicalOperatorKind {
 	return logOperators[op]
 }
 
+func (o LogicalOperatorKind) MarshalText() ([]byte, error) {
+	text, ok := LogicalOperatorTokens[o]
+	if !ok {
+		return nil, fmt.Errorf("unknown logical operator %d", int(o))
+	}
+	return []byte(text), nil
+}
+func (o *LogicalOperatorKind) UnmarshalText(data []byte) error {
+	var ok bool
+	*o, ok = logOperators[string(data)]
+	if !ok {
+		return fmt.Errorf("unknown logical operator %q", string(data))
+	}
+	return nil
+}
+
 // LogicalExpression represent the rule conditions that collectively evaluate to either true or false.
 // `or` expressions compute the disjunction of two boolean expressions and return boolean values.
 // `and`` expressions compute the conjunction of two boolean expressions and return boolean values.
@@ -256,6 +472,19 @@ type LogicalExpression struct {
 // Type is the abstract type
 func (*LogicalExpression) Type() string { return "LogicalExpression" }
 
+func (e *LogicalExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(LogicalExpression)
+	*ne = *e
+
+	ne.Left = e.Left.Copy().(Expression)
+	ne.Right = e.Right.Copy().(Expression)
+
+	return ne
+}
+
 // ArrayExpression is used to create and directly specify the elements of an array object
 type ArrayExpression struct {
 	*BaseNode
@@ -265,6 +494,23 @@ type ArrayExpression struct {
 // Type is the abstract type
 func (*ArrayExpression) Type() string { return "ArrayExpression" }
 
+func (e *ArrayExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ArrayExpression)
+	*ne = *e
+
+	if len(e.Elements) > 0 {
+		ne.Elements = make([]Expression, len(e.Elements))
+		for i, el := range e.Elements {
+			ne.Elements[i] = el.Copy().(Expression)
+		}
+	}
+
+	return ne
+}
+
 // ObjectExpression allows the declaration of an anonymous object within a declaration.
 type ObjectExpression struct {
 	*BaseNode
@@ -273,6 +519,23 @@ type ObjectExpression struct {
 
 // Type is the abstract type
 func (*ObjectExpression) Type() string { return "ObjectExpression" }
+
+func (e *ObjectExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ObjectExpression)
+	*ne = *e
+
+	if len(e.Properties) > 0 {
+		ne.Properties = make([]*Property, len(e.Properties))
+		for i, p := range e.Properties {
+			ne.Properties[i] = p.Copy().(*Property)
+		}
+	}
+
+	return ne
+}
 
 // ConditionalExpression selects one of two expressions, `Alternate` or `Consequent`
 // depending on a third, boolean, expression, `Test`.
@@ -286,11 +549,37 @@ type ConditionalExpression struct {
 // Type is the abstract type
 func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
 
+func (e *ConditionalExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(ConditionalExpression)
+	*ne = *e
+
+	ne.Test = e.Test.Copy().(Expression)
+	ne.Alternate = e.Alternate.Copy().(Expression)
+	ne.Consequent = e.Consequent.Copy().(Expression)
+
+	return ne
+}
+
 // Property is the value associated with a key
 type Property struct {
 	*BaseNode
 	Key   *Identifier `json:"key"`
 	Value Expression  `json:"value"`
+}
+
+func (p *Property) Copy() Node {
+	if p == nil {
+		return p
+	}
+	np := new(Property)
+	*np = *p
+
+	np.Value = p.Value.Copy().(Expression)
+
+	return np
 }
 
 // Type is the abstract type
@@ -305,6 +594,15 @@ type Identifier struct {
 // Type is the abstract type
 func (*Identifier) Type() string { return "Identifier" }
 
+func (i *Identifier) Copy() Node {
+	if i == nil {
+		return i
+	}
+	ni := new(Identifier)
+	*ni = *i
+	return ni
+}
+
 // Literal are thelexical forms for literal expressions which define
 // boolean, string, integer, number, duration, datetime and field values.
 // Literals must be coerced explicitly.
@@ -313,14 +611,14 @@ type Literal interface {
 	literal()
 }
 
-func (*StringLiteral) literal()   {}
-func (*BooleanLiteral) literal()  {}
-func (*NumberLiteral) literal()   {}
-func (*IntegerLiteral) literal()  {}
-func (*RegexpLiteral) literal()   {}
-func (*DurationLiteral) literal() {}
-func (*DateTimeLiteral) literal() {}
-func (*FieldLiteral) literal()    {}
+func (*StringLiteral) literal()          {}
+func (*BooleanLiteral) literal()         {}
+func (*FloatLiteral) literal()           {}
+func (*IntegerLiteral) literal()         {}
+func (*UnsignedIntegerLiteral) literal() {}
+func (*RegexpLiteral) literal()          {}
+func (*DurationLiteral) literal()        {}
+func (*DateTimeLiteral) literal()        {}
 
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {
@@ -329,6 +627,15 @@ type StringLiteral struct {
 }
 
 func (*StringLiteral) Type() string { return "StringLiteral" }
+
+func (l *StringLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(StringLiteral)
+	*nl = *l
+	return nl
+}
 
 // BooleanLiteral represent boolean values
 type BooleanLiteral struct {
@@ -339,14 +646,32 @@ type BooleanLiteral struct {
 // Type is the abstract type
 func (*BooleanLiteral) Type() string { return "BooleanLiteral" }
 
-// NumberLiteral  represent floating point numbers according to the double representations defined by the IEEE-754-1985
-type NumberLiteral struct {
+func (l *BooleanLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(BooleanLiteral)
+	*nl = *l
+	return nl
+}
+
+// FloatLiteral  represent floating point numbers according to the double representations defined by the IEEE-754-1985
+type FloatLiteral struct {
 	*BaseNode
 	Value float64 `json:"value"`
 }
 
 // Type is the abstract type
-func (*NumberLiteral) Type() string { return "NumberLiteral" }
+func (*FloatLiteral) Type() string { return "FloatLiteral" }
+
+func (l *FloatLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(FloatLiteral)
+	*nl = *l
+	return nl
+}
 
 // IntegerLiteral represent integer numbers.
 type IntegerLiteral struct {
@@ -357,6 +682,33 @@ type IntegerLiteral struct {
 // Type is the abstract type
 func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
 
+func (l *IntegerLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(IntegerLiteral)
+	*nl = *l
+	return nl
+}
+
+// UnsignedIntegerLiteral represent integer numbers.
+type UnsignedIntegerLiteral struct {
+	*BaseNode
+	Value uint64 `json:"value"`
+}
+
+// Type is the abstract type
+func (*UnsignedIntegerLiteral) Type() string { return "UnsignedIntegerLiteral" }
+
+func (l *UnsignedIntegerLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(UnsignedIntegerLiteral)
+	*nl = *l
+	return nl
+}
+
 // RegexpLiteral expressions begin and end with `/` and are regular expressions with syntax accepted by RE2
 type RegexpLiteral struct {
 	*BaseNode
@@ -365,6 +717,15 @@ type RegexpLiteral struct {
 
 // Type is the abstract type
 func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
+
+func (l *RegexpLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(RegexpLiteral)
+	*nl = *l
+	return nl
+}
 
 // DurationLiteral represents the elapsed time between two instants as an
 // int64 nanosecond count with syntax of golang's time.Duration
@@ -377,6 +738,15 @@ type DurationLiteral struct {
 // Type is the abstract type
 func (*DurationLiteral) Type() string { return "DurationLiteral" }
 
+func (l *DurationLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(DurationLiteral)
+	*nl = *l
+	return nl
+}
+
 // DateTimeLiteral represents an instant in time with nanosecond precision using
 // the syntax of golang's RFC3339 Nanosecond variant
 // TODO: this may be better as a class initialization
@@ -388,15 +758,14 @@ type DateTimeLiteral struct {
 // Type is the abstract type
 func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
 
-// FieldLiteral represents the point at a time and tagset with syntax `$`
-// TODO: Should field literals be an identifier?
-type FieldLiteral struct {
-	*BaseNode
-	Value string `json:"value"`
+func (l *DateTimeLiteral) Copy() Node {
+	if l == nil {
+		return l
+	}
+	nl := new(DateTimeLiteral)
+	*nl = *l
+	return nl
 }
-
-// Type is the abstract type
-func (*FieldLiteral) Type() string { return "FieldLiteral" }
 
 // OperatorTokens converts OperatorKind to string
 var OperatorTokens = map[OperatorKind]string{
@@ -409,6 +778,7 @@ var OperatorTokens = map[OperatorKind]string{
 	GreaterThanOperator:      ">",
 	GreaterThanEqualOperator: ">=",
 	InOperator:               "in",
+	NotOperator:              "not",
 	NotEmptyOperator:         "not empty",
 	EmptyOperator:            "empty",
 	StartsWithOperator:       "startswith",

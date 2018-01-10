@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
@@ -20,7 +21,6 @@ var version string
 var commit string
 var date string
 
-var queryStr = flag.String("query", "", "Query to run")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 var verbose = flag.Bool("v", false, "print verbose output")
@@ -45,7 +45,20 @@ func (l *hostList) Set(s string) error {
 
 var defaultStorageHosts = []string{"localhost:8082"}
 
+func usage() {
+	fmt.Println("Usage: ifql [OPTIONS] <query>")
+	fmt.Println()
+	fmt.Println("Runs a query using the IFQL engine.")
+	fmt.Println()
+	fmt.Println("The query argument is either a string query \nor a path to a file prefixed with an '@'.")
+	fmt.Println()
+	fmt.Println("Options:")
+
+	flag.PrintDefaults()
+}
+
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 	if tr := tracing.Open("ifql"); tr != nil {
 		defer tr.Close()
@@ -69,13 +82,25 @@ func main() {
 	defer span.Finish()
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
-	fmt.Println("Running query", *queryStr)
+	var queryStr string
+	if args := flag.Args(); len(args) == 1 {
+		q, err := loadQuery(args[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+		queryStr = q
+	} else {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	fmt.Println("Running query", queryStr)
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts
 	}
 	results, querySpec, err := ifql.ExecuteQuery(
 		ctx,
-		*queryStr,
+		queryStr,
 		&ifql.Options{
 			Verbose: *verbose,
 			Trace:   *trace,
@@ -118,4 +143,21 @@ func main() {
 			log.Fatal("could not write memory profile: ", err)
 		}
 	}
+}
+
+func loadQuery(q string) (string, error) {
+	if len(q) > 0 && q[0] == '@' {
+		f, err := os.Open(q[1:])
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+
+		data, err := ioutil.ReadAll(f)
+		if err != nil {
+			return "", err
+		}
+		q = string(data)
+	}
+	return q, nil
 }

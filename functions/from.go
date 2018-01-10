@@ -3,7 +3,7 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
@@ -18,13 +18,13 @@ type FromOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterFunction(FromKind, createFromOpSpec)
+	query.RegisterFunction(FromKind, createFromOpSpec)
 	query.RegisterOpSpec(FromKind, newFromOp)
 	plan.RegisterProcedureSpec(FromKind, newFromProcedure, FromKind)
 	execute.RegisterSource(FromKind, createFromSource)
 }
 
-func createFromOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createFromOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	db, err := args.GetRequiredString("db")
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func createFromOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpe
 	if array, ok, err := args.GetArray("hosts", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.Hosts = array.Elements.([]string)
+		spec.Hosts = array.AsStrings()
 	}
 	return spec, nil
 }
@@ -57,7 +57,7 @@ type FromProcedureSpec struct {
 	Bounds    plan.BoundsSpec
 
 	FilterSet bool
-	Filter    expression.Expression
+	Filter    *ast.ArrowFunctionExpression
 
 	DescendingSet bool
 	Descending    bool

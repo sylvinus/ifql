@@ -116,7 +116,10 @@ func (v *ValueIterator) AtTime(i int, j int) execute.Time {
 func BlocksFromCache(c execute.DataCache) []*Block {
 	var blocks []*Block
 	c.ForEach(func(key execute.BlockKey) {
-		b, _ := c.Block(key)
+		b, err := c.Block(key)
+		if err != nil {
+			panic(err)
+		}
 		blocks = append(blocks, ConvertBlock(b))
 	})
 	return blocks

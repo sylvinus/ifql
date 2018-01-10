@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -16,13 +15,13 @@ type LastOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(LastKind, createLastOpSpec)
+	query.RegisterMethod(LastKind, createLastOpSpec)
 	query.RegisterOpSpec(LastKind, newLastOp)
 	plan.RegisterProcedureSpec(LastKind, newLastProcedure, LastKind)
 	execute.RegisterTransformation(LastKind, createLastTransformation)
 }
 
-func createLastOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createLastOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(LastOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err

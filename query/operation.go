@@ -63,7 +63,7 @@ func (o Operation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(oj)
 }
 
-type CreateOperationSpec func() OperationSpec
+type NewOperationSpec func() OperationSpec
 
 // OperationSpec specifies an operation as part of a query.
 type OperationSpec interface {
@@ -77,11 +77,13 @@ type OperationID string
 // OperationKind denotes the kind of operations.
 type OperationKind string
 
-var kindToOp = make(map[OperationKind]CreateOperationSpec)
+var kindToOp = make(map[OperationKind]NewOperationSpec)
 
 // RegisterOpSpec registers an operation spec with a given kind.
 // If the kind has already been registered the call panics.
-func RegisterOpSpec(k OperationKind, c CreateOperationSpec) {
+//
+// TODO:(nathanielc) make this part of RegisterMethod/RegisterFunction
+func RegisterOpSpec(k OperationKind, c NewOperationSpec) {
 	if kindToOp[k] != nil {
 		panic(fmt.Errorf("duplicate registration for operation kind %v", k))
 	}

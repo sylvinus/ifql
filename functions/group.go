@@ -20,28 +20,28 @@ type GroupOpSpec struct {
 }
 
 func init() {
-	ifql.RegisterMethod(GroupKind, createGroupOpSpec)
+	query.RegisterMethod(GroupKind, createGroupOpSpec)
 	query.RegisterOpSpec(GroupKind, newGroupOp)
 	plan.RegisterProcedureSpec(GroupKind, newGroupProcedure, GroupKind)
 	execute.RegisterTransformation(GroupKind, createGroupTransformation)
 }
 
-func createGroupOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createGroupOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	spec := new(GroupOpSpec)
 	if array, ok, err := args.GetArray("by", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.By = array.Elements.([]string)
+		spec.By = array.AsStrings()
 	}
 	if array, ok, err := args.GetArray("keep", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.Keep = array.Elements.([]string)
+		spec.Keep = array.AsStrings()
 	}
 	if array, ok, err := args.GetArray("except", ifql.TString); err != nil {
 		return nil, err
 	} else if ok {
-		spec.Except = array.Elements.([]string)
+		spec.Except = array.AsStrings()
 	}
 
 	if len(spec.By) > 0 && len(spec.Except) > 0 {

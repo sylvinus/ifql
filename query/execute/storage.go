@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query/execute/storage"
 	"github.com/influxdata/yarpc"
 	"github.com/pkg/errors"
@@ -22,7 +22,7 @@ type ReadSpec struct {
 	RAMLimit     uint64
 	Database     string
 	Hosts        []string
-	Predicate    expression.Expression
+	Predicate    *ast.ArrowFunctionExpression
 	PointsLimit  int64
 	SeriesLimit  int64
 	SeriesOffset int64
@@ -78,8 +78,8 @@ type connection struct {
 
 func (sr *storageReader) Read(ctx context.Context, trace map[string]string, readSpec ReadSpec, start, stop Time) (BlockIterator, error) {
 	var predicate *storage.Predicate
-	if readSpec.Predicate.Root != nil {
-		p, err := ExpressionToStoragePredicate(readSpec.Predicate.Root)
+	if readSpec.Predicate != nil {
+		p, err := ToStoragePredicate(readSpec.Predicate)
 		if err != nil {
 			return nil, err
 		}

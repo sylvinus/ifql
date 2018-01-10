@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -13,13 +12,13 @@ import (
 const SpreadKind = "spread"
 
 func init() {
-	ifql.RegisterMethod(SpreadKind, createSpreadOpSpec)
+	query.RegisterMethod(SpreadKind, createSpreadOpSpec)
 	query.RegisterOpSpec(SpreadKind, newSpreadOp)
 	plan.RegisterProcedureSpec(SpreadKind, newSpreadProcedure, SpreadKind)
 	execute.RegisterTransformation(SpreadKind, createSpreadTransformation)
 }
 
-func createSpreadOpSpec(args ifql.Arguments, ctx ifql.Context) (query.OperationSpec, error) {
+func createSpreadOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
 	return new(SpreadOpSpec), nil
 }
 

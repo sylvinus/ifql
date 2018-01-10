@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/influxdata/ifql/expression"
+	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 )
@@ -370,39 +370,46 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.AndOperator,
-										Left: &expression.BinaryNode{
-											Operator: expression.EqualOperator,
-											Left: &expression.ReferenceNode{
-												Name: "_metric",
-												Kind: "tag",
+							Fn: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.LogicalExpression{
+										Operator: ast.AndOperator,
+										Left: &ast.BinaryExpression{
+											Operator: ast.EqualOperator,
+											Left: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "r",
+												},
+												Property: &ast.StringLiteral{Value: "_metric"},
 											},
-											Right: &expression.StringLiteralNode{
+											Right: &ast.StringLiteral{
 												Value: "node_cpu",
 											},
 										},
-										Right: &expression.BinaryNode{
-											Operator: expression.EqualOperator,
-											Left: &expression.ReferenceNode{
-												Name: "mode",
-												Kind: "tag",
+										Right: &ast.BinaryExpression{
+											Operator: ast.EqualOperator,
+											Left: &ast.MemberExpression{
+												Object: &ast.Identifier{
+													Name: "r",
+												},
+												Property: &ast.StringLiteral{Value: "mode"},
 											},
-											Right: &expression.StringLiteralNode{
+											Right: &ast.StringLiteral{
 												Value: "user",
 											},
 										},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "cpu",
-											Kind: "tag",
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "r",
+											},
+											Property: &ast.StringLiteral{Value: "cpu"},
 										},
-										Right: &expression.StringLiteralNode{
+										Right: &ast.StringLiteral{
 											Value: "cpu2",
 										},
 									},
@@ -444,26 +451,31 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_metric",
-											Kind: "tag",
+							Fn: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "r",
+											},
+											Property: &ast.StringLiteral{Value: "_metric"},
 										},
-										Right: &expression.StringLiteralNode{
+										Right: &ast.StringLiteral{
 											Value: "node_cpu",
 										},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "mode",
-											Kind: "tag",
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "r",
+											},
+											Property: &ast.StringLiteral{Value: "mode"},
 										},
-										Right: &expression.StringLiteralNode{
+										Right: &ast.StringLiteral{
 											Value: "user",
 										},
 									},
@@ -503,26 +515,31 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Expression: expression.Expression{
-								Root: &expression.BinaryNode{
-									Operator: expression.AndOperator,
-									Left: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_metric",
-											Kind: "tag",
+							Fn: &ast.ArrowFunctionExpression{
+								Params: []*ast.Identifier{{Name: "r"}},
+								Body: &ast.LogicalExpression{
+									Operator: ast.AndOperator,
+									Left: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "r",
+											},
+											Property: &ast.StringLiteral{Value: "_metric"},
 										},
-										Right: &expression.StringLiteralNode{
+										Right: &ast.StringLiteral{
 											Value: "node_cpu",
 										},
 									},
-									Right: &expression.BinaryNode{
-										Operator: expression.EqualOperator,
-										Left: &expression.ReferenceNode{
-											Name: "_measurement",
-											Kind: "tag",
+									Right: &ast.BinaryExpression{
+										Operator: ast.EqualOperator,
+										Left: &ast.MemberExpression{
+											Object: &ast.Identifier{
+												Name: "r",
+											},
+											Property: &ast.StringLiteral{Value: "_measurement"},
 										},
-										Right: &expression.StringLiteralNode{
+										Right: &ast.StringLiteral{
 											Value: "m0",
 										},
 									},
