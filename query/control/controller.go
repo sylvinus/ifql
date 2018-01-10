@@ -370,6 +370,7 @@ func (q *Query) setResults(r []execute.Result) {
 // compile transitions the query into the Compiling state.
 func (q *Query) compile() {
 	q.mu.Lock()
+
 	q.compilingSpan, q.compilingCtx = StartSpanFromContext(q.parentCtx, "compiling")
 	compilingGauge.Inc()
 
