@@ -9,6 +9,13 @@ import (
 	"github.com/influxdata/ifql/ast"
 )
 
+func toIfaceSlice(v interface{}) []interface{} {
+	if v == nil {
+		return nil
+	}
+	return v.([]interface{})
+}
+
 func program(body interface{}, text []byte, pos position) (*ast.Program, error) {
 	return &ast.Program{
 		Body:     body.([]ast.Statement),

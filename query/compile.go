@@ -1,23 +1,29 @@
 package query
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ifql"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (
 	parentTableArg = "table"
 )
 
-// NewQuery parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
-func NewQuery(q string, opts ...ifql.Option) (*QuerySpec, error) {
+// Compile parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
+func Compile(ctx context.Context, q string, opts ...ifql.Option) (*QuerySpec, error) {
+	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
 	program, err := ifql.NewAST(q, opts...)
 	if err != nil {
 		return nil, err
 	}
+	s.Finish()
+	s, _ = opentracing.StartSpanFromContext(ctx, "compile")
+	defer s.Finish()
 
 	// Create top-level builtin scope
 	scope := newBuiltInScope()
