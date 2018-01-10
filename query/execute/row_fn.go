@@ -2,6 +2,7 @@ package execute
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -287,6 +288,9 @@ type ReferencePath string
 func (r Reference) Path() ReferencePath {
 	return ReferencePath(strings.Join([]string(r), "."))
 }
+func (rp ReferencePath) Reference() Reference {
+	return Reference(strings.Split(string(rp), "."))
+}
 
 func (r Reference) String() string {
 	return string(r.Path())
@@ -390,6 +394,7 @@ func compile(n ast.Node, types map[ReferencePath]DataType) (DataTypeEvaluator, e
 	case *ast.BlockStatement:
 		body := make([]DataTypeEvaluator, len(n.Body))
 		hasReturn := false
+		var typ DataType
 		for i, s := range n.Body {
 			node, err := compile(s, types)
 			if err != nil {
@@ -399,6 +404,7 @@ func compile(n ast.Node, types map[ReferencePath]DataType) (DataTypeEvaluator, e
 			if _, ok := node.(returnEvaluator); ok {
 				// The returnEvaluator indicates the last statement
 				hasReturn = true
+				typ = node.Type()
 				break
 			}
 		}
@@ -406,7 +412,7 @@ func compile(n ast.Node, types map[ReferencePath]DataType) (DataTypeEvaluator, e
 			return nil, errors.New("block has no return statement")
 		}
 		return &blockEvaluator{
-			compiledType: compiledType(TBool),
+			compiledType: compiledType(typ),
 			body:         body,
 		}, nil
 	case *ast.ExpressionStatement:
@@ -421,6 +427,47 @@ func compile(n ast.Node, types map[ReferencePath]DataType) (DataTypeEvaluator, e
 		return returnEvaluator{
 			DataTypeEvaluator: node,
 		}, nil
+	case *ast.CallExpression:
+		if len(n.Arguments) != 1 {
+			return nil, errors.New("call expressions only support a single object argument")
+		}
+		obj, ok := n.Arguments[0].(*ast.ObjectExpression)
+		if !ok {
+			return nil, errors.New("call expression argument must be an ObjectExpression")
+		}
+
+		//TODO(nathanielc): We need to not flatten references into reference paths so that we can accurately track
+		// type information through call expressions.
+		callTypes := make(map[ReferencePath]DataType, len(types)+len(obj.Properties))
+		for k, v := range types {
+			callTypes[k] = v
+		}
+
+		args := make(map[ReferencePath]DataTypeEvaluator, len(obj.Properties))
+		for _, p := range obj.Properties {
+			n, err := compile(p.Value, types)
+			if err != nil {
+				return nil, err
+			}
+			rp := ReferencePath(p.Key.Name)
+			args[rp] = n
+			callTypes[rp] = n.Type()
+		}
+
+		node, err := compile(n.Callee, callTypes)
+		if err != nil {
+			return nil, err
+		}
+		log.Println("callEvaluator", callTypes, node, args)
+
+		return &callEvaluator{
+			compiledType: compiledType(node.Type()),
+			arguments:    args,
+			fn:           node,
+			callScope:    make(Scope),
+		}, nil
+	case *ast.ArrowFunctionExpression:
+		return compile(n.Body, types)
 	case *ast.VariableDeclaration:
 		if len(n.Declarations) != 1 {
 			return nil, errors.New("var declaration must have exactly one declaration")
@@ -603,8 +650,7 @@ func (s Scope) GetMap(rp ReferencePath) Map {
 }
 
 type DataTypeEvaluator interface {
-	Type() DataType
-	MapMeta() MapMeta
+	Type() TypeMeta
 	EvalBool(scope Scope) bool
 	EvalInt(scope Scope) int64
 	EvalUInt(scope Scope) uint64
@@ -615,8 +661,7 @@ type DataTypeEvaluator interface {
 }
 
 type CompiledFn interface {
-	Type() DataType
-	MapMeta() MapMeta
+	Type() TypeMeta
 	Eval(scope Scope) (Value, error)
 	EvalBool(scope Scope) (bool, error)
 	EvalInt(scope Scope) (int64, error)
@@ -627,13 +672,37 @@ type CompiledFn interface {
 	EvalMap(scope Scope) (Map, error)
 }
 
+type TypeMeta interface {
+	DataType() DataType
+	Property(name string) TypeMeta
+}
+
+func (t DataType) DataType() DataType {
+	return t
+}
+func (t DataType) Property() TypeMeta {
+	return nil
+}
+
 type MapMeta struct {
 	Properties []MapPropertyMeta
 }
 
+func (mm MapMeta) DataType() DataType {
+	return TMap
+}
+func (mm MapMeta) Property(name string) TypeMeta {
+	for _, p := range mm.Properties {
+		if p.Key == name {
+			return p.Type
+		}
+	}
+	return nil
+}
+
 type MapPropertyMeta struct {
 	Key  string
-	Type DataType
+	Type TypeMeta
 }
 
 // CompilationCache caches compilation results based on the types of the input parameters.
@@ -831,6 +900,7 @@ func (e *blockEvaluator) EvalMap(scope Scope) Map {
 type returnEvaluator struct {
 	DataTypeEvaluator
 }
+
 type declarationEvaluator struct {
 	compiledType
 	id   ReferencePath
@@ -874,6 +944,54 @@ func (e *declarationEvaluator) EvalTime(scope Scope) Time {
 func (e *declarationEvaluator) EvalMap(scope Scope) Map {
 	e.eval(scope)
 	return scope.GetMap(e.id)
+}
+
+type callEvaluator struct {
+	compiledType
+	fn        DataTypeEvaluator
+	arguments map[ReferencePath]DataTypeEvaluator
+	callScope Scope
+}
+
+func (e *callEvaluator) eval(scope Scope) Value {
+	for k := range e.callScope {
+		delete(e.callScope, k)
+	}
+	for k, v := range scope {
+		e.callScope.Set(k, v)
+	}
+	for k, node := range e.arguments {
+		e.callScope.Set(k, eval(node, scope))
+	}
+	return eval(e.fn, e.callScope)
+}
+
+func (e *callEvaluator) EvalBool(scope Scope) bool {
+	return e.eval(scope).Bool()
+}
+
+func (e *callEvaluator) EvalInt(scope Scope) int64 {
+	return e.eval(scope).Int()
+}
+
+func (e *callEvaluator) EvalUInt(scope Scope) uint64 {
+	return e.eval(scope).UInt()
+}
+
+func (e *callEvaluator) EvalFloat(scope Scope) float64 {
+	return e.eval(scope).Float()
+}
+
+func (e *callEvaluator) EvalString(scope Scope) string {
+	return e.eval(scope).Str()
+}
+
+func (e *callEvaluator) EvalTime(scope Scope) Time {
+	return e.eval(scope).Time()
+}
+
+func (e *callEvaluator) EvalMap(scope Scope) Map {
+	return e.eval(scope).Map()
 }
 
 type mapEvaluator struct {

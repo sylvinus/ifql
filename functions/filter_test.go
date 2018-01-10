@@ -970,3 +970,100 @@ func TestFilter_PushDown_MergeExpressions(t *testing.T) {
 		})
 	}
 }
+
+//{
+//	name: "duplicate non expressions 0",
+//	spec: &functions.FilterProcedureSpec{
+//		Fn: &ast.ArrowFunctionExpression{
+//			Params: []*ast.Property{{Key:&ast.Identifier{Name: "r"}}},
+//			Body: &ast.BlockStatement{
+//				Body: []ast.Statement{
+//					&ast.ReturnStatement{
+//						Argument: &ast.BinaryExpression{
+//							Operator: ast.NotEqualOperator,
+//							Left: &ast.MemberExpression{
+//								Object: &ast.Identifier{
+//									Name: "r",
+//								},
+//								Property: &ast.StringLiteral{Value: "_measurement"},
+//							},
+//							Right: &ast.StringLiteral{Value: "cpu"},
+//						},
+//					},
+//				},
+//			},
+//		},
+//	},
+//	root: &plan.Procedure{
+//		Spec: &functions.FromProcedureSpec{
+//			FilterSet: true,
+//			Filter: &ast.ArrowFunctionExpression{
+//				Params: []*ast.Property{{Key:&ast.Identifier{Name: "r"}}},
+//				Body: &ast.BinaryExpression{
+//					Operator: ast.NotEqualOperator,
+//					Left: &ast.MemberExpression{
+//						Object: &ast.Identifier{
+//							Name: "r",
+//						},
+//						Property: &ast.StringLiteral{Value: "_measurement"},
+//					},
+//					Right: &ast.StringLiteral{Value: "mem"},
+//				},
+//			},
+//		},
+//	},
+//	want: &plan.Procedure{
+//		Spec: &functions.FromProcedureSpec{
+//			FilterSet: false,
+//		},
+//	},
+//	wantDuplicated: true,
+//},
+//{
+//	name: "duplicate non expressions 1",
+//	spec: &functions.FilterProcedureSpec{
+//		Fn: &ast.ArrowFunctionExpression{
+//			Params: []*ast.Property{{Key:&ast.Identifier{Name: "r"}}},
+//			Body: &ast.BinaryExpression{
+//				Operator: ast.NotEqualOperator,
+//				Left: &ast.MemberExpression{
+//					Object: &ast.Identifier{
+//						Name: "r",
+//					},
+//					Property: &ast.StringLiteral{Value: "_measurement"},
+//				},
+//				Right: &ast.StringLiteral{Value: "mem"},
+//			},
+//		},
+//	},
+//	root: &plan.Procedure{
+//		Spec: &functions.FromProcedureSpec{
+//			FilterSet: true,
+//			Filter: &ast.ArrowFunctionExpression{
+//				Params: []*ast.Property{{Key:&ast.Identifier{Name: "r"}}},
+//				Body: &ast.BlockStatement{
+//					Body: []ast.Statement{
+//						&ast.ReturnStatement{
+//							Argument: &ast.BinaryExpression{
+//								Operator: ast.NotEqualOperator,
+//								Left: &ast.MemberExpression{
+//									Object: &ast.Identifier{
+//										Name: "r",
+//									},
+//									Property: &ast.StringLiteral{Value: "_measurement"},
+//								},
+//								Right: &ast.StringLiteral{Value: "cpu"},
+//							},
+//						},
+//					},
+//				},
+//			},
+//		},
+//	},
+//	want: &plan.Procedure{
+//		Spec: &functions.FromProcedureSpec{
+//			FilterSet: false,
+//		},
+//	},
+//	wantDuplicated: true,
+//},
