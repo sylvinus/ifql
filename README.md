@@ -106,7 +106,7 @@ Cannot be used with `except` option
 Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"])`
 
 *  `keep` array of strings
-Keep specific tag keys that were not in `by` in the results 
+Keep specific tag keys that were not in `by` in the results
 
 Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
 *  `except` array of strings
@@ -123,22 +123,23 @@ Example:
 ```
 var cpu = from(db: "telegraf").filter(fn: r => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
 var mem = from(db: "telegraf").filter(fn: r => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
-join(tables:[cpu, mem], on:["host"], fn: (cpu, mem) => cpu["_value"] + mem["_value"])
+join(tables:{cpu:cpu, mem:mem}, on:["host"], fn: (tables) => tables.cpu["_value"] + tables.mem["_value"])
 ````
 
 ##### options
 
-* `tables` array of tables
-List of tables to join. Currently only two tables are allowed.
+* `tables` map of tables
+Map of tables to join. Currently only two tables are allowed.
 
 * `on` array of strings
 List of tag keys that when equal produces a result set.
 
-* `fn` 
+* `fn`
 
 Defines the function that merges the values of the tables.
-The function must defined to accept the same number of parameters as tables being joined.
-The records of each table are then passed in turn to the function.
+The function must defined to accept a single parameter.
+The parameter is a map, which uses the same keys found in the `tables` map.
+The function is called for each joined set of records from the tables.
 
 #### last
 Returns the last result of the query
@@ -157,8 +158,8 @@ Returns the max value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"]=="cpu" AND 
-                r["_field"] == "usage_system" AND 
+    .filter(fn: r => r["_measurement"]=="cpu" AND
+                r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
     .range(start:-12h)
     .window(every:10m)
@@ -171,7 +172,7 @@ Returns the mean of the values within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "mem" AND 
+    .filter(fn: r => r["_measurement"] == "mem" AND
                 r["_field"] == "used_percent")
     .range(start:-12h)
     .window(every:10m)
@@ -184,7 +185,7 @@ Returns the min value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r[ "_measurement"] == "cpu" AND 
+    .filter(fn: r => r[ "_measurement"] == "cpu" AND
                 r["_field" ]== "usage_system")
     .range(start:-12h)
     .window(every:10m, period: 5m)
@@ -198,7 +199,7 @@ Filters the results by time boundaries
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "cpu" AND 
+    .filter(fn: r => r["_measurement"] == "cpu" AND
                 r["_field"] == "usage_system")
     .range(start:-12h, stop: -15m)
 ```
@@ -216,7 +217,7 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "cpu" AND 
+    .filter(fn: r => r["_measurement"] == "cpu" AND
                 r["_field"] == "usage_system")
     .range(start:-1d)
     .sample(n: 5, pos: 1)
@@ -247,10 +248,10 @@ Example: `from(db: "telegraf").range(start: -30m, stop: -15m).skew()`
 Sorts the results by the specified columns
 Default sort is ascending
 
-Example: 
+Example:
 ```
 from(db:"telegraf")
-    .filter(fn: r => r["_measurement"] == "system" AND 
+    .filter(fn: r => r["_measurement"] == "system" AND
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(cols:["region", "host", "value"])
@@ -258,7 +259,7 @@ from(db:"telegraf")
 
 ##### options
 * `cols` array of strings
-List of columns used to sort; precedence from left to right. 
+List of columns used to sort; precedence from left to right.
 Default is `["value"]`
 
 For example, this sorts by uptime descending to find the longest
@@ -266,13 +267,13 @@ running instances.
 
 ```
 from(db:"telegraf")
-    .filter(fn: r => r["_measurement"] == "system" AND 
+    .filter(fn: r => r["_measurement"] == "system" AND
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(desc: true)
 ```
 
-* `desc` bool 
+* `desc` bool
 Sort results descending
 
 #### spread
@@ -296,8 +297,8 @@ Filters the results using an expression
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"]=="cpu" AND 
-                r["_field"] == "usage_system" AND 
+    .filter(fn: r => r["_measurement"]=="cpu" AND
+                r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
     .range(start:-12h)
     .max()
@@ -312,7 +313,7 @@ The function must accept a single parameter which will be the records and return
 Records which evaluate to true, will be included in the results.
 
 #### window
-Partitions the results by a given time range 
+Partitions the results by a given time range
 
 ##### options
 * `every` duration

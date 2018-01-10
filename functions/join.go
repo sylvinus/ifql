@@ -18,8 +18,16 @@ const JoinKind = "join"
 const MergeJoinKind = "merge-join"
 
 type JoinOpSpec struct {
-	On []string                     `json:"on"`
+	// On is a list of tags on which to join.
+	On []string `json:"on"`
+	// Fn is a function accepting a single parameter.
+	// The parameter is map if records for each of the parent operations.
 	Fn *ast.ArrowFunctionExpression `json:"fn"`
+	// TableNames are the names to give to each parent when populating the parameter for the function.
+	// The first parent is referenced by the first name and so forth.
+	// TODO(nathanielc): Change this to a map of parent operation IDs to names.
+	// Then make it possible for the transformation to map operation IDs to parent IDs.
+	TableNames map[query.OperationID]string `json:"table_names"`
 }
 
 func init() {
@@ -30,7 +38,7 @@ func init() {
 	execute.RegisterTransformation(MergeJoinKind, createMergeJoinTransformation)
 }
 
-func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createJoinOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err
@@ -40,7 +48,8 @@ func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.Operation
 		return nil, err
 	}
 	spec := &JoinOpSpec{
-		Fn: resolved,
+		Fn:         resolved,
+		TableNames: make(map[query.OperationID]string),
 	}
 
 	if array, ok, err := args.GetArray("on", ifql.TString); err != nil {
@@ -49,11 +58,16 @@ func createJoinOpSpec(args query.Arguments, ctx *query.Context) (query.Operation
 		spec.On = array.AsStrings()
 	}
 
-	if array, ok, err := args.GetArray("tables", query.TTable); err != nil {
+	if m, ok, err := args.GetMap("tables"); err != nil {
 		return nil, err
 	} else if ok {
-		for _, t := range array.Elements {
-			ctx.AddParent(t.Value().(query.Table).ID)
+		for k, t := range m.Elements {
+			if t.Type() != query.TTable {
+				return nil, fmt.Errorf("tables key %q must be a table: got %v", k, t.Type())
+			}
+			id := t.Value().(query.Table).ID
+			a.AddParent(id)
+			spec.TableNames[id] = k
 		}
 	}
 
@@ -69,19 +83,27 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On []string                     `json:"keys"`
-	Fn *ast.ArrowFunctionExpression `json:"f"`
+	On         []string                     `json:"keys"`
+	Fn         *ast.ArrowFunctionExpression `json:"f"`
+	TableNames map[plan.ProcedureID]string  `json:"table_names"`
 }
 
-func newMergeJoinProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newMergeJoinProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*JoinOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 
+	tableNames := make(map[plan.ProcedureID]string, len(spec.TableNames))
+	for qid, name := range spec.TableNames {
+		pid := pa.ConvertID(qid)
+		tableNames[pid] = name
+	}
+
 	p := &MergeJoinProcedureSpec{
-		On: spec.On,
-		Fn: spec.Fn,
+		On:         spec.On,
+		Fn:         spec.Fn,
+		TableNames: tableNames,
 	}
 	sort.Strings(p.On)
 	return p, nil
@@ -101,18 +123,39 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func (s *MergeJoinProcedureSpec) ParentChanged(old, new plan.ProcedureID) {
+	if v, ok := s.TableNames[old]; ok {
+		delete(s.TableNames, old)
+		s.TableNames[new] = v
+	}
+}
+
+func createMergeJoinTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*MergeJoinProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	joinEval, err := NewExpressionSpec(s.Fn)
+	parents := a.Parents()
+	if len(parents) != 2 {
+		//TODO(nathanielc): Support n-way joins
+		return nil, nil, errors.New("joins currently must only have two parents")
+	}
+	leftID := parents[0]
+	rightID := parents[1]
+
+	tableNames := make(map[execute.DatasetID]string, len(s.TableNames))
+	for pid, name := range s.TableNames {
+		id := a.ConvertID(pid)
+		tableNames[id] = name
+	}
+
+	joinFn, err := NewJoinFunction(s.Fn, parents, tableNames)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "invalid expression")
 	}
-	cache := NewMergeJoinCache(joinEval, ctx.Allocator())
+	cache := NewMergeJoinCache(joinFn, a.Allocator(), leftID, rightID)
 	d := execute.NewDataset(id, mode, cache)
-	t := NewMergeJoinTransformation(d, cache, s)
+	t := NewMergeJoinTransformation(d, cache, s, parents)
 	return t, d, nil
 }
 
@@ -132,13 +175,19 @@ type mergeJoinTransformation struct {
 	keys []string
 }
 
-func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec) *mergeJoinTransformation {
-	return &mergeJoinTransformation{
-		d:           d,
-		cache:       cache,
-		parentState: make(map[execute.DatasetID]*mergeJoinParentState),
-		keys:        spec.On,
+func NewMergeJoinTransformation(d execute.Dataset, cache MergeJoinCache, spec *MergeJoinProcedureSpec, parents []execute.DatasetID) *mergeJoinTransformation {
+	t := &mergeJoinTransformation{
+		d:       d,
+		cache:   cache,
+		keys:    spec.On,
+		leftID:  parents[0],
+		rightID: parents[1],
 	}
+	t.parentState = make(map[execute.DatasetID]*mergeJoinParentState)
+	for _, id := range parents {
+		t.parentState[id] = new(mergeJoinParentState)
+	}
+	return t
 }
 
 type mergeJoinParentState struct {
@@ -278,21 +327,6 @@ func (t *mergeJoinTransformation) Finish(id execute.DatasetID, err error) {
 	}
 }
 
-func (t *mergeJoinTransformation) SetParents(ids []execute.DatasetID) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if len(ids) != 2 {
-		panic("joins should only ever have two parents")
-	}
-	t.leftID = ids[0]
-	t.rightID = ids[1]
-
-	for _, id := range ids {
-		t.parentState[id] = new(mergeJoinParentState)
-	}
-}
-
 type MergeJoinCache interface {
 	Tables(execute.BlockMetadata) *joinTables
 }
@@ -301,16 +335,20 @@ type mergeJoinCache struct {
 	data  map[execute.BlockKey]*joinTables
 	alloc *execute.Allocator
 
+	leftID, rightID execute.DatasetID
+
 	triggerSpec query.TriggerSpec
 
-	joinEval *expressionSpec
+	joinFn *joinFunc
 }
 
-func NewMergeJoinCache(joinEval *expressionSpec, a *execute.Allocator) *mergeJoinCache {
+func NewMergeJoinCache(joinFn *joinFunc, a *execute.Allocator, leftID, rightID execute.DatasetID) *mergeJoinCache {
 	return &mergeJoinCache{
-		data:     make(map[execute.BlockKey]*joinTables),
-		joinEval: joinEval,
-		alloc:    a,
+		data:    make(map[execute.BlockKey]*joinTables),
+		joinFn:  joinFn,
+		alloc:   a,
+		leftID:  leftID,
+		rightID: rightID,
 	}
 }
 
@@ -355,13 +393,15 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 	tables := c.data[key]
 	if tables == nil {
 		tables = &joinTables{
-			tags:     bm.Tags(),
-			bounds:   bm.Bounds(),
-			alloc:    c.alloc,
-			left:     execute.NewColListBlockBuilder(c.alloc),
-			right:    execute.NewColListBlockBuilder(c.alloc),
-			trigger:  execute.NewTriggerFromSpec(c.triggerSpec),
-			joinEval: c.joinEval.Copy(),
+			tags:    bm.Tags(),
+			bounds:  bm.Bounds(),
+			alloc:   c.alloc,
+			left:    execute.NewColListBlockBuilder(c.alloc),
+			right:   execute.NewColListBlockBuilder(c.alloc),
+			leftID:  c.leftID,
+			rightID: c.rightID,
+			trigger: execute.NewTriggerFromSpec(c.triggerSpec),
+			joinFn:  c.joinFn.Copy(),
 		}
 		tables.left.AddCol(execute.TimeCol)
 		tables.right.AddCol(execute.TimeCol)
@@ -376,11 +416,12 @@ type joinTables struct {
 
 	alloc *execute.Allocator
 
-	left, right *execute.ColListBlockBuilder
+	left, right     *execute.ColListBlockBuilder
+	leftID, rightID execute.DatasetID
 
 	trigger execute.Trigger
 
-	joinEval *expressionSpec
+	joinFn *joinFunc
 }
 
 func (t *joinTables) Bounds() execute.Bounds {
@@ -401,12 +442,12 @@ func (t *joinTables) ClearData() {
 // Join performs a sort-merge join
 func (t *joinTables) Join() (execute.Block, error) {
 	// First determine new value type
-	newType, err := t.joinEval.Compile(
-		execute.ValueCol(t.left.Cols()).Type,
-		execute.ValueCol(t.right.Cols()).Type,
-	)
+	newType, err := t.joinFn.Compile(map[execute.DatasetID]execute.DataType{
+		t.leftID:  execute.ValueCol(t.left.Cols()).Type,
+		t.rightID: execute.ValueCol(t.right.Cols()).Type,
+	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to compile join function")
 	}
 	// Create a builder to the result of the join
 	builder := execute.NewColListBlockBuilder(t.alloc)
@@ -469,9 +510,12 @@ func (t *joinTables) Join() (execute.Block, error) {
 					// Evaluate expression and add to block
 					lv := readValue(l, srcValueIdx, left)
 					rv := readValue(r, srcValueIdx, right)
-					v, err := t.eval(lv, rv)
+					v, err := t.joinFn.Eval(map[execute.DatasetID]execute.Value{
+						t.leftID:  lv,
+						t.rightID: rv,
+					})
 					if err != nil {
-						return nil, err
+						return nil, errors.Wrap(err, "failed to evaluate join function")
 					}
 					switch newType {
 					case execute.TBool:
@@ -603,70 +647,90 @@ func (k joinKey) Less(o joinKey) bool {
 	return k.Time < o.Time
 }
 
-func (t *joinTables) eval(l, r execute.Value) (execute.Value, error) {
-	return t.joinEval.Eval(l, r)
+func (t *joinTables) eval(values map[execute.DatasetID]execute.Value) (execute.Value, error) {
+	return t.joinFn.Eval(values)
 }
 
-type expressionSpec struct {
-	f               *ast.ArrowFunctionExpression
-	leftOP, rightOP execute.ObjectProperty
+type joinFunc struct {
+	f              *ast.ArrowFunctionExpression
+	referencePaths map[execute.DatasetID]execute.ReferencePath
 
 	scope execute.Scope
 
-	leftType, rightType execute.DataType
-	ce                  execute.CompiledExpression
+	ce    execute.CompiledExpression
+	types map[execute.DatasetID]execute.DataType
 }
 
-func NewExpressionSpec(f *ast.ArrowFunctionExpression) (*expressionSpec, error) {
-	if len(f.Params) != 2 {
-		names := make([]string, len(f.Params))
-		for i := range f.Params {
-			names[i] = f.Params[i].Name
-		}
-		return nil, fmt.Errorf("join expression can only have two tables, got tables: %v", names)
+func NewJoinFunction(f *ast.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
+	if len(f.Params) != 1 {
+		return nil, errors.New("join function should only have one parameter for the map of tables")
 	}
-	return &expressionSpec{
-		leftOP: execute.ObjectProperty{
-			Object:   f.Params[0].Name,
-			Property: "_value",
-		},
-		rightOP: execute.ObjectProperty{
-			Object:   f.Params[1].Name,
-			Property: "_value",
-		},
-		f:     f,
-		scope: make(execute.Scope, 2),
+	tableParam := f.Params[0].Name
+	referencePaths := make(map[execute.DatasetID]execute.ReferencePath, len(parentIDs))
+	for _, pid := range parentIDs {
+		referencePaths[pid] = execute.Reference{
+			tableParam,
+			tableNames[pid],
+			"_value",
+		}.Path()
+	}
+	return &joinFunc{
+		f:              f,
+		scope:          make(execute.Scope, 2),
+		referencePaths: referencePaths,
 	}, nil
 }
 
-func (s *expressionSpec) Copy() *expressionSpec {
-	cpy := new(expressionSpec)
+func (s *joinFunc) Copy() *joinFunc {
+	cpy := new(joinFunc)
 	*cpy = *s
 	cpy.scope = make(execute.Scope, 2)
 	return cpy
 }
 
-func (s *expressionSpec) Compile(l, r execute.DataType) (execute.DataType, error) {
-	if s.ce != nil && l == s.leftType && r == s.rightType {
+func (s *joinFunc) Compile(types map[execute.DatasetID]execute.DataType) (execute.DataType, error) {
+	if s.ce != nil && equalTypes(types, s.types) {
 		// Nothing to do, we already have a compiled expression
-		return execute.TInvalid, nil
+		return s.ce.Type(), nil
 	}
-	ce, err := execute.CompileExpression(s.f, map[execute.ObjectProperty]execute.DataType{s.leftOP: l, s.rightOP: r})
+	referenceTypes := make(map[execute.ReferencePath]execute.DataType, len(types))
+	for pid, typ := range types {
+		referenceTypes[s.referencePaths[pid]] = typ
+	}
+	ce, err := execute.CompileExpression(s.f, referenceTypes)
 	if err != nil {
 		s.ce = nil
+		s.types = nil
 		return execute.TInvalid, err
 	}
 	s.ce = ce
-	s.leftType = l
-	s.rightType = r
+	// Copy types
+	s.types = make(map[execute.DatasetID]execute.DataType, len(types))
+	for k, v := range types {
+		s.types[k] = v
+	}
 	return s.ce.Type(), nil
 }
 
-func (s *expressionSpec) Eval(l, r execute.Value) (execute.Value, error) {
+func equalTypes(a, b map[execute.DatasetID]execute.DataType) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *joinFunc) Eval(values map[execute.DatasetID]execute.Value) (execute.Value, error) {
 	if s.ce == nil {
 		return execute.Value{}, errors.New("expression has not been compiled")
 	}
-	s.scope[s.leftOP] = l
-	s.scope[s.rightOP] = r
+	for pid, v := range values {
+		s.scope[s.referencePaths[pid]] = v
+	}
 	return s.ce.Eval(s.scope)
 }

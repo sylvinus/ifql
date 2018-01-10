@@ -19,7 +19,7 @@ func init() {
 	plan.RegisterProcedureSpec(SkewKind, newSkewProcedure, SkewKind)
 	execute.RegisterTransformation(SkewKind, createSkewTransformation)
 }
-func createSkewOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSkewOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(SkewOpSpec), nil
 }
 
@@ -34,7 +34,7 @@ func (s *SkewOpSpec) Kind() query.OperationKind {
 type SkewProcedureSpec struct {
 }
 
-func newSkewProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSkewProcedure(query.OperationSpec, plan.Administration) (plan.ProcedureSpec, error) {
 	return new(SkewProcedureSpec), nil
 }
 
@@ -49,8 +49,8 @@ type SkewAgg struct {
 	n, m1, m2, m3 float64
 }
 
-func createSkewTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SkewAgg), ctx.Allocator())
+func createSkewTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(SkewAgg), a.Allocator())
 	return t, d, nil
 }
 

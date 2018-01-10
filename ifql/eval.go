@@ -843,6 +843,7 @@ type Arguments interface {
 	GetBool(name string) (bool, bool, error)
 	GetFunction(name string) (Function, bool, error)
 	GetArray(name string, t Type) (Array, bool, error)
+	GetMap(name string) (Map, bool, error)
 
 	GetRequiredString(name string) (string, error)
 	GetRequiredInt(name string) (int64, error)
@@ -850,6 +851,7 @@ type Arguments interface {
 	GetRequiredBool(name string) (bool, error)
 	GetRequiredFunction(name string) (Function, error)
 	GetRequiredArray(name string, t Type) (Array, error)
+	GetRequiredMap(name string) (Map, error)
 
 	// listUnused returns the list of provided arguments that were not used by the function.
 	listUnused() []string
@@ -974,6 +976,21 @@ func (a *arguments) GetRequiredFunction(name string) (Function, error) {
 		return nil, err
 	}
 	return v.Value().(Function), nil
+}
+
+func (a *arguments) GetMap(name string) (Map, bool, error) {
+	v, ok, err := a.get(name, TMap, false)
+	if err != nil || !ok {
+		return Map{}, ok, err
+	}
+	return v.Value().(Map), ok, nil
+}
+func (a *arguments) GetRequiredMap(name string) (Map, error) {
+	v, _, err := a.get(name, TMap, true)
+	if err != nil {
+		return Map{}, err
+	}
+	return v.Value().(Map), nil
 }
 
 func (a *arguments) get(name string, typ Type, required bool) (Value, bool, error) {

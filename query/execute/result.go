@@ -79,8 +79,6 @@ func (s *resultSink) UpdateProcessingTime(id DatasetID, t Time) error {
 	//Nothing to do
 	return nil
 }
-func (s *resultSink) SetParents(ids []DatasetID) {
-}
 
 func (s *resultSink) setTrigger(Trigger) {
 	//TODO: Change interfaces so that resultSink, does not need to implement this method.

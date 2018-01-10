@@ -103,18 +103,31 @@ type triggeringSpec interface {
 }
 
 func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (Node, error) {
+	// Build execution context
+	ec := executionContext{
+		es: es,
+	}
+	if len(pr.Parents) > 0 {
+		ec.parents = make([]DatasetID, len(pr.Parents))
+		for i, parentID := range pr.Parents {
+			ec.parents[i] = DatasetID(parentID)
+		}
+	}
+
+	// If source create source
 	if createS, ok := procedureToSource[pr.Spec.Kind()]; ok {
-		s := createS(pr.Spec, DatasetID(pr.ID), es.c.StorageReader, es)
+		s := createS(pr.Spec, DatasetID(pr.ID), es.c.StorageReader, ec)
 		es.sources = append(es.sources, s)
 		return s, nil
 	}
 
 	createT, ok := procedureToTransformation[pr.Spec.Kind()]
-
 	if !ok {
 		return nil, fmt.Errorf("unsupported procedure %v", pr.Spec.Kind())
 	}
-	t, ds, err := createT(DatasetID(pr.ID), AccumulatingMode, pr.Spec, es)
+
+	// Create the transformation
+	t, ds, err := createT(DatasetID(pr.ID), AccumulatingMode, pr.Spec, ec)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +139,8 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 	}
 	ds.SetTriggerSpec(ts)
 
-	parentIDs := make([]DatasetID, len(pr.Parents))
-	for i, parentID := range pr.Parents {
+	// Recurse creating parents
+	for _, parentID := range pr.Parents {
 		parent, err := es.createNode(ctx, es.p.Procedures[parentID])
 		if err != nil {
 			return nil, err
@@ -135,9 +148,7 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 		transport := newConescutiveTransport(es.dispatcher, t)
 		es.transports = append(es.transports, transport)
 		parent.AddTransformation(transport)
-		parentIDs[i] = DatasetID(parentID)
 	}
-	t.SetParents(parentIDs)
 
 	return ds, nil
 }
@@ -190,15 +201,27 @@ func (es *executionState) do(ctx context.Context) {
 	}()
 }
 
+type executionContext struct {
+	es      *executionState
+	parents []DatasetID
+}
+
 // Satisfy the ExecutionContext interface
 
-func (es *executionState) ResolveTime(qt query.Time) Time {
-	return Time(qt.Time(es.p.Now).UnixNano())
+func (ec executionContext) ResolveTime(qt query.Time) Time {
+	return Time(qt.Time(ec.es.p.Now).UnixNano())
 }
-func (es *executionState) Bounds() Bounds {
-	return es.bounds
+func (ec executionContext) Bounds() Bounds {
+	return ec.es.bounds
 }
 
-func (es *executionState) Allocator() *Allocator {
-	return es.alloc
+func (ec executionContext) Allocator() *Allocator {
+	return ec.es.alloc
+}
+
+func (ec executionContext) Parents() []DatasetID {
+	return ec.parents
+}
+func (ec executionContext) ConvertID(id plan.ProcedureID) DatasetID {
+	return DatasetID(id)
 }

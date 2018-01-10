@@ -21,7 +21,7 @@ func init() {
 	execute.RegisterTransformation(FirstKind, createFirstTransformation)
 }
 
-func createFirstOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createFirstOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(FirstOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ type FirstProcedureSpec struct {
 	UseRowTime bool
 }
 
-func newFirstProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newFirstProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*FirstOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -103,12 +103,12 @@ type FirstSelector struct {
 	selected bool
 }
 
-func createFirstTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createFirstTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	ps, ok := spec.(*FirstProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, ctx.Bounds(), new(FirstSelector), ps.UseRowTime, ctx.Allocator())
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), new(FirstSelector), ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

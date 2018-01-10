@@ -141,8 +141,13 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("join")},
 					},
 					plan.ProcedureIDFromOperationID("join"): {
-						ID:   plan.ProcedureIDFromOperationID("join"),
-						Spec: &functions.MergeJoinProcedureSpec{},
+						ID: plan.ProcedureIDFromOperationID("join"),
+						Spec: &functions.MergeJoinProcedureSpec{
+							TableNames: map[plan.ProcedureID]string{
+								plan.ProcedureIDFromOperationID("sum1"):   "sum",
+								plan.ProcedureIDFromOperationID("count0"): "count",
+							},
+						},
 						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("count0"),
 							plan.ProcedureIDFromOperationID("sum1"),
@@ -214,8 +219,13 @@ var benchmarkQuery = &query.QuerySpec{
 			Spec: &functions.SumOpSpec{},
 		},
 		{
-			ID:   "join",
-			Spec: &functions.JoinOpSpec{},
+			ID: "join",
+			Spec: &functions.JoinOpSpec{
+				TableNames: map[query.OperationID]string{
+					"count0": "count",
+					"sum1":   "sum",
+				},
+			},
 		},
 	},
 	Edges: []query.Edge{

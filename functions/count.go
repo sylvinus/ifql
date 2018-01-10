@@ -17,7 +17,7 @@ func init() {
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)
 }
-func createCountOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createCountOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(CountOpSpec), nil
 }
 
@@ -32,7 +32,7 @@ func (s *CountOpSpec) Kind() query.OperationKind {
 type CountProcedureSpec struct {
 }
 
-func newCountProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
+func newCountProcedure(query.OperationSpec, plan.Administration) (plan.ProcedureSpec, error) {
 	return new(CountProcedureSpec), nil
 }
 
@@ -72,8 +72,8 @@ type CountAgg struct {
 	count int64
 }
 
-func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(CountAgg), ctx.Allocator())
+func createCountTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(CountAgg), a.Allocator())
 	return t, d, nil
 }
 

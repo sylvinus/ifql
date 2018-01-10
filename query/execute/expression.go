@@ -2,43 +2,48 @@ package execute
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/influxdata/ifql/ast"
 )
 
-// ObjectProperties returns all object/property pairs referenced in the expression.
-func ObjectProperties(f *ast.ArrowFunctionExpression) ([]ObjectProperty, error) {
-	return objectProperties(f.Body.(ast.Expression))
+// FindReferences returns all references in the expression.
+func FindReferences(f *ast.ArrowFunctionExpression) ([]Reference, error) {
+	return findReferences(f.Body.(ast.Expression))
 }
 
-func objectProperties(n ast.Expression) ([]ObjectProperty, error) {
+func findReferences(n ast.Expression) ([]Reference, error) {
 	switch n := n.(type) {
 	case *ast.MemberExpression:
-		op, err := objectProperty(n)
+		r, err := determineReference(n)
 		if err != nil {
 			return nil, err
 		}
-		return []ObjectProperty{op}, nil
+		return []Reference{r}, nil
 	case *ast.Identifier:
-		return nil, fmt.Errorf("unexpected identifier %q", n.Name)
-	case *ast.UnaryExpression:
-		return objectProperties(n.Argument)
-	case *ast.LogicalExpression:
-		l, err := objectProperties(n.Left)
+		r, err := determineReference(n)
 		if err != nil {
 			return nil, err
 		}
-		r, err := objectProperties(n.Right)
+		return []Reference{r}, nil
+	case *ast.UnaryExpression:
+		return findReferences(n.Argument)
+	case *ast.LogicalExpression:
+		l, err := findReferences(n.Left)
+		if err != nil {
+			return nil, err
+		}
+		r, err := findReferences(n.Right)
 		if err != nil {
 			return nil, err
 		}
 		return append(l, r...), nil
 	case *ast.BinaryExpression:
-		l, err := objectProperties(n.Left)
+		l, err := findReferences(n.Left)
 		if err != nil {
 			return nil, err
 		}
-		r, err := objectProperties(n.Right)
+		r, err := findReferences(n.Right)
 		if err != nil {
 			return nil, err
 		}
@@ -48,19 +53,26 @@ func objectProperties(n ast.Expression) ([]ObjectProperty, error) {
 	}
 }
 
-func objectProperty(m *ast.MemberExpression) (ObjectProperty, error) {
-	p, err := propertyName(m)
-	if err != nil {
-		return ObjectProperty{}, err
+func determineReference(n ast.Expression) (Reference, error) {
+	switch n := n.(type) {
+	case *ast.MemberExpression:
+		r, err := determineReference(n.Object)
+		if err != nil {
+			return nil, err
+		}
+		name, err := propertyName(n)
+		if err != nil {
+			return nil, err
+		}
+		r = append(r, name)
+		return r, nil
+	case *ast.Identifier:
+		return Reference{n.Name}, nil
+	default:
+		return nil, fmt.Errorf("unexpected reference expression type %T", n)
 	}
-	if ident, ok := m.Object.(*ast.Identifier); ok {
-		return ObjectProperty{
-			Object:   ident.Name,
-			Property: p,
-		}, nil
-	}
-	return ObjectProperty{}, fmt.Errorf("unsupported member object expression type %T", m.Object)
 }
+
 func propertyName(m *ast.MemberExpression) (string, error) {
 	switch p := m.Property.(type) {
 	case *ast.Identifier:
@@ -72,15 +84,16 @@ func propertyName(m *ast.MemberExpression) (string, error) {
 	}
 }
 
-func CompileExpression(f *ast.ArrowFunctionExpression, types map[ObjectProperty]DataType) (CompiledExpression, error) {
-	objProperties, err := ObjectProperties(f)
+func CompileExpression(f *ast.ArrowFunctionExpression, types map[ReferencePath]DataType) (CompiledExpression, error) {
+	references, err := FindReferences(f)
 	if err != nil {
 		return nil, err
 	}
-	// Validate we have types for each object property
-	for _, op := range objProperties {
-		if types[op] == TInvalid {
-			return nil, fmt.Errorf("missing type information for %q", op)
+	// Validate we have types for each reference
+	for _, r := range references {
+		rp := r.Path()
+		if types[rp] == TInvalid {
+			return nil, fmt.Errorf("missing type information for %q", rp)
 		}
 	}
 
@@ -88,7 +101,7 @@ func CompileExpression(f *ast.ArrowFunctionExpression, types map[ObjectProperty]
 	if err != nil {
 		return nil, err
 	}
-	cpy := make(map[ObjectProperty]DataType, len(types))
+	cpy := make(map[ReferencePath]DataType, len(types))
 	for k, v := range types {
 		cpy[k] = v
 	}
@@ -98,18 +111,21 @@ func CompileExpression(f *ast.ArrowFunctionExpression, types map[ObjectProperty]
 	}, nil
 }
 
-type ObjectProperty struct {
-	Object   string
-	Property string
+type Reference []string
+
+type ReferencePath string
+
+func (r Reference) Path() ReferencePath {
+	return ReferencePath(strings.Join([]string(r), "."))
 }
 
-func (op ObjectProperty) String() string {
-	return fmt.Sprintf("%s.%s", op.Object, op.Property)
+func (r Reference) String() string {
+	return string(r.Path())
 }
 
 type compiledExpression struct {
 	root  DataTypeEvaluator
-	types map[ObjectProperty]DataType
+	types map[ReferencePath]DataType
 }
 
 func (c compiledExpression) validate(scope Scope) error {
@@ -189,16 +205,17 @@ func (c compiledExpression) EvalTime(scope Scope) (Time, error) {
 	return c.root.EvalTime(scope), nil
 }
 
-func compile(n ast.Expression, types map[ObjectProperty]DataType) (DataTypeEvaluator, error) {
+func compile(n ast.Expression, types map[ReferencePath]DataType) (DataTypeEvaluator, error) {
 	switch n := n.(type) {
 	case *ast.MemberExpression:
-		op, err := objectProperty(n)
+		r, err := determineReference(n)
 		if err != nil {
 			return nil, err
 		}
-		return &objectPropertyEvaluator{
-			compiledType: compiledType(types[op]),
-			op:           op,
+		rp := r.Path()
+		return &referenceEvaluator{
+			compiledType:  compiledType(types[rp]),
+			referencePath: rp,
 		}, nil
 	case *ast.BooleanLiteral:
 		return &booleanEvaluator{
@@ -290,28 +307,28 @@ func compile(n ast.Expression, types map[ObjectProperty]DataType) (DataTypeEvalu
 	}
 }
 
-type Scope map[ObjectProperty]Value
+type Scope map[ReferencePath]Value
 
-func (s Scope) Type(op ObjectProperty) DataType {
-	return s[op].Type
+func (s Scope) Type(rp ReferencePath) DataType {
+	return s[rp].Type
 }
-func (s Scope) GetBool(op ObjectProperty) bool {
-	return s[op].Bool()
+func (s Scope) GetBool(rp ReferencePath) bool {
+	return s[rp].Bool()
 }
-func (s Scope) GetInt(op ObjectProperty) int64 {
-	return s[op].Int()
+func (s Scope) GetInt(rp ReferencePath) int64 {
+	return s[rp].Int()
 }
-func (s Scope) GetUInt(op ObjectProperty) uint64 {
-	return s[op].UInt()
+func (s Scope) GetUInt(rp ReferencePath) uint64 {
+	return s[rp].UInt()
 }
-func (s Scope) GetFloat(op ObjectProperty) float64 {
-	return s[op].Float()
+func (s Scope) GetFloat(rp ReferencePath) float64 {
+	return s[rp].Float()
 }
-func (s Scope) GetString(op ObjectProperty) string {
-	return s[op].Str()
+func (s Scope) GetString(rp ReferencePath) string {
+	return s[rp].Str()
 }
-func (s Scope) GetTime(op ObjectProperty) Time {
-	return s[op].Time()
+func (s Scope) GetTime(rp ReferencePath) Time {
+	return s[rp].Time()
 }
 
 type DataTypeEvaluator interface {
@@ -630,33 +647,33 @@ func (e *timeEvaluator) EvalTime(scope Scope) Time {
 	return e.t
 }
 
-type objectPropertyEvaluator struct {
+type referenceEvaluator struct {
 	compiledType
-	op ObjectProperty
+	referencePath ReferencePath
 }
 
-func (e *objectPropertyEvaluator) EvalBool(scope Scope) bool {
-	return scope.GetBool(e.op)
+func (e *referenceEvaluator) EvalBool(scope Scope) bool {
+	return scope.GetBool(e.referencePath)
 }
 
-func (e *objectPropertyEvaluator) EvalInt(scope Scope) int64 {
-	return scope.GetInt(e.op)
+func (e *referenceEvaluator) EvalInt(scope Scope) int64 {
+	return scope.GetInt(e.referencePath)
 }
 
-func (e *objectPropertyEvaluator) EvalUInt(scope Scope) uint64 {
-	return scope.GetUInt(e.op)
+func (e *referenceEvaluator) EvalUInt(scope Scope) uint64 {
+	return scope.GetUInt(e.referencePath)
 }
 
-func (e *objectPropertyEvaluator) EvalFloat(scope Scope) float64 {
-	return scope.GetFloat(e.op)
+func (e *referenceEvaluator) EvalFloat(scope Scope) float64 {
+	return scope.GetFloat(e.referencePath)
 }
 
-func (e *objectPropertyEvaluator) EvalString(scope Scope) string {
-	return scope.GetString(e.op)
+func (e *referenceEvaluator) EvalString(scope Scope) string {
+	return scope.GetString(e.referencePath)
 }
 
-func (e *objectPropertyEvaluator) EvalTime(scope Scope) Time {
-	return scope.GetTime(e.op)
+func (e *referenceEvaluator) EvalTime(scope Scope) Time {
+	return scope.GetTime(e.referencePath)
 }
 
 // Map of binary functions

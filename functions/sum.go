@@ -18,7 +18,7 @@ func init() {
 	execute.RegisterTransformation(SumKind, createSumTransformation)
 }
 
-func createSumOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSumOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	return new(SumOpSpec), nil
 }
 
@@ -33,7 +33,7 @@ func (s *SumOpSpec) Kind() query.OperationKind {
 type SumProcedureSpec struct {
 }
 
-func newSumProcedure(query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSumProcedure(query.OperationSpec, plan.Administration) (plan.ProcedureSpec, error) {
 	return new(SumProcedureSpec), nil
 }
 
@@ -70,8 +70,8 @@ func (s *SumProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Proce
 
 type SumAgg struct{}
 
-func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
-	t, d := execute.NewAggregateTransformationAndDataset(id, mode, ctx.Bounds(), new(SumAgg), ctx.Allocator())
+func createSumTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
+	t, d := execute.NewAggregateTransformationAndDataset(id, mode, a.Bounds(), new(SumAgg), a.Allocator())
 	return t, d, nil
 }
 func (a *SumAgg) NewBoolAgg() execute.DoBoolAgg {

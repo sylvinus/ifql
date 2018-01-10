@@ -24,7 +24,7 @@ func init() {
 	execute.RegisterSource(FromKind, createFromSource)
 }
 
-func createFromOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createFromOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	db, err := args.GetRequiredString("db")
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ type FromProcedureSpec struct {
 	AggregateType string
 }
 
-func newFromProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newFromProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*FromOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -133,7 +133,7 @@ func (s *FromProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func createFromSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, ctx execute.Context) execute.Source {
+func createFromSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execute.StorageReader, a execute.Administration) execute.Source {
 	spec := prSpec.(*FromProcedureSpec)
 	var w execute.Window
 	if spec.WindowSet {
@@ -141,20 +141,20 @@ func createFromSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execut
 			Every:  execute.Duration(spec.Window.Every),
 			Period: execute.Duration(spec.Window.Period),
 			Round:  execute.Duration(spec.Window.Round),
-			Start:  ctx.ResolveTime(spec.Window.Start),
+			Start:  a.ResolveTime(spec.Window.Start),
 		}
 	} else {
-		duration := execute.Duration(ctx.ResolveTime(spec.Bounds.Stop)) - execute.Duration(ctx.ResolveTime(spec.Bounds.Start))
+		duration := execute.Duration(a.ResolveTime(spec.Bounds.Stop)) - execute.Duration(a.ResolveTime(spec.Bounds.Start))
 		w = execute.Window{
 			Every:  duration,
 			Period: duration,
-			Start:  ctx.ResolveTime(spec.Bounds.Start),
+			Start:  a.ResolveTime(spec.Bounds.Start),
 		}
 	}
 	currentTime := w.Start + execute.Time(w.Period)
 	bounds := execute.Bounds{
-		Start: ctx.ResolveTime(spec.Bounds.Start),
-		Stop:  ctx.ResolveTime(spec.Bounds.Stop),
+		Start: a.ResolveTime(spec.Bounds.Start),
+		Stop:  a.ResolveTime(spec.Bounds.Stop),
 	}
 	return execute.NewStorageSource(
 		id,

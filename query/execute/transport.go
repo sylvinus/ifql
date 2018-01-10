@@ -116,11 +116,6 @@ func (t *consecutiveTransport) Finish(id DatasetID, err error) {
 	})
 }
 
-func (t *consecutiveTransport) SetParents(ids []DatasetID) {
-	//TODO(nathanielc): Need a better mechanism to inform transformations of their parent ids.
-	t.t.SetParents(ids)
-}
-
 func (t *consecutiveTransport) pushMsg(m Message) {
 	t.messages.Push(m)
 	atomic.AddInt32(&t.inflight, 1)
@@ -162,6 +157,10 @@ PROCESS:
 
 			// Transition to the finished state.
 			if t.tryTransition(running, finished) {
+				// Call Finish if we have not already
+				if !f {
+					t.t.Finish(m.SrcDatasetID(), err)
+				}
 				// We are finished
 				close(t.finished)
 				return

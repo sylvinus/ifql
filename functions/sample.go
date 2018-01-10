@@ -25,7 +25,7 @@ func init() {
 	execute.RegisterTransformation(SampleKind, createSampleTransformation)
 }
 
-func createSampleOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSampleOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SampleOpSpec)
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ type SampleProcedureSpec struct {
 	Pos        int64
 }
 
-func newSampleProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSampleProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	spec, ok := qs.(*SampleOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -95,7 +95,7 @@ type SampleSelector struct {
 	selected []int
 }
 
-func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	ps, ok := spec.(*SampleProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
@@ -105,7 +105,7 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 		N:   int(ps.N),
 		Pos: int(ps.Pos),
 	}
-	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, ctx.Bounds(), ss, ps.UseRowTime, ctx.Allocator())
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), ss, ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

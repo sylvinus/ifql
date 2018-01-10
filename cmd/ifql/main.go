@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -101,6 +102,7 @@ func main() {
 	c, err := ifql.NewController(ifql.Config{
 		Hosts:            hosts,
 		ConcurrencyQuota: runtime.NumCPU() * 2,
+		MemoryBytesQuota: math.MaxInt64,
 	})
 	if err != nil {
 		log.Fatal(err)

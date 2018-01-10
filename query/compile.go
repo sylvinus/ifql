@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
@@ -37,7 +38,7 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*QuerySpec, er
 	return d.ToSpec(), nil
 }
 
-type CreateOperationSpec func(args Arguments, ctx *Context) (OperationSpec, error)
+type CreateOperationSpec func(args Arguments, ctx *Administration) (OperationSpec, error)
 
 var functionsMap = make(map[string]function)
 
@@ -71,13 +72,13 @@ func newBuiltInScope() *ifql.Scope {
 	return s
 }
 
-type Context struct {
+type Administration struct {
 	parents []OperationID
 }
 
 // AddParent instructs the evaluation Context that a new edge should be created from the parent to the current operation.
 // Duplicate parents will be removed, so the caller need not concern itself with which parents have already been added.
-func (c *Context) AddParent(id OperationID) {
+func (c *Administration) AddParent(id OperationID) {
 	// Check for duplicates
 	for _, p := range c.parents {
 		if p == id {
@@ -109,6 +110,10 @@ func (d *queryDomain) nextID() int {
 }
 
 func (d *queryDomain) AddParentEdges(id OperationID, parents ...OperationID) {
+	if len(parents) > 1 {
+		// Always add parents in a consistent order
+		sort.Slice(parents, func(i, j int) bool { return parents[i] < parents[j] })
+	}
 	for _, p := range parents {
 		if p != id {
 			d.edges = append(d.edges, Edge{
@@ -177,7 +182,7 @@ func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
 		qd.AddParentEdges(o.ID, f.parentID)
 	}
 
-	ctx := new(Context)
+	ctx := new(Administration)
 	spec, err := f.createOpSpec(Arguments{Arguments: args}, ctx)
 	if err != nil {
 		return nil, err

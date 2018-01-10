@@ -22,7 +22,7 @@ func init() {
 	execute.RegisterTransformation(SetKind, createSetTransformation)
 }
 
-func createSetOpSpec(args query.Arguments, ctx *query.Context) (query.OperationSpec, error) {
+func createSetOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SetOpSpec)
 	key, err := args.GetRequiredString("key")
 	if err != nil {
@@ -51,7 +51,7 @@ type SetProcedureSpec struct {
 	Key, Value string
 }
 
-func newSetProcedure(qs query.OperationSpec) (plan.ProcedureSpec, error) {
+func newSetProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
 	s, ok := qs.(*SetOpSpec)
 	if !ok {
 		return nil, fmt.Errorf("invalid spec type %T", qs)
@@ -73,21 +73,20 @@ func (s *SetProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func createSetTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, ctx execute.Context) (execute.Transformation, execute.Dataset, error) {
+func createSetTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {
 	s, ok := spec.(*SetProcedureSpec)
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", spec)
 	}
-	cache := execute.NewBlockBuilderCache(ctx.Allocator())
+	cache := execute.NewBlockBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
 	t := NewSetTransformation(d, cache, s)
 	return t, d, nil
 }
 
 type setTransformation struct {
-	d       execute.Dataset
-	cache   execute.BlockBuilderCache
-	parents []execute.DatasetID
+	d     execute.Dataset
+	cache execute.BlockBuilderCache
 
 	key, value string
 }
@@ -199,7 +198,4 @@ func (t *setTransformation) UpdateProcessingTime(id execute.DatasetID, pt execut
 }
 func (t *setTransformation) Finish(id execute.DatasetID, err error) {
 	t.d.Finish(err)
-}
-func (t *setTransformation) SetParents(ids []execute.DatasetID) {
-	t.parents = ids
 }
