@@ -16,7 +16,7 @@ Program
     }
 
 SourceElements
-  = head:SourceElement tail:(__ SourceElement)* {
+  = head:SourceElement tail:(__ SourceElement __)* {
       return srcElems(head, tail)
     }
 
@@ -24,29 +24,29 @@ SourceElement
   = Statement
 
 Statement
-  = varstmt:VariableStatement
-  / returnstmt:ReturnStatement
-  / exprstmt:ExpressionStatement
-  / blockstmt:BlockStatement
+  = VariableStatement
+  / ReturnStatement 
+  / ExpressionStatement
+  / BlockStatement
 
 
 VariableStatement
-  = __ "var" __ declaration:VariableDeclaration  __ {
+  = "var" __ declaration:VariableDeclaration {
       return varstmt(declaration, c.text, c.pos)
     }
 
 ReturnStatement
-  = __ "return" __ argument:Expr __  {
+  = "return" __ argument:Expr {
     return returnstmt(argument, c.text, c.pos)
   }
 
 ExpressionStatement
-  = __ expr:Expr __ {
+  = expr:Expr {
         return exprstmt(expr, c.text, c.pos)
     }
 
 BlockStatement
-  = __ "{" __ body:Statement* __ "}"  __ {
+  = "{" __ body:( __ Statement __ )* __ "}" {
     return blockstmt(body, c.text, c.pos)
   }
 
@@ -58,7 +58,7 @@ VariableDeclaration
 MemberExpressions
   = head:Identifier // TODO: should be primary
     tail:(
-        property:MemberExpressionProperty {
+         __ property:MemberExpressionProperty {
           return property, nil
         }
     )*
@@ -67,10 +67,10 @@ MemberExpressions
     }
 
 MemberExpressionProperty
-  = __ "." __ property:Identifier {
+  = "." __ property:Identifier {
       return property, nil
     }
-    / __ "[" __ property:Primary __ "]" __ {
+    / "[" __ property:Primary __ "]" __ {
       return property, nil
     }
 
@@ -84,7 +84,7 @@ CallExpression
         __ args:Arguments {
           return callexpr(nil, args, c.text, c.pos)
         }
-      / property:MemberExpressionProperty {
+      /  __ property:MemberExpressionProperty {
           return memberexpr(nil, property, c.text, c.pos)
         }
     )*

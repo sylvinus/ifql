@@ -29,7 +29,8 @@ func blockstmt(body interface{}, text []byte, pos position) (*ast.BlockStatement
 	bodySlice := toIfaceSlice(body)
 	statements := make([]ast.Statement, len(bodySlice))
 	for i, s := range bodySlice {
-		statements[i] = s.(ast.Statement)
+		stmt := toIfaceSlice(s)[1] // Skip whitespace
+		statements[i] = stmt.(ast.Statement)
 	}
 	return &ast.BlockStatement{
 		BaseNode: base(text, pos),
