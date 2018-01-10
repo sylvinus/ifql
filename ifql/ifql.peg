@@ -31,7 +31,7 @@ Statement
 
 
 VariableStatement
-  = "var" __ declaration:VariableDeclaration {
+  = declaration:VariableDeclaration  {
       return varstmt(declaration, c.text, c.pos)
     }
 

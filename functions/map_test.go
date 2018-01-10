@@ -50,7 +50,7 @@ func TestMap_NewQuery(t *testing.T) {
 		},
 		{
 			Name: "resolve map",
-			Raw:  `var x = 2 from(db:"mydb").map(fn: (r) => r._value + x)`,
+			Raw:  `x = 2 from(db:"mydb").map(fn: (r) => r._value + x)`,
 			Want: &query.QuerySpec{
 				Operations: []*query.Operation{
 					{

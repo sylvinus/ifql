@@ -59,7 +59,7 @@ func TestEval(t *testing.T) {
 		{
 			name: "reassign nested scope",
 			query: `
-			var six = six()
+			six = six()
 			six()
 			`,
 			wantErr: true,
@@ -67,33 +67,33 @@ func TestEval(t *testing.T) {
 		{
 			name: "binary expressions",
 			query: `
-			var six = six()
-			var nine = nine()
+			six = six()
+			nine = nine()
 
-			var answer = fortyTwo() == six * nine
+			answer = fortyTwo() == six * nine
 			`,
 		},
 		{
 			name: "logcial expressions short circuit",
 			query: `
-            var six = six()
-            var nine = nine()
+            six = six()
+            nine = nine()
 
-            var answer = (not (fortyTwo() == six * nine)) or fail()
+            answer = (not (fortyTwo() == six * nine)) or fail()
 			`,
 		},
 		{
 			name: "arrow function",
 			query: `
-            var plusSix = (r) => r + six()
+            plusSix = (r) => r + six()
             plusSix(r:1.0) == 7.0 or fail()
 			`,
 		},
 		{
 			name: "arrow function block",
 			query: `
-            var f = (r) => {
-                var r2 = r * r
+            f = (r) => {
+                r2 = r * r
                 return (r - r2) / r2
             }
             f(r:2.0) == -0.5 or fail()
@@ -102,10 +102,10 @@ func TestEval(t *testing.T) {
 		{
 			name: "extra statements after return",
 			query: `
-            var f = (r) => {
-                var r2 = r * r
+            f = (r) => {
+                r2 = r * r
                 return (r - r2) / r2
-                var x = r2 * r
+                x = r2 * r
             }
             f(r:2.0)
 			`,
@@ -114,19 +114,19 @@ func TestEval(t *testing.T) {
 		{
 			name: "scope closing",
 			query: `
-			var x = 5
-            var plusX = (r) => r + x
+			x = 5
+            plusX = (r) => r + x
             plusX(r:2) == 7 or fail()
 			`,
 		},
 		{
 			name: "return map from func",
 			query: `
-            var toMap = (a,b) => ({
+            toMap = (a,b) => ({
                 a: a,
                 b: b,
             })
-            var m = toMap(a:1, b:false)
+            m = toMap(a:1, b:false)
             m.a == 1 or fail()
             not m.b or fail()
 			`,
@@ -170,7 +170,7 @@ func TestFunction_Resolve(t *testing.T) {
 	})
 
 	program, err := ifql.NewAST(`
-	var x = 42
+	x = 42
 	resolver(f: (r) => r + x)
 `)
 	if err != nil {
