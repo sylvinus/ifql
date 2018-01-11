@@ -424,9 +424,11 @@ RegularExpressionNonTerminator
 
 SourceChar
   = .
-
 __
-  = ( ws / EOL )*
+  = ( ws / EOL / Comment )*
+
+Comment
+  = "//" [^\r\n]* EOL
 
 ws
   = [ \t\r\n]
