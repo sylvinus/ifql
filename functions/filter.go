@@ -81,8 +81,10 @@ func (s *FilterProcedureSpec) PushDownRules() []plan.PushDownRule {
 					return false
 				}
 				fs := spec.(*FromProcedureSpec)
-				if _, ok := fs.Filter.Body.(ast.Expression); !ok {
-					return false
+				if fs.Filter != nil {
+					if _, ok := fs.Filter.Body.(ast.Expression); !ok {
+						return false
+					}
 				}
 				return true
 			},
