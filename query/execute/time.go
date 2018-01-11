@@ -34,6 +34,10 @@ func (t Time) Truncate(d Duration) Time {
 	return t - Time(r)
 }
 
+func (t Time) Add(d Duration) Time {
+	return t + Time(d)
+}
+
 func Now() Time {
 	return Time(time.Now().UnixNano())
 }
