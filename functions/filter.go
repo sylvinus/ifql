@@ -70,23 +70,104 @@ func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func (s *FilterProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
-		Root:    FromKind,
-		Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
+func (s *FilterProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{
+		{
+			Root:    FromKind,
+			Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
+			Match: func(spec plan.ProcedureSpec) bool {
+				// TODO(nathanielc): Remove once row functions support calling functions
+				if _, ok := s.Fn.Body.(ast.Expression); !ok {
+					return false
+				}
+				fs := spec.(*FromProcedureSpec)
+				if _, ok := fs.Filter.Body.(ast.Expression); !ok {
+					return false
+				}
+				return true
+			},
+		},
+		{
+			Root:    FilterKind,
+			Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
+			Match: func(spec plan.ProcedureSpec) bool {
+				// TODO(nathanielc): Remove once row functions support calling functions
+				if _, ok := s.Fn.Body.(ast.Expression); !ok {
+					return false
+				}
+				fs := spec.(*FilterProcedureSpec)
+				if _, ok := fs.Fn.Body.(ast.Expression); !ok {
+					return false
+				}
+				return true
+			},
+		},
 	}
 }
+
 func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
-	selectSpec := root.Spec.(*FromProcedureSpec)
-	if selectSpec.FilterSet {
-		root = dup()
-		selectSpec = root.Spec.(*FromProcedureSpec)
-		selectSpec.FilterSet = false
-		selectSpec.Filter = nil
-		return
+	switch spec := root.Spec.(type) {
+	case *FromProcedureSpec:
+		if spec.FilterSet {
+			spec.Filter = mergeArrowFunction(spec.Filter, s.Fn)
+			return
+		}
+		spec.FilterSet = true
+		spec.Filter = s.Fn
+	case *FilterProcedureSpec:
+		spec.Fn = mergeArrowFunction(spec.Fn, s.Fn)
 	}
-	selectSpec.FilterSet = true
-	selectSpec.Filter = s.Fn
+}
+
+func mergeArrowFunction(a, b *ast.ArrowFunctionExpression) *ast.ArrowFunctionExpression {
+	fn := a.Copy().(*ast.ArrowFunctionExpression)
+
+	aExp, aOK := a.Body.(ast.Expression)
+	bExp, bOK := b.Body.(ast.Expression)
+
+	if aOK && bOK {
+		fn.Body = &ast.LogicalExpression{
+			Operator: ast.AndOperator,
+			Left:     aExp,
+			Right:    bExp,
+		}
+		return fn
+	}
+
+	// TODO(nathanielc): This code is unreachable while the current PushDownRule Match function is inplace.
+
+	and := &ast.LogicalExpression{
+		Operator: ast.AndOperator,
+		Left:     aExp,
+		Right:    bExp,
+	}
+
+	// Create pass through arguments expression
+	passThroughArgs := &ast.ObjectExpression{
+		Properties: make([]*ast.Property, len(a.Params)),
+	}
+	for i, p := range a.Params {
+		passThroughArgs.Properties[i] = &ast.Property{
+			Key:   p.Key,
+			Value: p.Key,
+		}
+	}
+
+	if !aOK {
+		// Rewrite left expression as a function call.
+		and.Left = &ast.CallExpression{
+			Callee:    a.Copy().(*ast.ArrowFunctionExpression),
+			Arguments: []ast.Expression{passThroughArgs.Copy().(*ast.ObjectExpression)},
+		}
+	}
+	if !bOK {
+		// Rewrite right expression as a function call.
+		and.Right = &ast.CallExpression{
+			Callee:    b.Copy().(*ast.ArrowFunctionExpression),
+			Arguments: []ast.Expression{passThroughArgs.Copy().(*ast.ObjectExpression)},
+		}
+	}
+	return fn
 }
 
 func createFilterTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {

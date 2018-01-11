@@ -52,7 +52,7 @@ type ProcedureSpec interface {
 }
 
 type PushDownProcedureSpec interface {
-	PushDownRule() PushDownRule
+	PushDownRules() []PushDownRule
 	PushDown(root *Procedure, dup func() *Procedure)
 }
 

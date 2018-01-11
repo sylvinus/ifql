@@ -8,13 +8,18 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 )
 
-func PhysicalPlan_PushDown_Match_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, matchSpec plan.ProcedureSpec, want bool) {
+func PhysicalPlan_PushDown_Match_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, matchSpec plan.ProcedureSpec, want []bool) {
 	t.Helper()
 
-	rule := spec.PushDownRule()
-	got := rule.Match(matchSpec)
-	if got != want {
-		t.Errorf("unexpected push down rule matching: got: %t want: %t", got, want)
+	rules := spec.PushDownRules()
+	if len(want) != len(rules) {
+		t.Fatalf("unexpected number of rules, want:%d got:%d", len(want), len(rules))
+	}
+	for i, rule := range rules {
+		got := rule.Match(matchSpec)
+		if got != want[i] {
+			t.Errorf("unexpected push down rule matching: got: %t want: %t", got, want[i])
+		}
 	}
 }
 

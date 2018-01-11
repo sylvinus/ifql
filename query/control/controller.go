@@ -179,6 +179,7 @@ func (c *Controller) run() {
 				q.plan = p
 				q.concurrency = p.Resources.ConcurrencyQuota
 				q.memory = p.Resources.MemoryBytesQuota
+				//log.Println("plan", plan.Formatted(q.plan))
 			}
 
 			// Check if we have enough resources

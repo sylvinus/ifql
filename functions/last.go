@@ -65,15 +65,15 @@ func (s *LastProcedureSpec) Kind() plan.ProcedureKind {
 	return LastKind
 }
 
-func (s *LastProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
+func (s *LastProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{{
 		Root:    FromKind,
 		Through: []plan.ProcedureKind{GroupKind, LimitKind, FilterKind},
 		Match: func(spec plan.ProcedureSpec) bool {
 			selectSpec := spec.(*FromProcedureSpec)
 			return !selectSpec.AggregateSet
 		},
-	}
+	}}
 }
 
 func (s *LastProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {

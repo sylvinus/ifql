@@ -71,11 +71,11 @@ func (s *LimitProcedureSpec) Copy() plan.ProcedureSpec {
 	return ns
 }
 
-func (s *LimitProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
+func (s *LimitProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{{
 		Root:    FromKind,
 		Through: []plan.ProcedureKind{GroupKind, RangeKind, FilterKind},
-	}
+	}}
 }
 func (s *LimitProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*FromProcedureSpec)

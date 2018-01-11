@@ -44,15 +44,15 @@ func (s *CountProcedureSpec) Copy() plan.ProcedureSpec {
 	return new(CountProcedureSpec)
 }
 
-func (s *CountProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
+func (s *CountProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{{
 		Root:    FromKind,
 		Through: nil,
 		Match: func(spec plan.ProcedureSpec) bool {
 			selectSpec := spec.(*FromProcedureSpec)
 			return !selectSpec.GroupingSet
 		},
-	}
+	}}
 }
 
 func (s *CountProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
