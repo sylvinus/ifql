@@ -1538,6 +1538,27 @@ from()
 			},
 		},
 		{
+			name: "package declaration",
+			raw: `
+package boolean
+
+t = true
+`,
+			want: &ast.Program{
+				Package: &ast.PackageDeclaration{
+					ID: &ast.Identifier{Name: "boolean"},
+				},
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "t"},
+							Init: &ast.BooleanLiteral{Value: true},
+						}},
+					},
+				},
+			},
+		},
+		{
 			name:    "parse error extra gibberish",
 			raw:     `from(db:"ifql") &^*&H#IUJBN`,
 			wantErr: true,

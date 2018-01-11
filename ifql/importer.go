@@ -39,6 +39,7 @@ func (fi *FileImporter) Import(p string, dir string) (Package, error) {
 		return nil, errors.Wrapf(err, "failed to read package %q", p)
 	}
 
+	var packageName string
 	program := new(ast.Program)
 	for _, fi := range files {
 		if fi.IsDir() || filepath.Ext(fi.Name()) != ".ifql" {
@@ -57,12 +58,24 @@ func (fi *FileImporter) Import(p string, dir string) (Package, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse package file %q", fi.Name())
 		}
+		if p.Package == nil {
+			return nil, fmt.Errorf("no package name declared in file %q", fi.Name())
+		}
+		if packageName == "" {
+			packageName = p.Package.ID.Name
+		}
+		if packageName != p.Package.ID.Name {
+			return nil, fmt.Errorf("found conflicting package names [%q, %q] declared in file %q", packageName, p.Package.ID.Name, fi.Name())
+		}
 		program.Imports = append(program.Imports, p.Imports...)
 		program.Body = append(program.Body, p.Body...)
 	}
+	if packageName == "" {
+		return nil, errors.New("no package name declared")
+	}
 
 	pkg := &SourcePackage{
-		name:    filepath.Base(p),
+		name:    packageName,
 		path:    p,
 		program: program,
 	}

@@ -17,8 +17,13 @@ func toIfaceSlice(v interface{}) []interface{} {
 	return v.([]interface{})
 }
 
-func program(imports, body interface{}, text []byte, pos position) (*ast.Program, error) {
+func program(pkg, imports, body interface{}, text []byte, pos position) (*ast.Program, error) {
+	var pkgDecl *ast.PackageDeclaration
+	if pkg != nil {
+		pkgDecl = pkg.(*ast.PackageDeclaration)
+	}
 	return &ast.Program{
+		Package:  pkgDecl,
 		Imports:  imports.([]*ast.ImportDeclaration),
 		Body:     body.([]ast.Statement),
 		BaseNode: base(text, pos),

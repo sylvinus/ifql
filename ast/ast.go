@@ -77,6 +77,7 @@ func (b *BaseNode) Location() *SourceLocation { return b.Loc }
 // Program represents a complete program source tree
 type Program struct {
 	*BaseNode
+	Package *PackageDeclaration  `json:"package,omitempty"`
 	Imports []*ImportDeclaration `json:"imports,omitempty"`
 	Body    []Statement          `json:"body"`
 }
@@ -87,6 +88,9 @@ func (*Program) Type() string { return "Program" }
 func (p *Program) Copy() Node {
 	np := new(Program)
 	*np = *p
+
+	np.Package = p.Package.Copy().(*PackageDeclaration)
+
 	if len(p.Imports) > 0 {
 		np.Imports = make([]*ImportDeclaration, len(p.Body))
 		for i, s := range p.Imports {
@@ -112,6 +116,9 @@ type PackageDeclaration struct {
 func (*PackageDeclaration) Type() string { return "PackageDeclaration" }
 
 func (d *PackageDeclaration) Copy() Node {
+	if d == nil {
+		return d
+	}
 	nd := new(PackageDeclaration)
 	*nd = *d
 	nd.ID = d.ID.Copy().(*Identifier)
@@ -192,7 +199,7 @@ type VersionNumber struct {
 	Literal string `json:"literal"`
 	Major   int    `json:"major"`
 	Minor   int    `json:"minor"`
-	Patch   int    `json:"pamatchtch"`
+	Patch   int    `json:"patch"`
 }
 
 // Type is the abstract type

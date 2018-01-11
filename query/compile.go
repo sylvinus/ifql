@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -32,7 +33,7 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) 
 		return nil, err
 	}
 	spec := d.ToSpec()
-	//log.Println(Formatted(spec, FmtJSON))
+	log.Println(Formatted(spec, FmtJSON))
 	return spec, nil
 }
 

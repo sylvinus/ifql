@@ -12,7 +12,7 @@ Start
 
 Program
   = pkg:PackageDeclaration? __ imprts:Imports  __ body:Statements {
-      return program(imprts, body, c.text, c.pos)
+      return program(pkg, imprts, body, c.text, c.pos)
     }
 
 PackageDeclaration

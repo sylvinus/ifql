@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -50,7 +49,6 @@ func (ev evaluator) eval(program *ast.Program, scope *Scope) error {
 			return err
 		}
 	}
-	log.Println("program scope", scope)
 	for _, stmt := range program.Body {
 		if err := ev.doStatement(stmt, scope); err != nil {
 			return err
