@@ -3,16 +3,44 @@ syntax = "proto3";
 package api;
 
 service API {
-	// only these two functions don't require a token
-	rpc GetTokenByUser(string, string) returns(Token) {}
-	rpc GetTokenByApiKey(string, string)
+	// Organziations API
+	// GetOrganizations returns all organizations. Only an API token from the root organization can make this request.
+	rpc GetOrganizations(EmptyAuthRequest) returns (OrganizationCollection) {}
 
-	// every function should have a token (for authorization)
-	// TODO: how to do authentication/authorization in gRPC?
-	rpc GetOrganizations() returns (OrganizationCollection) {}
-	rpc GetOrganization(uint32 id) returns (Organization) {}
+	// GetOrganization returns the information for an organization. Root org or API token with this right can perform.
+	rpc GetOrganization(GetOrganizationRequest) returns (Organization) {}
+
+	// CreateOrganization creates the organization, with the initial root user, and an API token for this user with all rights.
+	// To call this a validated user with an API token with the create org right must be passed.
+	rpc CreateOrganization(CreateOrganizationRequest) returns (Error) {}
+
+	// UpdateOrganization will update the organization's name.
+	rpc UpdateOrganization(UpdateOrganizationRequest) returns (Error) {}
+
+	rpc DeleteOrganization(DeleteOrganizationRequest) returns (Error) {}
+
+	// Buckets API
+	rpc GetBucketsByOrg(GetBucketsByOrgRequest) returns (BucketCollection) {}
+
+	rpc CreateBucket(CreateBucketRequest) returns (Error) {}
+
+	// UpdateBucket will only allow you to change the retention period.
+	rpc UpdateBucket(UpdateBucketRequest) returns (Error) {}
+
+	rpc DeleteBucket(DeleteBucketRequest) returns (Error) {}
+
+	// Users API
+	rpc CreateUser(CreateUserRequest) returns (Error) {}
+	rpc GetUsersByOrgID(GetUsersByOrgIDRequest) returns (Error) {}
+	rpc DeleteUser(DeleteUserRequest) returns (Error) {}
+
+	// API Tokens API
+	rpc CreateAPIToken(CreateAPITokenRequest) returns (Error) {}
+	rpc UpdateAPIToken(UpdateAPITokenRequest) returns (Error) {}
+	rpc DeleteAPIToken(DeleteAPITokenRequest) returns (Error) {}
 
 	// Write API
+	rpc Write(WriteRequest) returns (Error) {}
 
 	// Query API
 	rpc ValidateQuery(Query) returns (Error) {}
@@ -24,24 +52,135 @@ service API {
 	rpc GetBackgroundQueries(Organization) returns (BackGroundQueriesResponse) {}
 	rpc GetBackgroundQueryStatus(BackgroundQueryRequest) returns (BackgroundQueryStatusResponse) {}
 
-	// TODO 
-	rpc TestK8sConfig(K8sConfig) returns (Error) {}
-
-	rpc AddFunction(string, Query) returns (Error) {}
-	rpc DeleteFunction(string) returns (Error) {}
-
-	rpc GetSecretsByOrgID(uint32) returns (SecretCollection) {}
+	rpc GetSecretsByOrgID(EmptyAuthRequest) returns (SecretCollection) {}
 
 	// Registry API (enterprise)
-	rpc RegisterPackage(Package) returns (Error) {}
-	rpc DeletePackage(Package) returns (Error) {}
-	rpc GetPackage(org, namespace) returns (Package) {}
-	rpc GetPackages(Organization) returns (GetPackagesResponse) {}
+	rpc RegisterPackage(RegisterPackageRequest) returns (Error) {}
+	rpc DeletePackage(DeletePackageRequest) returns (Error) {}
+	rpc GetPackage(GetPackageRequest) returns (Package) {}
+	rpc GetPackagesByOrgID(GetPackagesByOrgIDRequest) returns (GetPackagesResponse) {}
 }
 
-message GetPackagesResponse {
-	repeated Package packages = 1;
-	Error error = 2;
+// EmptyAuthRequest is used for any request that takes only authentication and authorizaiton arguments
+message EmptyAuthRequest {
+	uint32 organization_id = 1;
+	APIToken api_token = 2;
+}
+
+message Error {
+	enum Kind {
+		UNKNOWN = 1;
+	}
+	Kind kind = 1;
+	string message = 2;
+}
+
+message OrganizationCollection {
+	repeated Organization organizations = 2;
+}
+
+message Organization {
+	uint32 id = 1;
+	bool is_root_organization = 1;
+	string name = 2;
+	User root_user = 3;
+	APIToken api_token = 4;
+	repeated Bucket buckets = 5;
+	repeated Limits limits = 6;
+	repeated User users = 7;
+}
+
+message CreateOrganizationRequest {
+	string name = 1;
+	APIToken api_token = 2;
+}
+
+message UpdateOrganizationRequest {
+	uint32 id = 1;
+	string name = 2;
+	APIToken api_token = 3;
+}
+
+// GetOrganizationRequest will return the org specified by either its ID or name
+message GetOrganziationRequest {
+	uint32 organization_id = 1;
+	string organization_name = 2;
+	APIToken api_token = 3;
+}
+
+message Bucket {
+	uint32 id = 1;
+	string name = 2;
+	Limits limits = 3;
+	string retention_period = 4;
+	repeated RetentionRule retention_rules = 5;
+	AuthorizationScope default_scope = 6;
+	repeated ETLRule etl_rules = 7;
+	enum Kind {
+		PERSISTENT = 1;
+		CIRCULAR = 2;
+		STREAM = 3;
+	}
+}
+
+message CreateBucketRequest {
+	uint32 organization_id = 1;
+	string name = 2;
+	string retention_duration = 3;
+}
+
+message User {
+	uint32 id = 1;
+	repeated APIToken api_tokens = 2;
+	repeated Organization organizations = 3;
+
+	// what stuff for oauth?
+}
+
+message CreateUserRequest {
+	// organizations that the user should be added to on creation
+	repeated uint32 organization_ids = 1;
+	APIToken api_token = 2;
+	User user = 3;
+}
+
+// APItoken must be passed for every request to the API to authenticate and authorize the request
+message APIToken {
+	string key = 1;
+	// how should API keys work?
+	string secret = 2;
+	string description = 3;
+	repeated AuthorizationScope authorization_scopes = 4;
+}
+
+message CreateAPITokenRequest {
+	uint32 user_id = 1;
+
+	// api_token is the token to be authenticated and authorized to make this request
+	APIToken api_token = 2;
+
+	// name is the human readable name of the token. It must be unique within a user
+	string name = 3;
+}
+
+message AuthorizationScope {
+	enum Resource {
+		BUCKET = 0;
+		ORGANIZATION = 1;
+	}
+	enum Right {
+		CREATE = 1;
+		UPDATE = 2;
+		DELETE = 3;
+		READ = 4;
+		WRITE = 5;
+	}
+	Resource resource = 1;
+	repeated Right rights = 2;
+}
+
+message Query {
+	string script = 1;
 }
 
 message QueryRequest {
@@ -52,6 +191,7 @@ message QueryRequest {
 	}
 
 	Query query = 1;
+	ResponseType response_type = 2;
 }
 
 message QueryResponse {
@@ -74,83 +214,27 @@ message CSVResponse {
 	// TODO
 }
 
-message Package {
-	string organizationName = 1;
-	string namespace = 2;
-	string script = 3;
-	string version = 4;
+message WriteRequest {
+	APIToken api_token = 1;
+	repeated string lines = 2;
+	repeated Point points = 3;
 }
 
-message UserAuth {
-	string name = 1;
-	string password = 2;
-}
-
-message Error {
-	enum Kind {
-		UNKNOWN = 1;
-	}
-	Kind kind = 1;
-	string message = 2;
-}
-
-message OrganizationCollection {
-	repeated Organization organizations = 1;
-}
-
-message Organization {
-	uint32 id = 1;
-	string name = 2;
-	Bucket buckets = 3;
-	Limits limits = 4;
-	User users = 5;
-}
-
-message Bucket {
-	uint32 id = 1;
-	string name = 2;
-	Limits limits = 3;
-	string retention_period = 4;
-	repeated RetentionRule retention_rules = 5;
-	AuthorizationScope default_scope = 6;
-	repeated ETLRule etl_rules = 7;
-	enum Kind {
-		PERSISTENT = 1;
-		CIRCULAR = 2;
-		STREAM = 3;
+message Point {
+	repeated Tag tags = 1;
+	int64 timestamp = 2;
+	oneof valuetype {
+		Float64 float64 = 2;
+		String string = 3;
+		Int64 int64 = 4;
+		Uint64 uint64 = 5;
+		Bool bool = 6;
 	}
 }
 
-message User {
-	uint32 id = 1;
-	repeated ApiKey keys = 2;
-	repeated Organization organizations = 3;
-
-	// what stuff for oauth?
-}
-
-message ApiKey {
+message Tag {
 	string key = 1;
-	// how should API keys work?
-	string secret = 2;
-	string description = 3;
-	repeated AuthorizationScope authorization_scopes = 4;
-}
-
-message AuthorizationScope {
-	enum Resource {
-		BUCKET = 0;
-		ORGANIZATION = 1;
-	}
-	enum Right {
-		CREATE = 1;
-		UPDATE = 2;
-		DELETE = 3;
-		READ = 4;
-		WRITE = 5;
-	}
-	Resource resource = 1;
-	repeated Right rights = 2;
+	string value = 2;
 }
 
 // Limits represents rate, storage and other
@@ -173,10 +257,6 @@ message Limits {
 message RetentionRule {
 	string matcher = 1;
 	string duration = 2;
-}
-
-message Query {
-	string script = 1;
 }
 
 message BackgroundQueryRequest {
@@ -269,6 +349,20 @@ message PrometheusTarget {
 	string host = 3;
 }
 
+/*
+  Package Registry messages
+*/
+message Package {
+	string organizationName = 1;
+	string namespace = 2;
+	string script = 3;
+	string version = 4;
+}
+
+message GetPackagesResponse {
+	repeated Package packages = 1;
+	Error error = 2;
+}
 
 /*
     Telegraf configs
