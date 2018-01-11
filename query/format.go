@@ -1,11 +1,14 @@
 package query
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // TODO(nathanielc): Add better options for formatting plans as Graphviz dot format.
 type FormatOption func(*formatter)
 
-func Formatted(q *QuerySpec, opts ...FormatOption) fmt.Formatter {
+func Formatted(q *Spec, opts ...FormatOption) fmt.Formatter {
 	f := formatter{
 		q: q,
 	}
@@ -15,8 +18,11 @@ func Formatted(q *QuerySpec, opts ...FormatOption) fmt.Formatter {
 	return f
 }
 
+func FmtJSON(f *formatter) { f.json = true }
+
 type formatter struct {
-	q *QuerySpec
+	q    *Spec
+	json bool
 }
 
 func (f formatter) Format(fs fmt.State, c rune) {
@@ -24,10 +30,19 @@ func (f formatter) Format(fs fmt.State, c rune) {
 		fmt.Fprintf(fs, "%#v", f.q)
 		return
 	}
-	f.format(fs)
+	if f.json {
+		f.formatJSON(fs)
+	} else {
+		f.formatDAG(fs)
+	}
+}
+func (f formatter) formatJSON(fs fmt.State) {
+	e := json.NewEncoder(fs)
+	e.SetIndent("", "  ")
+	e.Encode(f.q)
 }
 
-func (f formatter) format(fs fmt.State) {
+func (f formatter) formatDAG(fs fmt.State) {
 	fmt.Fprint(fs, "digraph QuerySpec {\n")
 	_ = f.q.Walk(func(o *Operation) error {
 		fmt.Fprintf(fs, "%s[kind=%q];\n", o.ID, o.Spec.Kind())

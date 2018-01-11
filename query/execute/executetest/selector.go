@@ -11,7 +11,11 @@ func RowSelectorFuncTestHelper(t *testing.T, selector execute.RowSelector, data 
 	t.Helper()
 
 	s := selector.NewFloatSelector()
-	data.Values().DoFloat(s.DoFloat)
+	values, err := data.Values()
+	if err != nil {
+		t.Fatal(err)
+	}
+	values.DoFloat(s.DoFloat)
 
 	got := s.Rows()
 
@@ -27,7 +31,11 @@ func RowSelectorFuncBenchmarkHelper(b *testing.B, selector execute.RowSelector, 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		s := selector.NewFloatSelector()
-		data.Values().DoFloat(s.DoFloat)
+		values, err := data.Values()
+		if err != nil {
+			b.Fatal(err)
+		}
+		values.DoFloat(s.DoFloat)
 		rows = s.Rows()
 	}
 }
@@ -37,7 +45,11 @@ func IndexSelectorFuncTestHelper(t *testing.T, selector execute.IndexSelector, d
 
 	var got [][]int
 	s := selector.NewFloatSelector()
-	data.Values().DoFloat(func(vs []float64, rr execute.RowReader) {
+	values, err := data.Values()
+	if err != nil {
+		t.Fatal(err)
+	}
+	values.DoFloat(func(vs []float64, rr execute.RowReader) {
 		var cpy []int
 		selected := s.DoFloat(vs)
 		t.Log(selected)
@@ -59,7 +71,11 @@ func IndexSelectorFuncBenchmarkHelper(b *testing.B, selector execute.IndexSelect
 	var got [][]int
 	for n := 0; n < b.N; n++ {
 		s := selector.NewFloatSelector()
-		data.Values().DoFloat(func(vs []float64, rr execute.RowReader) {
+		values, err := data.Values()
+		if err != nil {
+			b.Fatal(err)
+		}
+		values.DoFloat(func(vs []float64, rr execute.RowReader) {
 			got = append(got, s.DoFloat(vs))
 		})
 	}

@@ -156,7 +156,7 @@ func (t *limitTransformation) Process(id execute.DatasetID, b execute.Block) err
 		n -= l
 		builder.AppendTimes(timeIdx, ts[:l])
 		for j, c := range cols {
-			if j == timeIdx || c.IsCommon {
+			if j == timeIdx || c.Common {
 				continue
 			}
 			for i := range ts[:l] {

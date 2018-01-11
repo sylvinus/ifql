@@ -32,7 +32,7 @@ func createSortOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		spec.Cols = array.AsStrings()
 	} else {
 		//Default behavior to sort by value
-		spec.Cols = []string{execute.ValueColLabel}
+		spec.Cols = []string{execute.DefaultValueColLabel}
 	}
 
 	if desc, ok, err := args.GetBool("desc"); err != nil {

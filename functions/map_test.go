@@ -16,7 +16,7 @@ func TestMap_NewQuery(t *testing.T) {
 		{
 			Name: "simple static map",
 			Raw:  `from(db:"mydb").map(fn: (r) => r._value + 1)`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -51,7 +51,7 @@ func TestMap_NewQuery(t *testing.T) {
 		{
 			Name: "resolve map",
 			Raw:  `x = 2 from(db:"mydb").map(fn: (r) => r._value + x)`,
-			Want: &query.QuerySpec{
+			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
 						ID: "from0",
@@ -172,8 +172,8 @@ func TestMap_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0},
@@ -186,8 +186,8 @@ func TestMap_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 6.0},
@@ -223,8 +223,8 @@ func TestMap_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0},
@@ -237,8 +237,8 @@ func TestMap_Process(t *testing.T) {
 					Stop:  3,
 				},
 				ColMeta: []execute.ColMeta{
-					{Label: "time", Type: execute.TTime},
-					{Label: "value", Type: execute.TFloat},
+					{Label: "_time", Type: execute.TTime, Kind: execute.TimeColKind},
+					{Label: "_value", Type: execute.TFloat, Kind: execute.ValueColKind},
 				},
 				Data: [][]interface{}{
 					{execute.Time(1), 1.0},

@@ -192,7 +192,7 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) err
 		tags = make(execute.Tags, len(blockTags))
 		cols := b.Cols()
 		for _, c := range cols {
-			if c.IsTag {
+			if c.IsTag() {
 				found := false
 				for _, tag := range t.except {
 					if tag == c.Label {
@@ -201,7 +201,7 @@ func (t *groupTransformation) Process(id execute.DatasetID, b execute.Block) err
 					}
 				}
 				if !found {
-					if !c.IsCommon {
+					if !c.Common {
 						isFanIn = false
 						break
 					}
@@ -230,7 +230,7 @@ func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) e
 
 		// Add existing columns, skipping tags.
 		for _, c := range b.Cols() {
-			if !c.IsTag {
+			if !c.IsTag() {
 				builder.AddCol(c)
 			}
 		}
@@ -243,7 +243,7 @@ func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) e
 			builder.AddCol(execute.ColMeta{
 				Label: k,
 				Type:  execute.TString,
-				IsTag: true,
+				Kind:  execute.TagColKind,
 			})
 		}
 	}
@@ -275,7 +275,7 @@ func (t *groupTransformation) processFanOut(b execute.Block) error {
 	cols := b.Cols()
 	tagMap := make(map[string]tagMeta, len(cols))
 	for j, c := range cols {
-		if c.IsTag {
+		if c.IsTag() {
 			ignoreTag := false
 			for _, tag := range t.except {
 				if tag == c.Label {
@@ -317,16 +317,16 @@ func (t *groupTransformation) processFanOut(b execute.Block) error {
 			if new {
 				// Add existing columns, skipping tags.
 				for _, c := range cols {
-					if !c.IsTag {
+					if !c.IsTag() {
 						builder.AddCol(c)
 						continue
 					}
 					if meta, ok := tagMap[c.Label]; ok {
 						j := builder.AddCol(execute.ColMeta{
-							Label:    c.Label,
-							Type:     execute.TString,
-							IsTag:    true,
-							IsCommon: meta.isCommon,
+							Label:  c.Label,
+							Type:   execute.TString,
+							Kind:   execute.TagColKind,
+							Common: meta.isCommon,
 						})
 						if meta.isCommon {
 							builder.SetCommonString(j, tags[c.Label])

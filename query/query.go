@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// QuerySpec specifies a query.
-type QuerySpec struct {
+// Spec specifies a query.
+type Spec struct {
 	Operations []*Operation       `json:"operations"`
 	Edges      []Edge             `json:"edges"`
 	Resources  ResourceManagement `json:"resources"`
@@ -25,7 +25,7 @@ type Edge struct {
 // Walk calls f on each operation exactly once.
 // The function f will be called on an operation only after
 // all of its parents have already been passed to f.
-func (q *QuerySpec) Walk(f func(o *Operation) error) error {
+func (q *Spec) Walk(f func(o *Operation) error) error {
 	if len(q.sorted) == 0 {
 		if err := q.prepare(); err != nil {
 			return err
@@ -41,13 +41,13 @@ func (q *QuerySpec) Walk(f func(o *Operation) error) error {
 }
 
 // Validate ensures the query is a valid DAG.
-func (q *QuerySpec) Validate() error {
+func (q *Spec) Validate() error {
 	return q.prepare()
 }
 
 // Children returns a list of children for a given operation.
 // If the query is invalid no children will be returned.
-func (q *QuerySpec) Children(id OperationID) []*Operation {
+func (q *Spec) Children(id OperationID) []*Operation {
 	if q.children == nil {
 		err := q.prepare()
 		if err != nil {
@@ -59,7 +59,7 @@ func (q *QuerySpec) Children(id OperationID) []*Operation {
 
 // Parents returns a list of parents for a given operation.
 // If the query is invalid no parents will be returned.
-func (q *QuerySpec) Parents(id OperationID) []*Operation {
+func (q *Spec) Parents(id OperationID) []*Operation {
 	if q.parents == nil {
 		err := q.prepare()
 		if err != nil {
@@ -71,7 +71,7 @@ func (q *QuerySpec) Parents(id OperationID) []*Operation {
 
 // prepare populates the internal datastructure needed to quickly navigate the query DAG.
 // As a result the query DAG is validated.
-func (q *QuerySpec) prepare() error {
+func (q *Spec) prepare() error {
 	parents, children, roots, err := q.determineParentsChildrenAndRoots()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (q *QuerySpec) prepare() error {
 	return nil
 }
 
-func (q *QuerySpec) computeLookup() (map[OperationID]*Operation, error) {
+func (q *Spec) computeLookup() (map[OperationID]*Operation, error) {
 	lookup := make(map[OperationID]*Operation, len(q.Operations))
 	for _, o := range q.Operations {
 		if _, ok := lookup[o.ID]; ok {
@@ -109,7 +109,7 @@ func (q *QuerySpec) computeLookup() (map[OperationID]*Operation, error) {
 	return lookup, nil
 }
 
-func (q *QuerySpec) determineParentsChildrenAndRoots() (parents, children map[OperationID][]*Operation, roots []*Operation, _ error) {
+func (q *Spec) determineParentsChildrenAndRoots() (parents, children map[OperationID][]*Operation, roots []*Operation, _ error) {
 	lookup, err := q.computeLookup()
 	if err != nil {
 		return nil, nil, nil, err
@@ -142,7 +142,7 @@ func (q *QuerySpec) determineParentsChildrenAndRoots() (parents, children map[Op
 
 // Depth first search topological sorting of a DAG.
 // https://en.wikipedia.org/wiki/Topological_sorting#Algorithms
-func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, o *Operation) error {
+func (q *Spec) visit(tMarks, pMarks map[OperationID]bool, o *Operation) error {
 	id := o.ID
 	if tMarks[id] {
 		return errors.New("found cycle in query")
@@ -163,7 +163,7 @@ func (q *QuerySpec) visit(tMarks, pMarks map[OperationID]bool, o *Operation) err
 }
 
 // Functions return the names of all functions used in the plan
-func (q *QuerySpec) Functions() ([]string, error) {
+func (q *Spec) Functions() ([]string, error) {
 	funcs := []string{}
 	err := q.Walk(func(o *Operation) error {
 		funcs = append(funcs, string(o.Spec.Kind()))

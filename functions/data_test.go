@@ -40,9 +40,9 @@ func init() {
 	})
 
 	normalBlockBuilder.AddCol(execute.TimeCol)
-	normalBlockBuilder.AddCol(execute.ColMeta{Label: "value", Type: execute.TFloat})
-	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t1", Type: execute.TString, IsTag: true, IsCommon: true})
-	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t2", Type: execute.TString, IsTag: true, IsCommon: false})
+	normalBlockBuilder.AddCol(execute.ColMeta{Label: execute.DefaultValueColLabel, Type: execute.TFloat, Kind: execute.ValueColKind})
+	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t1", Type: execute.TString, Kind: execute.TagColKind, Common: true})
+	normalBlockBuilder.AddCol(execute.ColMeta{Label: "t2", Type: execute.TString, Kind: execute.TagColKind, Common: false})
 
 	times := make([]execute.Time, N)
 	values := NormalData

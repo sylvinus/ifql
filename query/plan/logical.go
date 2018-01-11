@@ -27,19 +27,19 @@ func (lp *LogicalPlanSpec) lookup(id ProcedureID) *Procedure {
 }
 
 type LogicalPlanner interface {
-	Plan(*query.QuerySpec) (*LogicalPlanSpec, error)
+	Plan(*query.Spec) (*LogicalPlanSpec, error)
 }
 
 type logicalPlanner struct {
 	plan *LogicalPlanSpec
-	q    *query.QuerySpec
+	q    *query.Spec
 }
 
 func NewLogicalPlanner() LogicalPlanner {
 	return new(logicalPlanner)
 }
 
-func (p *logicalPlanner) Plan(q *query.QuerySpec) (*LogicalPlanSpec, error) {
+func (p *logicalPlanner) Plan(q *query.Spec) (*LogicalPlanSpec, error) {
 	p.q = q
 	p.plan = &LogicalPlanSpec{
 		Procedures: make(map[ProcedureID]*Procedure),

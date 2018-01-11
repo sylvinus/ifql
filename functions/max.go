@@ -11,7 +11,8 @@ import (
 const MaxKind = "max"
 
 type MaxOpSpec struct {
-	UseRowTime bool `json:"useRowtime"`
+	Column     string `json:"column"`
+	UseRowTime bool   `json:"useRowtime"`
 }
 
 func init() {
@@ -23,6 +24,11 @@ func init() {
 
 func createMaxOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(MaxOpSpec)
+	if c, ok, err := args.GetString("column"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Column = c
+	}
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
 	} else if ok {
@@ -41,6 +47,7 @@ func (s *MaxOpSpec) Kind() query.OperationKind {
 }
 
 type MaxProcedureSpec struct {
+	Column     string
 	UseRowTime bool
 }
 
@@ -50,6 +57,7 @@ func newMaxProcedure(qs query.OperationSpec, pa plan.Administration) (plan.Proce
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 	return &MaxProcedureSpec{
+		Column:     spec.Column,
 		UseRowTime: spec.UseRowTime,
 	}, nil
 }
@@ -59,6 +67,7 @@ func (s *MaxProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *MaxProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(MaxProcedureSpec)
+	ns.Column = s.Column
 	ns.UseRowTime = s.UseRowTime
 	return ns
 }
@@ -73,7 +82,7 @@ func createMaxTransformation(id execute.DatasetID, mode execute.AccumulationMode
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, a.Bounds(), new(MaxSelector), ps.UseRowTime, a.Allocator())
+	t, d := execute.NewRowSelectorTransformationAndDataset(id, mode, a.Bounds(), new(MaxSelector), ps.Column, ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

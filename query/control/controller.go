@@ -71,7 +71,7 @@ func (c *Controller) QueryWithCompile(ctx context.Context, queryStr string) (*Qu
 // Query submits a query for execution returning immediately.
 // The spec must not be modified while the query is still active.
 // Done must be called on any returned Query objects.
-func (c *Controller) Query(ctx context.Context, qSpec *query.QuerySpec) (*Query, error) {
+func (c *Controller) Query(ctx context.Context, qSpec *query.Spec) (*Query, error) {
 	q := c.createQuery(ctx)
 	q.Spec = *qSpec
 	err := c.enqueueQuery(q)
@@ -230,7 +230,7 @@ type Query struct {
 	id QueryID
 	c  *Controller
 
-	Spec query.QuerySpec
+	Spec query.Spec
 	now  time.Time
 
 	err error

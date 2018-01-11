@@ -14,20 +14,22 @@ type Operation struct {
 }
 
 func (o *Operation) UnmarshalJSON(data []byte) error {
-	type operationJSON struct {
-		ID   OperationID     `json:"id"`
+	type Alias Operation
+	raw := struct {
+		*Alias
 		Kind OperationKind   `json:"kind"`
 		Spec json.RawMessage `json:"spec"`
-	}
-	oj := operationJSON{}
-	err := json.Unmarshal(data, &oj)
+	}{}
+	err := json.Unmarshal(data, &raw)
 	if err != nil {
 		return err
 	}
-	o.ID = oj.ID
-	spec, err := unmarshalOpSpec(oj.Kind, oj.Spec)
+	if raw.Alias != nil {
+		*o = *(*Operation)(raw.Alias)
+	}
+	spec, err := unmarshalOpSpec(raw.Kind, raw.Spec)
 	if err != nil {
-		return errors.Wrapf(err, "failed to unmarshal operation %q", oj.ID)
+		return errors.Wrapf(err, "failed to unmarshal operation %q", o.ID)
 	}
 	o.Spec = spec
 	return nil
@@ -50,17 +52,15 @@ func unmarshalOpSpec(k OperationKind, data []byte) (OperationSpec, error) {
 }
 
 func (o Operation) MarshalJSON() ([]byte, error) {
-	type operationJSON struct {
-		ID   OperationID   `json:"id"`
+	type Alias Operation
+	raw := struct {
 		Kind OperationKind `json:"kind"`
-		Spec OperationSpec `json:"spec"`
+		Alias
+	}{
+		Kind:  o.Spec.Kind(),
+		Alias: (Alias)(o),
 	}
-	oj := operationJSON{
-		ID:   o.ID,
-		Kind: o.Spec.Kind(),
-		Spec: o.Spec,
-	}
-	return json.Marshal(oj)
+	return json.Marshal(raw)
 }
 
 type NewOperationSpec func() OperationSpec

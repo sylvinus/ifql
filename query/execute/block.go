@@ -28,10 +28,11 @@ type Block interface {
 	// Col returns an iterator to consume the values for a given column.
 	Col(c int) ValueIterator
 
-	// Times returns an iterator to consume the values for the "time" column.
+	// Times returns an iterator to consume the values for the "_time" column.
 	Times() ValueIterator
-	// Values returns an iterator to consume the values for the "value" column.
-	Values() ValueIterator
+	// Values returns an iterator to consume the values for the "_value" column.
+	// If no column exists and error is returned
+	Values() (ValueIterator, error)
 
 	// RefCount modifies the reference count on the block by n.
 	// When the RefCount goes to zero, the block is freed.
@@ -66,7 +67,7 @@ func CopyBlock(b Block, a *Allocator) Block {
 	for j, c := range cols {
 		colMap[j] = j
 		builder.AddCol(c)
-		if c.IsTag && c.IsCommon {
+		if c.IsTag() && c.Common {
 			builder.SetCommonString(j, b.Tags()[c.Label])
 		}
 	}
@@ -82,7 +83,7 @@ func AddBlockCols(b Block, builder BlockBuilder) {
 	cols := b.Cols()
 	for j, c := range cols {
 		builder.AddCol(c)
-		if c.IsTag && c.IsCommon {
+		if c.IsTag() && c.Common {
 			builder.SetCommonString(j, b.Tags()[c.Label])
 		}
 	}
@@ -107,7 +108,7 @@ func AddNewCols(b Block, builder BlockBuilder) []int {
 			builder.AddCol(c)
 			colMap = append(colMap, j)
 
-			if c.IsTag && c.IsCommon {
+			if c.IsTag() && c.Common {
 				builder.SetCommonString(j, b.Tags()[c.Label])
 			}
 		}
@@ -126,7 +127,7 @@ func AppendBlock(b Block, builder BlockBuilder, colMap []int) {
 	times.DoTime(func(ts []Time, rr RowReader) {
 		builder.AppendTimes(timeIdx, ts)
 		for j, c := range cols {
-			if j == timeIdx || c.IsCommon {
+			if j == timeIdx || c.Common {
 				continue
 			}
 			for i := range ts {
@@ -201,34 +202,34 @@ func AddTags(t Tags, b BlockBuilder) {
 	keys := t.Keys()
 	for _, k := range keys {
 		j := b.AddCol(ColMeta{
-			Label:    k,
-			Type:     TString,
-			IsTag:    true,
-			IsCommon: true,
+			Label:  k,
+			Type:   TString,
+			Kind:   TagColKind,
+			Common: true,
 		})
 		b.SetCommonString(j, t[k])
 	}
 }
 
-func ValueCol(cols []ColMeta) ColMeta {
+var NoDefaultValueColumn = fmt.Errorf("no default value column %q found.", DefaultValueColLabel)
+
+func ValueCol(cols []ColMeta) (ColMeta, error) {
 	for _, c := range cols {
-		if c.Label == ValueColLabel {
-			return c
+		if c.Label == DefaultValueColLabel {
+			return c, nil
 		}
 	}
-	return ColMeta{}
+	return ColMeta{}, NoDefaultValueColumn
 }
 func ValueIdx(cols []ColMeta) int {
-	for j, c := range cols {
-		if c.Label == ValueColLabel {
-			return j
-		}
-	}
-	return -1
+	return ColIdx(DefaultValueColLabel, cols)
 }
 func TimeIdx(cols []ColMeta) int {
+	return ColIdx(TimeColLabel, cols)
+}
+func ColIdx(label string, cols []ColMeta) int {
 	for j, c := range cols {
-		if c.Label == TimeColLabel {
+		if c.Label == label {
 			return j
 		}
 	}
@@ -293,9 +294,10 @@ const (
 	TFloat
 	TString
 	TTime
+	TMap // TMap is not a valid type for a column, but it is a type to return from a record function.
 )
 
-var ValueDataTypes = [...]DataType{TBool, TInt, TUInt, TFloat, TString}
+var ValueDataTypes = []DataType{TBool, TInt, TUInt, TFloat, TString}
 
 func (t DataType) String() string {
 	switch t {
@@ -321,20 +323,40 @@ func (t DataType) String() string {
 type ColMeta struct {
 	Label string
 	Type  DataType
-	IsTag bool
-	// IsCommon indicates that the value for the column is shared by all rows.
-	IsCommon bool
+	Kind  ColKind
+	// Common indicates that the value for the column is shared by all rows.
+	Common bool
+}
+
+func (c ColMeta) IsTime() bool {
+	return c.Kind == TimeColKind
+}
+func (c ColMeta) IsTag() bool {
+	return c.Kind == TagColKind
+}
+func (c ColMeta) IsValue() bool {
+	return c.Kind == ValueColKind
 }
 
 const (
-	ValueColLabel = "value"
-	TimeColLabel  = "time"
+	DefaultValueColLabel = "_value"
+	TimeColLabel         = "_time"
+)
+
+type ColKind int
+
+const (
+	InvalidColKind = iota
+	TimeColKind
+	TagColKind
+	ValueColKind
 )
 
 var (
 	TimeCol = ColMeta{
 		Label: TimeColLabel,
 		Type:  TTime,
+		Kind:  TimeColKind,
 	}
 )
 
@@ -371,7 +393,7 @@ func TagsForRow(i int, rr RowReader) Tags {
 	cols := rr.Cols()
 	tags := make(Tags, len(cols))
 	for j, c := range cols {
-		if c.IsTag {
+		if c.IsTag() {
 			tags[c.Label] = rr.AtString(i, j)
 		}
 	}
@@ -528,7 +550,7 @@ func (b ColListBlockBuilder) AddCol(c ColMeta) int {
 			alloc:   b.alloc,
 		}
 	case TString:
-		if c.IsCommon {
+		if c.Common {
 			col = &commonStrColumn{
 				ColMeta: c,
 			}
@@ -626,7 +648,7 @@ func (b ColListBlockBuilder) SetString(i int, j int, value string) {
 func (b ColListBlockBuilder) AppendString(j int, value string) {
 	meta := b.blk.cols[j].Meta()
 	checkColType(meta, TString)
-	if meta.IsCommon {
+	if meta.Common {
 		v := b.blk.cols[j].(*commonStrColumn).value
 		if value != v {
 			panic(fmt.Errorf("attempting to append a different value to the column %s, which has all common values", meta.Label))
@@ -646,11 +668,11 @@ func (b ColListBlockBuilder) AppendStrings(j int, values []string) {
 func (b ColListBlockBuilder) SetCommonString(j int, value string) {
 	meta := b.blk.cols[j].Meta()
 	checkColType(meta, TString)
-	if !meta.IsCommon {
+	if !meta.Common {
 		panic(fmt.Errorf("cannot set common value for column %s, column is not marked as common", meta.Label))
 	}
 	b.blk.cols[j].(*commonStrColumn).value = value
-	if meta.IsTag {
+	if meta.IsTag() {
 		if b.blk.tags == nil {
 			b.blk.tags = make(Tags)
 		}
@@ -769,7 +791,7 @@ func (b *ColListBlock) Col(c int) ValueIterator {
 	}
 }
 
-func (b *ColListBlock) Values() ValueIterator {
+func (b *ColListBlock) Values() (ValueIterator, error) {
 	j := ValueIdx(b.colMeta)
 	if j >= 0 {
 		return colListValueIterator{
@@ -777,9 +799,9 @@ func (b *ColListBlock) Values() ValueIterator {
 			colMeta: b.colMeta,
 			cols:    b.cols,
 			nrows:   b.nrows,
-		}
+		}, nil
 	}
-	return nil
+	return nil, NoDefaultValueColumn
 }
 
 func (b *ColListBlock) Times() ValueIterator {
@@ -813,7 +835,7 @@ func (b *ColListBlock) AtFloat(i, j int) float64 {
 func (b *ColListBlock) AtString(i, j int) string {
 	meta := b.colMeta[j]
 	checkColType(meta, TString)
-	if meta.IsTag && meta.IsCommon {
+	if meta.IsTag() && meta.Common {
 		return b.cols[j].(*commonStrColumn).value
 	}
 	return b.cols[j].(*stringColumn).data[i]
@@ -869,7 +891,7 @@ func (itr colListValueIterator) DoFloat(f func([]float64, RowReader)) {
 func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
 	meta := itr.colMeta[itr.col]
 	checkColType(meta, TString)
-	if meta.IsTag && meta.IsCommon {
+	if meta.IsTag() && meta.Common {
 		value := itr.cols[itr.col].(*commonStrColumn).value
 		strs := make([]string, itr.nrows)
 		for i := range strs {
@@ -902,7 +924,7 @@ func (itr colListValueIterator) AtFloat(i, j int) float64 {
 func (itr colListValueIterator) AtString(i, j int) string {
 	meta := itr.colMeta[j]
 	checkColType(meta, TString)
-	if meta.IsTag && meta.IsCommon {
+	if meta.IsTag() && meta.Common {
 		return itr.cols[j].(*commonStrColumn).value
 	}
 	return itr.cols[j].(*stringColumn).data[i]

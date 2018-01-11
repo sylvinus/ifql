@@ -132,16 +132,16 @@ func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) error
 				found = true
 			}
 			builder.AddCol(c)
-			if c.IsTag && c.IsCommon {
+			if c.IsTag() && c.Common {
 				builder.SetCommonString(j, tags[c.Label])
 			}
 		}
 		if !found {
 			builder.AddCol(execute.ColMeta{
-				Label:    t.key,
-				Type:     execute.TString,
-				IsTag:    true,
-				IsCommon: isCommon,
+				Label:  t.key,
+				Type:   execute.TString,
+				Kind:   execute.TagColKind,
+				Common: isCommon,
 			})
 		}
 	}
@@ -157,7 +157,7 @@ func (t *setTransformation) Process(id execute.DatasetID, b execute.Block) error
 	b.Col(timeIdx).DoTime(func(ts []execute.Time, rr execute.RowReader) {
 		builder.AppendTimes(timeIdx, ts)
 		for j, c := range cols {
-			if j == timeIdx || c.IsCommon {
+			if j == timeIdx || c.Common {
 				continue
 			}
 			for i := range ts {

@@ -141,7 +141,7 @@ func TestEval(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			err = ifql.Eval(program, testScope, nil)
+			err = ifql.Eval(program, testScope.Nest(), nil)
 			if !tc.wantErr && err != nil {
 				t.Fatal(err)
 			} else if tc.wantErr && err == nil {

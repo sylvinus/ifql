@@ -13,9 +13,10 @@ import (
 const SampleKind = "sample"
 
 type SampleOpSpec struct {
-	UseRowTime bool  `json:"useRowtime"`
-	N          int64 `json:"n"`
-	Pos        int64 `json:"pos"`
+	Column     string `json:"column"`
+	UseRowTime bool   `json:"useRowtime"`
+	N          int64  `json:"n"`
+	Pos        int64  `json:"pos"`
 }
 
 func init() {
@@ -27,6 +28,11 @@ func init() {
 
 func createSampleOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SampleOpSpec)
+	if c, ok, err := args.GetString("column"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Column = c
+	}
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
 	} else if ok {
@@ -59,6 +65,7 @@ func (s *SampleOpSpec) Kind() query.OperationKind {
 }
 
 type SampleProcedureSpec struct {
+	Column     string
 	UseRowTime bool
 	N          int64
 	Pos        int64
@@ -70,6 +77,7 @@ func newSampleProcedure(qs query.OperationSpec, pa plan.Administration) (plan.Pr
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 	return &SampleProcedureSpec{
+		Column:     spec.Column,
 		UseRowTime: spec.UseRowTime,
 		N:          spec.N,
 		Pos:        spec.Pos,
@@ -81,6 +89,7 @@ func (s *SampleProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *SampleProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(SampleProcedureSpec)
+	ns.Column = s.Column
 	ns.UseRowTime = s.UseRowTime
 	ns.N = s.N
 	ns.Pos = s.Pos
@@ -105,7 +114,7 @@ func createSampleTransformation(id execute.DatasetID, mode execute.AccumulationM
 		N:   int(ps.N),
 		Pos: int(ps.Pos),
 	}
-	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), ss, ps.UseRowTime, a.Allocator())
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), ss, ps.Column, ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

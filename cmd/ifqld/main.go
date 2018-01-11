@@ -122,7 +122,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 		err error
 	)
 	if req.Header.Get("Content-type") == "application/json" {
-		spec := new(query.QuerySpec)
+		spec := new(query.Spec)
 		if err := json.NewDecoder(req.Body).Decode(spec); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(fmt.Sprintf("Error parsing query spec %s", err.Error())))
@@ -234,7 +234,7 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 				var value interface{}
 
 				for j, c := range rr.Cols() {
-					if c.IsTag {
+					if c.IsTag() {
 						if c.Label == "_measurement" {
 							measurement = rr.AtString(i, j)
 						} else if c.Label == "_field" {
@@ -323,12 +323,12 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 					ch.Points[i].Time = time.Time().UnixNano()
 
 					for j, c := range rr.Cols() {
-						if !c.IsCommon && c.Type == execute.TString {
+						if !c.Common && c.Type == execute.TString {
 							if ch.Points[i].Context == nil {
 								ch.Points[i].Context = make(map[string]string)
 							}
 							ch.Points[i].Context[c.Label] = rr.AtString(i, j)
-						} else if !c.IsTag && c.Type != execute.TTime {
+						} else if c.IsValue() {
 							switch c.Type {
 							case execute.TFloat:
 								ch.Points[i].Value = rr.AtFloat(i, j)

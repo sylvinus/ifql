@@ -34,8 +34,9 @@ func TestExecutor_Execute(t *testing.T) {
 				ColMeta: []execute.ColMeta{
 					execute.TimeCol,
 					execute.ColMeta{
-						Label: execute.ValueColLabel,
+						Label: execute.DefaultValueColLabel,
 						Type:  execute.TFloat,
+						Kind:  execute.ValueColKind,
 					},
 				},
 				Data: [][]interface{}{
@@ -92,8 +93,9 @@ func TestExecutor_Execute(t *testing.T) {
 				ColMeta: []execute.ColMeta{
 					execute.TimeCol,
 					execute.ColMeta{
-						Label: execute.ValueColLabel,
+						Label: execute.DefaultValueColLabel,
 						Type:  execute.TFloat,
+						Kind:  execute.ValueColKind,
 					},
 				},
 				Data: [][]interface{}{
@@ -111,8 +113,9 @@ func TestExecutor_Execute(t *testing.T) {
 				ColMeta: []execute.ColMeta{
 					execute.TimeCol,
 					execute.ColMeta{
-						Label: execute.ValueColLabel,
+						Label: execute.DefaultValueColLabel,
 						Type:  execute.TInt,
+						Kind:  execute.ValueColKind,
 					},
 				},
 				Data: [][]interface{}{
@@ -216,8 +219,9 @@ func TestExecutor_Execute(t *testing.T) {
 				ColMeta: []execute.ColMeta{
 					execute.TimeCol,
 					execute.ColMeta{
-						Label: execute.ValueColLabel,
+						Label: execute.DefaultValueColLabel,
 						Type:  execute.TInt,
+						Kind:  execute.ValueColKind,
 					},
 				},
 				Data: [][]interface{}{

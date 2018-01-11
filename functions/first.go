@@ -11,7 +11,8 @@ import (
 const FirstKind = "first"
 
 type FirstOpSpec struct {
-	UseRowTime bool `json:"useRowtime"`
+	Column     string `json:"column"`
+	UseRowTime bool   `json:"useRowtime"`
 }
 
 func init() {
@@ -23,6 +24,11 @@ func init() {
 
 func createFirstOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(FirstOpSpec)
+	if c, ok, err := args.GetString("column"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Column = c
+	}
 	if useRowTime, ok, err := args.GetBool("useRowTime"); err != nil {
 		return nil, err
 	} else if ok {
@@ -41,6 +47,7 @@ func (s *FirstOpSpec) Kind() query.OperationKind {
 }
 
 type FirstProcedureSpec struct {
+	Column     string
 	UseRowTime bool
 }
 
@@ -50,6 +57,7 @@ func newFirstProcedure(qs query.OperationSpec, pa plan.Administration) (plan.Pro
 		return nil, fmt.Errorf("invalid spec type %T", qs)
 	}
 	return &FirstProcedureSpec{
+		Column:     spec.Column,
 		UseRowTime: spec.UseRowTime,
 	}, nil
 }
@@ -96,6 +104,8 @@ func (s *FirstProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pro
 func (s *FirstProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FirstProcedureSpec)
 	*ns = *s
+	ns.Column = s.Column
+	ns.UseRowTime = s.UseRowTime
 	return ns
 }
 
@@ -108,7 +118,7 @@ func createFirstTransformation(id execute.DatasetID, mode execute.AccumulationMo
 	if !ok {
 		return nil, nil, fmt.Errorf("invalid spec type %T", ps)
 	}
-	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), new(FirstSelector), ps.UseRowTime, a.Allocator())
+	t, d := execute.NewIndexSelectorTransformationAndDataset(id, mode, a.Bounds(), new(FirstSelector), ps.Column, ps.UseRowTime, a.Allocator())
 	return t, d, nil
 }
 

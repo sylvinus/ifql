@@ -23,7 +23,7 @@ func (b *Block) Bounds() execute.Bounds {
 func (b *Block) Tags() execute.Tags {
 	tags := make(execute.Tags, len(b.ColMeta))
 	for j, c := range b.ColMeta {
-		if c.IsTag && c.IsCommon {
+		if c.IsTag() && c.Common {
 			tags[c.Label] = b.Data[0][j].(string)
 		}
 	}
@@ -43,9 +43,12 @@ func (b *Block) Times() execute.ValueIterator {
 	return b.Col(timeIdx)
 }
 
-func (b *Block) Values() execute.ValueIterator {
+func (b *Block) Values() (execute.ValueIterator, error) {
 	valueIdx := execute.ValueIdx(b.ColMeta)
-	return b.Col(valueIdx)
+	if valueIdx >= 0 {
+		return b.Col(valueIdx), nil
+	}
+	return nil, execute.NoDefaultValueColumn
 }
 
 type ValueIterator struct {

@@ -5,6 +5,8 @@ type selectorTransformation struct {
 	cache      BlockBuilderCache
 	bounds     Bounds
 	useRowTime bool
+
+	colLabel string
 }
 
 type rowSelectorTransformation struct {
@@ -16,35 +18,39 @@ type indexSelectorTransformation struct {
 	selector IndexSelector
 }
 
-func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, useRowTime bool, a *Allocator) (*rowSelectorTransformation, Dataset) {
+func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, colLabel string, useRowTime bool, a *Allocator) (*rowSelectorTransformation, Dataset) {
 	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
-	return NewRowSelectorTransformation(d, cache, bounds, selector, useRowTime), d
+	return NewRowSelectorTransformation(d, cache, bounds, selector, colLabel, useRowTime), d
 }
-func NewRowSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector RowSelector, useRowTime bool) *rowSelectorTransformation {
+func NewRowSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector RowSelector, colLabel string, useRowTime bool) *rowSelectorTransformation {
 	return &rowSelectorTransformation{
-		selectorTransformation: newSelectorTransformation(d, c, bounds, useRowTime),
+		selectorTransformation: newSelectorTransformation(d, c, bounds, colLabel, useRowTime),
 		selector:               selector,
 	}
 }
 
-func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, useRowTime bool, a *Allocator) (*indexSelectorTransformation, Dataset) {
+func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, colLabel string, useRowTime bool, a *Allocator) (*indexSelectorTransformation, Dataset) {
 	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
-	return NewIndexSelectorTransformation(d, cache, bounds, selector, useRowTime), d
+	return NewIndexSelectorTransformation(d, cache, bounds, selector, colLabel, useRowTime), d
 }
-func NewIndexSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector IndexSelector, useRowTime bool) *indexSelectorTransformation {
+func NewIndexSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, selector IndexSelector, colLabel string, useRowTime bool) *indexSelectorTransformation {
 	return &indexSelectorTransformation{
-		selectorTransformation: newSelectorTransformation(d, c, bounds, useRowTime),
+		selectorTransformation: newSelectorTransformation(d, c, bounds, colLabel, useRowTime),
 		selector:               selector,
 	}
 }
 
-func newSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, useRowTime bool) selectorTransformation {
+func newSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, colLabel string, useRowTime bool) selectorTransformation {
+	if colLabel == "" {
+		colLabel = DefaultValueColLabel
+	}
 	return selectorTransformation{
 		d:          d,
 		cache:      c,
 		bounds:     bounds,
+		colLabel:   colLabel,
 		useRowTime: useRowTime,
 	}
 }
@@ -64,69 +70,65 @@ func (t *selectorTransformation) Finish(id DatasetID, err error) {
 	t.d.Finish(err)
 }
 
-func (t *selectorTransformation) setupBuilder(b Block) (BlockBuilder, []int, ColMeta) {
-	cols := b.Cols()
-	valueIdx := ValueIdx(cols)
-	valueCol := cols[valueIdx]
-
+func (t *selectorTransformation) setupBuilder(b Block) (BlockBuilder, int) {
 	builder, new := t.cache.BlockBuilder(blockMetadata{
 		bounds: t.bounds,
 		tags:   b.Tags(),
 	})
 	if new {
-		builder.AddCol(TimeCol)
-		builder.AddCol(valueCol)
-		AddTags(b.Tags(), builder)
+		AddBlockCols(b, builder)
 	}
 
-	colMap := AddNewCols(b, builder)
-
-	return builder, colMap, valueCol
+	cols := builder.Cols()
+	valueIdx := ColIdx(t.colLabel, cols)
+	return builder, valueIdx
 }
 
 func (t *indexSelectorTransformation) Process(id DatasetID, b Block) error {
-	builder, colMap, valueCol := t.setupBuilder(b)
+	builder, valueIdx := t.setupBuilder(b)
+	valueCol := builder.Cols()[valueIdx]
 
-	values := b.Values()
+	values := b.Col(valueIdx)
 	switch valueCol.Type {
 	case TBool:
 		s := t.selector.NewBoolSelector()
 		values.DoBool(func(vs []bool, rr RowReader) {
 			selected := s.DoBool(vs)
-			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+			t.appendSelected(selected, builder, rr, b.Bounds().Stop)
 		})
 	case TInt:
 		s := t.selector.NewIntSelector()
 		values.DoInt(func(vs []int64, rr RowReader) {
 			selected := s.DoInt(vs)
-			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+			t.appendSelected(selected, builder, rr, b.Bounds().Stop)
 		})
 	case TUInt:
 		s := t.selector.NewUIntSelector()
 		values.DoUInt(func(vs []uint64, rr RowReader) {
 			selected := s.DoUInt(vs)
-			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+			t.appendSelected(selected, builder, rr, b.Bounds().Stop)
 		})
 	case TFloat:
 		s := t.selector.NewFloatSelector()
 		values.DoFloat(func(vs []float64, rr RowReader) {
 			selected := s.DoFloat(vs)
-			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+			t.appendSelected(selected, builder, rr, b.Bounds().Stop)
 		})
 	case TString:
 		s := t.selector.NewStringSelector()
 		values.DoString(func(vs []string, rr RowReader) {
 			selected := s.DoString(vs)
-			t.appendSelected(selected, colMap, builder, rr, b.Bounds().Stop)
+			t.appendSelected(selected, builder, rr, b.Bounds().Stop)
 		})
 	}
 	return nil
 }
 
 func (t *rowSelectorTransformation) Process(id DatasetID, b Block) error {
-	builder, colMap, valueCol := t.setupBuilder(b)
+	builder, valueIdx := t.setupBuilder(b)
+	valueCol := builder.Cols()[valueIdx]
 
-	values := b.Values()
+	values := b.Col(valueIdx)
 	var rower Rower
 	switch valueCol.Type {
 	case TBool:
@@ -152,11 +154,11 @@ func (t *rowSelectorTransformation) Process(id DatasetID, b Block) error {
 	}
 
 	rows := rower.Rows()
-	t.appendRows(builder, rows, colMap, b.Bounds().Stop)
+	t.appendRows(builder, rows, b.Bounds().Stop)
 	return nil
 }
 
-func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, builder BlockBuilder, rr RowReader, stop Time) {
+func (t *indexSelectorTransformation) appendSelected(selected []int, builder BlockBuilder, rr RowReader, stop Time) {
 	if len(selected) == 0 {
 		return
 	}
@@ -165,19 +167,19 @@ func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, bui
 		for _, i := range selected {
 			switch c.Type {
 			case TBool:
-				builder.AppendBool(j, rr.AtBool(i, colMap[j]))
+				builder.AppendBool(j, rr.AtBool(i, j))
 			case TInt:
-				builder.AppendInt(j, rr.AtInt(i, colMap[j]))
+				builder.AppendInt(j, rr.AtInt(i, j))
 			case TUInt:
-				builder.AppendUInt(j, rr.AtUInt(i, colMap[j]))
+				builder.AppendUInt(j, rr.AtUInt(i, j))
 			case TFloat:
-				builder.AppendFloat(j, rr.AtFloat(i, colMap[j]))
+				builder.AppendFloat(j, rr.AtFloat(i, j))
 			case TString:
-				builder.AppendString(j, rr.AtString(i, colMap[j]))
+				builder.AppendString(j, rr.AtString(i, j))
 			case TTime:
 				time := stop
 				if t.useRowTime {
-					time = rr.AtTime(i, colMap[j])
+					time = rr.AtTime(i, j)
 				}
 				builder.AppendTime(j, time)
 			default:
@@ -187,11 +189,11 @@ func (t *indexSelectorTransformation) appendSelected(selected, colMap []int, bui
 	}
 }
 
-func (t *rowSelectorTransformation) appendRows(builder BlockBuilder, rows []Row, colMap []int, stop Time) {
+func (t *rowSelectorTransformation) appendRows(builder BlockBuilder, rows []Row, stop Time) {
 	cols := builder.Cols()
 	for j, c := range cols {
 		for _, row := range rows {
-			v := row.Values[colMap[j]]
+			v := row.Values[j]
 			switch c.Type {
 			case TBool:
 				builder.AppendBool(j, v.(bool))
