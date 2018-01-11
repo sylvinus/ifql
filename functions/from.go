@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -33,7 +32,7 @@ func createFromOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		Database: db,
 	}
 
-	if array, ok, err := args.GetArray("hosts", ifql.TString); err != nil {
+	if array, ok, err := args.GetArray("hosts", query.TString); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Hosts = array.AsStrings()

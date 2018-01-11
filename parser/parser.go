@@ -1,6 +1,6 @@
 // +build !parser_debug
 
-package ifql
+package parser
 
 //go:generate pigeon -optimize-parser -optimize-grammar -o ifql.go ifql.peg
 

@@ -3,7 +3,6 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -26,7 +25,7 @@ func init() {
 func createSortOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SortOpSpec)
 
-	if array, ok, err := args.GetArray("cols", ifql.TString); err != nil {
+	if array, ok, err := args.GetArray("cols", query.TString); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Cols = array.AsStrings()

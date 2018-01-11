@@ -7,18 +7,30 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/interpreter"
+	"github.com/influxdata/ifql/parser"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
+// Pass through interpreter types so that consumers of the query package need not know about the interpreter package.
 const (
-	parentTableArg = "table"
+	TInvalid  = interpreter.TInvalid
+	TString   = interpreter.TString
+	TInt      = interpreter.TInt
+	TUInt     = interpreter.TUInt
+	TFloat    = interpreter.TFloat
+	TBool     = interpreter.TBool
+	TTime     = interpreter.TTime
+	TDuration = interpreter.TDuration
+	TFunction = interpreter.TFunction
+	TArray    = interpreter.TArray
+	TMap      = interpreter.TMap
 )
 
-// Compile parses IFQL into an AST; validates and checks the AST; and produces a QuerySpec.
-func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) {
+// Compile parses IFQL into an AST; validates and checks the AST; and produces a query Spec.
+func Compile(ctx context.Context, q string) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
-	program, err := ifql.NewAST(q, opts...)
+	program, err := parser.NewAST(q)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +44,7 @@ func Compile(ctx context.Context, q string, opts ...ifql.Option) (*Spec, error) 
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := ifql.Eval(program, scope, d); err != nil {
+	if err := interpreter.Eval(program, scope, d); err != nil {
 		return nil, err
 	}
 	spec := d.ToSpec()
@@ -44,12 +56,12 @@ type CreateOperationSpec func(args Arguments, a *Administration) (OperationSpec,
 
 var functionsMap = make(map[string]function)
 
-// RegisterFunction adds a new top level builtin function.
+// RegisterFunction adds a new builtin top level function.
 func RegisterFunction(name string, c CreateOperationSpec) {
 	registerFunction(name, c, false)
 }
 
-// RegisterMethod adds a new builtin method.
+// RegisterMethod adds a new builtin method of the TTable type.
 func RegisterMethod(name string, c CreateOperationSpec) {
 	registerFunction(name, c, true)
 }
@@ -69,11 +81,11 @@ func registerFunction(name string, c CreateOperationSpec, chainable bool) {
 	}
 }
 
-var builtinScope = ifql.NewScope()
+var builtinScope = interpreter.NewScope()
 
 // RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
 func RegisterBuiltIn(script string) {
-	program, err := ifql.NewAST(script)
+	program, err := parser.NewAST(script)
 	if err != nil {
 		panic(err)
 	}
@@ -81,7 +93,7 @@ func RegisterBuiltIn(script string) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := ifql.Eval(program, builtinScope, d); err != nil {
+	if err := interpreter.Eval(program, builtinScope, d); err != nil {
 		panic(err)
 	}
 }
@@ -152,14 +164,14 @@ func (d *queryDomain) ToSpec() *Spec {
 	}
 }
 
-var TTable = ifql.RegisterType("table")
+var TTable = interpreter.RegisterType("table")
 
 // Table represents a table created via a function call.
 type Table struct {
 	ID OperationID
 }
 
-func (t Table) Type() ifql.Type {
+func (t Table) Type() interpreter.Type {
 	return TTable
 }
 
@@ -167,7 +179,7 @@ func (t Table) Value() interface{} {
 	return t
 }
 
-func (t Table) Property(name string) (ifql.Value, error) {
+func (t Table) Property(name string) (interpreter.Value, error) {
 	// All chainable methods are properties of all tables
 	f, ok := functionsMap[name]
 	if !ok || !f.chainable {
@@ -184,18 +196,18 @@ type function struct {
 	parentID     OperationID
 }
 
-func (f function) Type() ifql.Type {
-	return ifql.TFunction
+func (f function) Type() interpreter.Type {
+	return interpreter.TFunction
 }
 
 func (f function) Value() interface{} {
 	return f
 }
-func (f function) Property(name string) (ifql.Value, error) {
+func (f function) Property(name string) (interpreter.Value, error) {
 	return nil, fmt.Errorf("property %q does not exist", name)
 }
 
-func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
+func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
 	qd := d.(*queryDomain)
 	o := qd.AddOperation(f.name)
 
@@ -225,7 +237,7 @@ func (f function) Resolve() (*ast.ArrowFunctionExpression, error) {
 }
 
 type Arguments struct {
-	ifql.Arguments
+	interpreter.Arguments
 }
 
 func (a Arguments) GetTime(name string) (Time, bool, error) {
@@ -288,7 +300,7 @@ func (a Arguments) GetRequiredTable(name string) (Table, error) {
 	return d, nil
 }
 
-func ToQueryTime(value ifql.Value) (Time, error) {
+func ToQueryTime(value interpreter.Value) (Time, error) {
 	switch v := value.Value().(type) {
 	case time.Time:
 		return Time{

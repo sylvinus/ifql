@@ -1,4 +1,4 @@
-package ifql_test
+package parser_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ast/asttest"
-	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/parser"
 )
 
 func TestParse(t *testing.T) {
@@ -1507,7 +1507,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			t.Parallel()
 			// Set the env var`GO_TAGS=parser_debug` in order
 			// to turn on parser debugging as it is turned off by default.
-			got, err := ifql.NewAST(tt.raw)
+			got, err := parser.NewAST(tt.raw)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ifql.NewAST() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -1549,7 +1549,7 @@ func BenchmarkParse(b *testing.B) {
 	b.ReportAllocs()
 	var err error
 	for n := 0; n < b.N; n++ {
-		benchmarkProgram, err = ifql.Parse("", benchmarkQuery)
+		benchmarkProgram, err = parser.Parse("", benchmarkQuery)
 		if err != nil {
 			b.Fatal(err)
 		}

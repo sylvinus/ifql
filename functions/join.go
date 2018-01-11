@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/ifql"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -53,7 +52,7 @@ func createJoinOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		TableNames: make(map[query.OperationID]string),
 	}
 
-	if array, ok, err := args.GetArray("on", ifql.TString); err != nil {
+	if array, ok, err := args.GetArray("on", query.TString); err != nil {
 		return nil, err
 	} else if ok {
 		spec.On = array.AsStrings()

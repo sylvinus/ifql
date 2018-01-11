@@ -1,5 +1,5 @@
 VERSION ?= $(shell git describe --always --tags)
-SUBDIRS := ast ifql promql
+SUBDIRS := ast parser promql
 GO_ARGS=-tags '$(GO_TAGS)'
 export GO_BUILD=go build $(GO_ARGS)
 export GO_TEST=go test $(GO_ARGS)
