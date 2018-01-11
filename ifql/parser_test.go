@@ -33,6 +33,22 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "comment",
+			raw: `// Comment
+			from()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "from",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "identifier with number",
 			raw:  `tan2()`,
 			want: &ast.Program{
@@ -393,6 +409,52 @@ func TestParse(t *testing.T) {
 			name: "unary expressions within logical expression",
 			raw: `a = 5.0
             10.0 * -a == -0.5 or a == 6.0`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.FloatLiteral{Value: 5},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.LogicalExpression{
+							Operator: ast.OrOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left: &ast.BinaryExpression{
+									Operator: ast.MultiplicationOperator,
+									Left:     &ast.FloatLiteral{Value: 10},
+									Right: &ast.UnaryExpression{
+										Operator: ast.SubtractionOperator,
+										Argument: &ast.Identifier{Name: "a"},
+									},
+								},
+								Right: &ast.UnaryExpression{
+									Operator: ast.SubtractionOperator,
+									Argument: &ast.FloatLiteral{Value: 0.5},
+								},
+							},
+							Right: &ast.BinaryExpression{
+								Operator: ast.EqualOperator,
+								Left:     &ast.Identifier{Name: "a"},
+								Right:    &ast.FloatLiteral{Value: 6},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "unary expressions with too many comments",
+			raw: `// define a
+a = 5.0
+// eval this
+10.0 * -a == -0.5
+	// or this
+	or a == 6.0`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
