@@ -11,7 +11,10 @@ import (
 
 func TestCompilationCache(t *testing.T) {
 	add := &ast.ArrowFunctionExpression{
-		Params: []*ast.Identifier{{Name: "a"}, {Name: "b"}},
+		Params: []*ast.Property{
+			{Key: &ast.Identifier{Name: "a"}},
+			{Key: &ast.Identifier{Name: "b"}},
+		},
 		Body: &ast.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left:     &ast.Identifier{Name: "a"},

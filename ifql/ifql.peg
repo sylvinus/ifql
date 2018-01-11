@@ -98,12 +98,12 @@ Arguments
     }
 
 ArrowFunctionExpression
-  = __ "(" __ params:ArrowFunctionParams? __ ")" __ "=>" __ body:ArrowFunctionBody __  {
+  = "(" __ params:ArrowFunctionParams? __ ")" __ "=>" __ body:ArrowFunctionBody __ {
       return arrowfunc(params, body, c.text, c.pos), nil
     }
 
 ArrowFunctionParams
-  = __ first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest* ","?  {
+  = first:ArrowFunctionParam __ rest:ArrowFunctionParamsRest* ","?  {
       return append([]interface{}{first}, toIfaceSlice(rest)...), nil
     }
 
@@ -113,15 +113,18 @@ ArrowFunctionParamsRest
     }
 
 ArrowFunctionParam
-  =  __ key:Identifier __  {
-      return key, nil
+  = key:Identifier __ "=" __ value:Primary __ {
+      return property(key, value, c.text, c.pos)
+    }
+  / key:Identifier __  {
+      return property(key, nil, c.text, c.pos)
     }
 
 ArrowFunctionBody
-  =  __ body:Expr __  {
+  = body:Expr {
       return body, nil
     }
-  / __ body:BlockStatement __ {
+  / body:BlockStatement {
     return body, nil
   }
 

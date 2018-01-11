@@ -528,7 +528,7 @@ func TestParse(t *testing.T) {
 								Name: "plusOne",
 							},
 							Init: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left:     &ast.Identifier{Name: "r"},
@@ -570,12 +570,38 @@ func TestParse(t *testing.T) {
 								Name: "toMap",
 							},
 							Init: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.ObjectExpression{
 									Properties: []*ast.Property{{
 										Key:   &ast.Identifier{Name: "r"},
 										Value: &ast.Identifier{Name: "r"},
 									}},
+								},
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "arrow function with default arg",
+			raw:  `addN = (r, n=5) => r + n`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "addN",
+							},
+							Init: &ast.ArrowFunctionExpression{
+								Params: []*ast.Property{
+									{Key: &ast.Identifier{Name: "r"}},
+									{Key: &ast.Identifier{Name: "n"}, Value: &ast.IntegerLiteral{Value: 5}},
+								},
+								Body: &ast.BinaryExpression{
+									Operator: ast.AdditionOperator,
+									Left:     &ast.Identifier{Name: "r"},
+									Right:    &ast.Identifier{Name: "n"},
 								},
 							},
 						}},
@@ -597,7 +623,7 @@ func TestParse(t *testing.T) {
 								Name: "plusOne",
 							},
 							Init: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left:     &ast.Identifier{Name: "r"},
@@ -649,7 +675,7 @@ func TestParse(t *testing.T) {
 								Name: "f",
 							},
 							Init: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.EqualOperator,
 									Left: &ast.MemberExpression{
@@ -678,7 +704,7 @@ func TestParse(t *testing.T) {
 								Name: "f",
 							},
 							Init: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BlockStatement{
 									Body: []ast.Statement{
 										&ast.VariableDeclaration{
@@ -738,7 +764,7 @@ func TestParse(t *testing.T) {
 										{
 											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
-												Params: []*ast.Identifier{{Name: "r"}},
+												Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 												Body: &ast.LogicalExpression{
 													Operator: ast.OrOperator,
 													Left: &ast.LogicalExpression{
@@ -1030,7 +1056,7 @@ func TestParse(t *testing.T) {
 														{
 															Key: &ast.Identifier{Name: "fn"},
 															Value: &ast.ArrowFunctionExpression{
-																Params: []*ast.Identifier{{Name: "r"}},
+																Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 																Body: &ast.BinaryExpression{
 																	Operator: ast.EqualOperator,
 																	Left: &ast.MemberExpression{
@@ -1184,9 +1210,9 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 										{
 											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
-												Params: []*ast.Identifier{
-													{Name: "a"},
-													{Name: "b"},
+												Params: []*ast.Property{
+													{Key: &ast.Identifier{Name: "a"}},
+													{Key: &ast.Identifier{Name: "b"}},
 												},
 												Body: &ast.BinaryExpression{
 													Operator: ast.AdditionOperator,
@@ -1246,7 +1272,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 													{
 														Key: &ast.Identifier{Name: "fn"},
 														Value: &ast.ArrowFunctionExpression{
-															Params: []*ast.Identifier{{Name: "r"}},
+															Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 															Body: &ast.BinaryExpression{
 																Operator: ast.EqualOperator,
 																Left: &ast.MemberExpression{
@@ -1309,7 +1335,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 													{
 														Key: &ast.Identifier{Name: "fn"},
 														Value: &ast.ArrowFunctionExpression{
-															Params: []*ast.Identifier{{Name: "r"}},
+															Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 															Body: &ast.BinaryExpression{
 																Operator: ast.EqualOperator,
 																Left: &ast.MemberExpression{
@@ -1370,9 +1396,9 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 										{
 											Key: &ast.Identifier{Name: "fn"},
 											Value: &ast.ArrowFunctionExpression{
-												Params: []*ast.Identifier{
-													{Name: "a"},
-													{Name: "b"},
+												Params: []*ast.Property{
+													{Key: &ast.Identifier{Name: "a"}},
+													{Key: &ast.Identifier{Name: "b"}},
 												},
 												Body: &ast.BinaryExpression{
 													Operator: ast.DivisionOperator,

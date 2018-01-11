@@ -13,7 +13,7 @@ func ToStoragePredicate(f *ast.ArrowFunctionExpression) (*storage.Predicate, err
 		return nil, errors.New("storage predicate functions must have exactly one parameter")
 	}
 
-	root, err := toStoragePredicate(f.Body.(ast.Expression), f.Params[0].Name)
+	root, err := toStoragePredicate(f.Body.(ast.Expression), f.Params[0].Key.Name)
 	if err != nil {
 		return nil, err
 	}

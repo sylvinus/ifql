@@ -371,7 +371,7 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.LogicalExpression{
@@ -452,7 +452,7 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -516,7 +516,7 @@ func TestBuild(t *testing.T) {
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{

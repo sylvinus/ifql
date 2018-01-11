@@ -32,7 +32,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -110,7 +110,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.OrOperator,
 									Left: &ast.LogicalExpression{
@@ -197,7 +197,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -271,7 +271,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -345,7 +345,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -415,7 +415,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.BinaryExpression{
 									Operator: ast.EqualOperator,
 									Left: &ast.MemberExpression{
@@ -455,7 +455,7 @@ func TestFilter_NewQuery(t *testing.T) {
 						ID: "filter1",
 						Spec: &functions.FilterOpSpec{
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "r"}},
+								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 								Body: &ast.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &ast.BinaryExpression{
@@ -504,7 +504,7 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 		"spec":{
 			"fn":{
 				"type": "ArrowFunctionExpression",
-				"params": [{"type":"Identifier","name":"r"}],
+				"params": [{"type":"Property","key":{"type":"Identifier","name":"r"}}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "!=",
@@ -528,7 +528,7 @@ func TestFilterOperation_Marshaling(t *testing.T) {
 		ID: "filter",
 		Spec: &functions.FilterOpSpec{
 			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "r"}},
+				Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.NotEqualOperator,
 					Left: &ast.MemberExpression{
@@ -556,7 +556,7 @@ func TestFilter_Process(t *testing.T) {
 			name: `_value>5`,
 			spec: &functions.FilterProcedureSpec{
 				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Identifier{{Name: "r"}},
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.GreaterThanOperator,
 						Left: &ast.MemberExpression{
@@ -603,7 +603,7 @@ func TestFilter_Process(t *testing.T) {
 			name: "_value>5 multiple blocks",
 			spec: &functions.FilterProcedureSpec{
 				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Identifier{{Name: "r"}},
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 					Body: &ast.BinaryExpression{
 						Operator: ast.GreaterThanOperator,
 						Left: &ast.MemberExpression{
@@ -683,7 +683,7 @@ func TestFilter_Process(t *testing.T) {
 			name: "_value>5 and t1 = a and t2 = y",
 			spec: &functions.FilterProcedureSpec{
 				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Identifier{{Name: "r"}},
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 					Body: &ast.LogicalExpression{
 						Operator: ast.AndOperator,
 						Left: &ast.BinaryExpression{
@@ -784,7 +784,7 @@ func TestFilter_Process(t *testing.T) {
 func TestFilter_PushDown(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
 		Fn: &ast.ArrowFunctionExpression{
-			Params: []*ast.Identifier{{Name: "r"}},
+			Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 			Body: &ast.BinaryExpression{
 				Operator: ast.NotEqualOperator,
 				Left: &ast.MemberExpression{
@@ -804,7 +804,7 @@ func TestFilter_PushDown(t *testing.T) {
 		Spec: &functions.FromProcedureSpec{
 			FilterSet: true,
 			Filter: &ast.ArrowFunctionExpression{
-				Params: []*ast.Identifier{{Name: "r"}},
+				Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 				Body: &ast.BinaryExpression{
 					Operator: ast.NotEqualOperator,
 					Left: &ast.MemberExpression{
@@ -825,7 +825,7 @@ func TestFilter_PushDown(t *testing.T) {
 func TestFilter_PushDown_Duplicate(t *testing.T) {
 	spec := &functions.FilterProcedureSpec{
 		Fn: &ast.ArrowFunctionExpression{
-			Params: []*ast.Identifier{{Name: "r"}},
+			Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
 			Body: &ast.BinaryExpression{
 				Operator: ast.NotEqualOperator,
 				Left: &ast.MemberExpression{

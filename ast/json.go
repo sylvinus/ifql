@@ -513,11 +513,13 @@ func (p *Property) UnmarshalJSON(data []byte) error {
 		*p = *(*Property)(raw.Alias)
 	}
 
-	value, err := unmarshalExpression(raw.Value)
-	if err != nil {
-		return err
+	if raw.Value != nil {
+		value, err := unmarshalExpression(raw.Value)
+		if err != nil {
+			return err
+		}
+		p.Value = value
 	}
-	p.Value = value
 	return nil
 }
 func (i *Identifier) MarshalJSON() ([]byte, error) {
@@ -713,8 +715,18 @@ func (l *DateTimeLiteral) MarshalJSON() ([]byte, error) {
 	return json.Marshal(raw)
 }
 
+func checkNullMsg(msg json.RawMessage) bool {
+	switch len(msg) {
+	case 0:
+		return true
+	case 4:
+		return string(msg) == "null"
+	default:
+		return false
+	}
+}
 func unmarshalStatement(msg json.RawMessage) (Statement, error) {
-	if len(msg) == 0 {
+	if checkNullMsg(msg) {
 		return nil, nil
 	}
 	n, err := unmarshalNode(msg)
@@ -728,7 +740,7 @@ func unmarshalStatement(msg json.RawMessage) (Statement, error) {
 	return s, nil
 }
 func unmarshalExpression(msg json.RawMessage) (Expression, error) {
-	if len(msg) == 0 {
+	if checkNullMsg(msg) {
 		return nil, nil
 	}
 	n, err := unmarshalNode(msg)
@@ -742,7 +754,7 @@ func unmarshalExpression(msg json.RawMessage) (Expression, error) {
 	return e, nil
 }
 func unmarshalNode(msg json.RawMessage) (Node, error) {
-	if len(msg) == 0 {
+	if checkNullMsg(msg) {
 		return nil, nil
 	}
 

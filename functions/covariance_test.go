@@ -83,7 +83,9 @@ func TestCovariance_NewQuery(t *testing.T) {
 								"from1": "y",
 							},
 							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Identifier{{Name: "t"}},
+								Params: []*ast.Property{
+									{Key: &ast.Identifier{Name: "t"}},
+								},
 								Body: &ast.ObjectExpression{
 									Properties: []*ast.Property{
 										{

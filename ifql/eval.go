@@ -566,11 +566,28 @@ type arrowFunc struct {
 
 func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 	for _, p := range f.e.Params {
-		v, err := args.GetRequired(p.Name)
-		if err != nil {
-			return nil, err
+		if p.Value == nil {
+			v, err := args.GetRequired(p.Key.Name)
+			if err != nil {
+				return nil, err
+			}
+			f.scope.Set(p.Key.Name, v)
+		} else {
+			v, ok := args.Get(p.Key.Name)
+			if !ok {
+				// Use default value
+				lit, ok := p.Value.(ast.Literal)
+				if !ok {
+					return nil, fmt.Errorf("function parameter %q default values is not a literal", p.Key.Name)
+				}
+				var err error
+				v, err = f.ev.doLiteral(lit)
+				if err != nil {
+					return nil, err
+				}
+			}
+			f.scope.Set(p.Key.Name, v)
 		}
-		f.scope.Set(p.Name, v)
 	}
 	switch n := f.e.Body.(type) {
 	case ast.Expression:
@@ -604,7 +621,7 @@ func (f arrowFunc) resolveIdentifiers(n ast.Node) (ast.Node, error) {
 	switch n := n.(type) {
 	case *ast.Identifier:
 		for _, p := range f.e.Params {
-			if n.Name == p.Name {
+			if n.Name == p.Key.Name {
 				// Identifier is a parameter do not resolve
 				return n, nil
 			}
