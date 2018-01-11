@@ -44,11 +44,11 @@ func TestSum_PushDown_Match(t *testing.T) {
 
 	// Should not match when an aggregate is set
 	from.GroupingSet = true
-	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, false)
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, []bool{false})
 
 	// Should match when no aggregate is set
 	from.GroupingSet = false
-	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, true)
+	plantest.PhysicalPlan_PushDown_Match_TestHelper(t, spec, from, []bool{true})
 }
 
 func TestSum_PushDown(t *testing.T) {

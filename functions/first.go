@@ -65,15 +65,15 @@ func newFirstProcedure(qs query.OperationSpec, pa plan.Administration) (plan.Pro
 func (s *FirstProcedureSpec) Kind() plan.ProcedureKind {
 	return FirstKind
 }
-func (s *FirstProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
+func (s *FirstProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{{
 		Root:    FromKind,
 		Through: []plan.ProcedureKind{GroupKind, LimitKind, FilterKind},
 		Match: func(spec plan.ProcedureSpec) bool {
 			selectSpec := spec.(*FromProcedureSpec)
 			return !selectSpec.AggregateSet
 		},
-	}
+	}}
 }
 
 func (s *FirstProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {

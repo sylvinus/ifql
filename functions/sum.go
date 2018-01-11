@@ -45,15 +45,15 @@ func (s *SumProcedureSpec) Copy() plan.ProcedureSpec {
 	return new(SumProcedureSpec)
 }
 
-func (s *SumProcedureSpec) PushDownRule() plan.PushDownRule {
-	return plan.PushDownRule{
+func (s *SumProcedureSpec) PushDownRules() []plan.PushDownRule {
+	return []plan.PushDownRule{{
 		Root:    FromKind,
 		Through: nil,
 		Match: func(spec plan.ProcedureSpec) bool {
 			selectSpec := spec.(*FromProcedureSpec)
 			return !selectSpec.GroupingSet
 		},
-	}
+	}}
 }
 func (s *SumProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Procedure) {
 	selectSpec := root.Spec.(*FromProcedureSpec)

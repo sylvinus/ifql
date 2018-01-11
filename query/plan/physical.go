@@ -75,10 +75,12 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		for _, id := range order {
 			pr := p.plan.Procedures[id]
 			if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
-				rule := pd.PushDownRule()
-				if p.pushDownAndSearch(pr, rule, pd.PushDown) {
-					if err := p.removeProcedure(pr); err != nil {
-						return nil, errors.Wrap(err, "failed to remove procedure")
+				rules := pd.PushDownRules()
+				for _, rule := range rules {
+					if p.pushDownAndSearch(pr, rule, pd.PushDown) {
+						if err := p.removeProcedure(pr); err != nil {
+							return nil, errors.Wrap(err, "failed to remove procedure")
+						}
 					}
 				}
 			}

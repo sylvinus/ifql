@@ -822,43 +822,151 @@ func TestFilter_PushDown(t *testing.T) {
 	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, false, want)
 }
 
-func TestFilter_PushDown_Duplicate(t *testing.T) {
-	spec := &functions.FilterProcedureSpec{
-		Fn: &ast.ArrowFunctionExpression{
-			Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-			Body: &ast.BinaryExpression{
-				Operator: ast.NotEqualOperator,
-				Left: &ast.MemberExpression{
-					Object: &ast.Identifier{
-						Name: "r",
-					},
-					Property: &ast.StringLiteral{Value: "_measurement"},
-				},
-				Right: &ast.StringLiteral{Value: "mem"},
-			},
-		},
-	}
-	root := &plan.Procedure{
-		Spec: &functions.FromProcedureSpec{
-			FilterSet: true,
-			Filter: &ast.ArrowFunctionExpression{
-				Body: &ast.BinaryExpression{
-					Operator: ast.NotEqualOperator,
-					Left: &ast.MemberExpression{
-						Object: &ast.Identifier{
-							Name: "r",
+func TestFilter_PushDown_MergeExpressions(t *testing.T) {
+	testCases := []struct {
+		name string
+		spec *functions.FilterProcedureSpec
+		root *plan.Procedure
+		want *plan.Procedure
+	}{
+		{
+			name: "merge with from",
+			spec: &functions.FilterProcedureSpec{
+				Fn: &ast.ArrowFunctionExpression{
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+					Body: &ast.BinaryExpression{
+						Operator: ast.NotEqualOperator,
+						Left: &ast.MemberExpression{
+							Object: &ast.Identifier{
+								Name: "r",
+							},
+							Property: &ast.StringLiteral{Value: "_measurement"},
 						},
-						Property: &ast.StringLiteral{Value: "_measurement"},
+						Right: &ast.StringLiteral{Value: "cpu"},
 					},
-					Right: &ast.StringLiteral{Value: "mem"},
+				},
+			},
+			root: &plan.Procedure{
+				Spec: &functions.FromProcedureSpec{
+					FilterSet: true,
+					Filter: &ast.ArrowFunctionExpression{
+						Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+						Body: &ast.BinaryExpression{
+							Operator: ast.NotEqualOperator,
+							Left: &ast.MemberExpression{
+								Object: &ast.Identifier{
+									Name: "r",
+								},
+								Property: &ast.StringLiteral{Value: "_measurement"},
+							},
+							Right: &ast.StringLiteral{Value: "mem"},
+						},
+					},
+				},
+			},
+			want: &plan.Procedure{
+				Spec: &functions.FromProcedureSpec{
+					FilterSet: true,
+					Filter: &ast.ArrowFunctionExpression{
+						Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+						Body: &ast.LogicalExpression{
+							Operator: ast.AndOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.NotEqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "_measurement"},
+								},
+								Right: &ast.StringLiteral{Value: "mem"},
+							},
+							Right: &ast.BinaryExpression{
+								Operator: ast.NotEqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "_measurement"},
+								},
+								Right: &ast.StringLiteral{Value: "cpu"},
+							},
+						},
+					},
 				},
 			},
 		},
-	}
-	want := &plan.Procedure{
-		// Expect the duplicate has been reset to zero values
-		Spec: new(functions.FromProcedureSpec),
+		{
+			name: "merge with filter",
+			spec: &functions.FilterProcedureSpec{
+				Fn: &ast.ArrowFunctionExpression{
+					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+					Body: &ast.BinaryExpression{
+						Operator: ast.NotEqualOperator,
+						Left: &ast.MemberExpression{
+							Object: &ast.Identifier{
+								Name: "r",
+							},
+							Property: &ast.StringLiteral{Value: "_measurement"},
+						},
+						Right: &ast.StringLiteral{Value: "cpu"},
+					},
+				},
+			},
+			root: &plan.Procedure{
+				Spec: &functions.FilterProcedureSpec{
+					Fn: &ast.ArrowFunctionExpression{
+						Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+						Body: &ast.BinaryExpression{
+							Operator: ast.NotEqualOperator,
+							Left: &ast.MemberExpression{
+								Object: &ast.Identifier{
+									Name: "r",
+								},
+								Property: &ast.StringLiteral{Value: "_measurement"},
+							},
+							Right: &ast.StringLiteral{Value: "mem"},
+						},
+					},
+				},
+			},
+			want: &plan.Procedure{
+				Spec: &functions.FilterProcedureSpec{
+					Fn: &ast.ArrowFunctionExpression{
+						Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+						Body: &ast.LogicalExpression{
+							Operator: ast.AndOperator,
+							Left: &ast.BinaryExpression{
+								Operator: ast.NotEqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "_measurement"},
+								},
+								Right: &ast.StringLiteral{Value: "mem"},
+							},
+							Right: &ast.BinaryExpression{
+								Operator: ast.NotEqualOperator,
+								Left: &ast.MemberExpression{
+									Object: &ast.Identifier{
+										Name: "r",
+									},
+									Property: &ast.StringLiteral{Value: "_measurement"},
+								},
+								Right: &ast.StringLiteral{Value: "cpu"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
-	plantest.PhysicalPlan_PushDown_TestHelper(t, spec, root, true, want)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			plantest.PhysicalPlan_PushDown_TestHelper(t, tc.spec, tc.root, false, tc.want)
+		})
+	}
 }
