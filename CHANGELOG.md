@@ -1,3 +1,22 @@
+## v0.0.4 [2018-01-12]
+
+### Features
+
+- [#167](https://github.com/influxdata/ifql/pull/167) Add support for functions in IFQL
+- [#171](https://github.com/influxdata/ifql/pull/171) Add initial benchmarks
+- [#177](https://github.com/influxdata/ifql/pull/177) Make join function accept map of tables
+- [#178](https://github.com/influxdata/ifql/pull/178) Update tracing for parsing/compile steps
+- [#179](https://github.com/influxdata/ifql/pull/179) Add "map" function
+- [#180](https://github.com/influxdata/ifql/pull/180) Remove "var" keyword
+- [#181](https://github.com/influxdata/ifql/pull/181) Add "shift" function, for shifting values in time
+- [#182](https://github.com/influxdata/ifql/pull/182) Add suppport for multiple values on table records
+- [#183](https://github.com/influxdata/ifql/pull/183) Add derivative function
+- [#185](https://github.com/influxdata/ifql/pull/185) Add integral function
+- [#186](https://github.com/influxdata/ifql/pull/186) Add difference function
+- [#188](https://github.com/influxdata/ifql/pull/188) Add support for default arguments in IFQL functions
+- [#189](https://github.com/influxdata/ifql/pull/189) Update filter to be able to push down into multiple filter operations
+- [#190](https://github.com/influxdata/ifql/pull/190) Add support for "//" style comments in IFQL
+
 ## v0.0.3 [2017-12-08]
 
 ### Features
