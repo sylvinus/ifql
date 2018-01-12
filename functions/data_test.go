@@ -5,9 +5,14 @@ import (
 	"time"
 
 	"github.com/gonum/stat/distuv"
+	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 )
+
+func init() {
+	query.FinalizeRegistration()
+}
 
 const (
 	N     = 1e6

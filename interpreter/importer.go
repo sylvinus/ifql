@@ -118,3 +118,11 @@ func (p *SourcePackage) SetScope(scope *Scope) {
 func (p *SourcePackage) Program() *ast.Program {
 	return p.program
 }
+
+var DisabledImporter = disabledImporter{}
+
+type disabledImporter struct{}
+
+func (disabledImporter) Import(path string, dir string) (Package, error) {
+	return nil, errors.New("imports disabled")
+}

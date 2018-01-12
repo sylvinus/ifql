@@ -13,6 +13,9 @@ import (
 )
 
 func Eval(program *ast.Program, scope *Scope, d Domain, imp Importer) error {
+	if imp == nil {
+		imp = DisabledImporter
+	}
 	itrp := interpreter{
 		d:   d,
 		imp: imp,

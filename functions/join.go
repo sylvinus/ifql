@@ -29,11 +29,6 @@ type JoinOpSpec struct {
 
 func init() {
 	query.RegisterFunction(JoinKind, createJoinOpSpec)
-
-	// The covarianceBuiltIn requires that join be defined
-	// TODO(nathanielc): Make it so RegisterBuiltIn order doesn't matter
-	query.RegisterBuiltIn(covarianceBuiltIn)
-
 	query.RegisterOpSpec(JoinKind, newJoinOp)
 	//TODO(nathanielc): Allow for other types of join implementations
 	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)

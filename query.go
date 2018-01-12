@@ -10,11 +10,17 @@ import (
 	// Import functions
 
 	_ "github.com/influxdata/ifql/functions"
+	"github.com/influxdata/ifql/query"
 
 	"github.com/influxdata/ifql/query/control"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/pkg/errors"
 )
+
+func init() {
+	// FinalizeRegistration once all functions have registered
+	query.FinalizeRegistration()
+}
 
 type Config struct {
 	Hosts []string

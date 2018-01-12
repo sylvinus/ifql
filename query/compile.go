@@ -11,6 +11,7 @@ import (
 	"github.com/influxdata/ifql/interpreter"
 	"github.com/influxdata/ifql/parser"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 )
 
 // Pass through interpreter types so that consumers of the query package need not know about the interpreter package.
@@ -68,6 +69,9 @@ func RegisterMethod(name string, c CreateOperationSpec) {
 }
 
 func registerFunction(name string, c CreateOperationSpec, chainable bool) {
+	if finalized {
+		panic(fmt.Errorf("already finalized, cannot register function %q", name))
+	}
 	if _, ok := functionsMap[name]; ok {
 		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
@@ -84,19 +88,37 @@ func registerFunction(name string, c CreateOperationSpec, chainable bool) {
 
 var builtinScope = interpreter.NewScope()
 
+// list of builtin scripts
+var builtins []string
+var finalized bool
+
 // RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
 func RegisterBuiltIn(script string) {
-	program, err := parser.NewAST(script)
-	if err != nil {
-		panic(err)
+	if finalized {
+		panic(errors.New("already finalized, cannot register builtin"))
 	}
+	builtins = append(builtins, script)
+}
 
-	// Create new query domain
-	d := new(queryDomain)
+// FinalizeRegistration must be called to complete registration.
+// Future calls to RegisterFunction, RegisterMethod or RegisterBuiltIn will panic.
+func FinalizeRegistration() {
+	finalized = true
+	for _, script := range builtins {
+		program, err := parser.NewAST(script)
+		if err != nil {
+			panic(err)
+		}
 
-	if err := interpreter.Eval(program, builtinScope, d, interpreter.NewFileImporter()); err != nil {
-		panic(err)
+		// Create new query domain
+		d := new(queryDomain)
+
+		if err := interpreter.Eval(program, builtinScope, d, nil); err != nil {
+			panic(err)
+		}
 	}
+	// free builtins list
+	builtins = nil
 }
 
 type Administration struct {
