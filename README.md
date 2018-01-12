@@ -351,3 +351,46 @@ from(db:"foo")
     .max()
 ```
 
+### Custom Functions
+
+IFQL also allows the user to define their own functions.
+The function syntax is:
+
+```
+(parameter list) => <function body>
+```
+
+The list of parameters is simply a list of identifiers with optional default values.
+The function body is either a single expression which is returned or a block of statements.
+Functions may be assigned to identifiers to given them a name.
+
+Examples:
+
+```
+// Define a simple addition function
+add = (a,b) => a + b
+
+// Define a helper function to get data from a telegraf measurement.
+// By default the database is expected to be named "telegraf".
+telegrafM = (measurement, db="telegraf") =>
+    from(db:db)
+        .filter(fn: (r) => r._measurement == measurement)
+
+// Define a helper function for a common join operation
+// Use block syntax since we have more than a single expression
+abJoin = (measurementA, measurementB, on) => {
+    a = telegrafM(measurement:measurementA)
+    b = telegrafM(measurement:measurementB)
+    join(
+        tables:{a:a, b:b},
+        on:on,
+        // Return a map from the join fn,
+        // this creates a table with a column for each key in the map.
+        // Note the () around the map to indicate a single map expression instead of function block.
+        fn: (t) => ({
+            a: t.a._value,
+            b: t.b._value,
+        }),
+    )
+}
+```
