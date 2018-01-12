@@ -1493,7 +1493,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 		{
 			name: "import simple",
 			raw: `
-import "boolean" 1.0.0
+import "boolean" =1.0.0
 boolean.true
 `,
 			want: &ast.Program{

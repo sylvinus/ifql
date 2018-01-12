@@ -144,7 +144,7 @@ func TestEval(t *testing.T) {
 		{
 			name: "import",
 			query: `
-            import "boolean" 1.0.0
+            import "boolean" =1.0.0
             boolean.true or fail()
             boolean.false and fail()
 			`,
@@ -152,7 +152,7 @@ func TestEval(t *testing.T) {
 		{
 			name: "import as",
 			query: `
-            import "boolean" 1.0.0 as b
+            import "boolean" =1.0.0 as b
             b.true or fail()
             b.false and fail()
 			`,
@@ -160,7 +160,7 @@ func TestEval(t *testing.T) {
 		{
 			name: "import err",
 			query: `
-            import "nonexistant" 1.0.0
+            import "nonexistant" =1.0.0
 			`,
 			wantErr: true,
 		},
@@ -186,13 +186,13 @@ func TestEval(t *testing.T) {
 
 type testImporter struct{}
 
-func (i testImporter) Import(importPath, dir string) (ifql.Package, error) {
-	scope := ifql.NewScope()
+func (i testImporter) Import(importPath, dir string) (interpreter.Package, error) {
+	scope := interpreter.NewScope()
 	// Define some test packages to import
 	switch importPath {
 	case "boolean":
-		scope.Set("true", ifql.NewBoolValue(true))
-		scope.Set("false", ifql.NewBoolValue(false))
+		scope.Set("true", interpreter.NewBoolValue(true))
+		scope.Set("false", interpreter.NewBoolValue(false))
 	default:
 		return nil, fmt.Errorf("unknown package %q", importPath)
 	}
@@ -206,7 +206,7 @@ func (i testImporter) Import(importPath, dir string) (ifql.Package, error) {
 type pkg struct {
 	name  string
 	path  string
-	scope *ifql.Scope
+	scope *interpreter.Scope
 }
 
 func (p *pkg) Name() string {
@@ -215,10 +215,10 @@ func (p *pkg) Name() string {
 func (p *pkg) Path() string {
 	return p.path
 }
-func (p *pkg) Scope() *ifql.Scope {
+func (p *pkg) Scope() *interpreter.Scope {
 	return p.scope
 }
-func (p *pkg) SetScope(s *ifql.Scope) {
+func (p *pkg) SetScope(s *interpreter.Scope) {
 	p.scope = s
 }
 
