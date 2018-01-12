@@ -1,4 +1,4 @@
-package ifql
+package parser
 
 import (
 	"bytes"

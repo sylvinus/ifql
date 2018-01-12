@@ -1,4 +1,4 @@
-package ifql
+package interpreter
 
 import (
 	"fmt"
@@ -9,43 +9,43 @@ import (
 )
 
 func Eval(program *ast.Program, scope *Scope, d Domain) error {
-	ev := evaluator{
+	itrp := interpreter{
 		d: d,
 	}
-	return ev.eval(program, scope)
+	return itrp.eval(program, scope)
 }
 
 // Domain represents any specific domain being used during evaluation.
 type Domain interface{}
 
-type evaluator struct {
+type interpreter struct {
 	d Domain
 }
 
-func (ev evaluator) eval(program *ast.Program, scope *Scope) error {
+func (itrp interpreter) eval(program *ast.Program, scope *Scope) error {
 	for _, stmt := range program.Body {
-		if err := ev.doStatement(stmt, scope); err != nil {
+		if err := itrp.doStatement(stmt, scope); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (ev evaluator) doStatement(stmt ast.Statement, scope *Scope) error {
+func (itrp interpreter) doStatement(stmt ast.Statement, scope *Scope) error {
 	switch s := stmt.(type) {
 	case *ast.VariableDeclaration:
-		if err := ev.doVariableDeclaration(s, scope); err != nil {
+		if err := itrp.doVariableDeclaration(s, scope); err != nil {
 			return err
 		}
 	case *ast.ExpressionStatement:
-		_, err := ev.doExpression(s.Expression, scope)
+		_, err := itrp.doExpression(s.Expression, scope)
 		if err != nil {
 			return err
 		}
 	case *ast.BlockStatement:
 		nested := scope.Nest()
 		for i, stmt := range s.Body {
-			if err := ev.doStatement(stmt, nested); err != nil {
+			if err := itrp.doStatement(stmt, nested); err != nil {
 				return err
 			}
 			// Validate a return statement is the last statement
@@ -59,7 +59,7 @@ func (ev evaluator) doStatement(stmt ast.Statement, scope *Scope) error {
 		// Since a return statement is always last we do not have to worry about overriding an existing return value.
 		scope.SetReturn(nested.Return())
 	case *ast.ReturnStatement:
-		v, err := ev.doExpression(s.Argument, scope)
+		v, err := itrp.doExpression(s.Argument, scope)
 		if err != nil {
 			return err
 		}
@@ -70,9 +70,9 @@ func (ev evaluator) doStatement(stmt ast.Statement, scope *Scope) error {
 	return nil
 }
 
-func (ev evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *Scope) error {
+func (itrp interpreter) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *Scope) error {
 	for _, vd := range declarations.Declarations {
-		value, err := ev.doExpression(vd.Init, scope)
+		value, err := itrp.doExpression(vd.Init, scope)
 		if err != nil {
 			return err
 		}
@@ -81,12 +81,12 @@ func (ev evaluator) doVariableDeclaration(declarations *ast.VariableDeclaration,
 	return nil
 }
 
-func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, error) {
+func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, error) {
 	switch e := expr.(type) {
 	case ast.Literal:
-		return ev.doLiteral(e)
+		return itrp.doLiteral(e)
 	case *ast.ArrayExpression:
-		return ev.doArray(e, scope)
+		return itrp.doArray(e, scope)
 	case *ast.Identifier:
 		value, ok := scope.Lookup(e.Name)
 		if !ok {
@@ -94,14 +94,14 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 		}
 		return value, nil
 	case *ast.CallExpression:
-		v, err := ev.callFunction(e, scope)
+		v, err := itrp.callFunction(e, scope)
 		if err != nil {
 			// Determine function name
 			return nil, errors.Wrapf(err, "error calling funcion %q", functionName(e))
 		}
 		return v, nil
 	case *ast.MemberExpression:
-		obj, err := ev.doExpression(e.Object, scope)
+		obj, err := itrp.doExpression(e.Object, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -111,9 +111,9 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 		}
 		return obj.Property(p)
 	case *ast.ObjectExpression:
-		return ev.doMap(e, scope)
+		return itrp.doMap(e, scope)
 	case *ast.UnaryExpression:
-		v, err := ev.doExpression(e.Argument, scope)
+		v, err := itrp.doExpression(e.Argument, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -139,12 +139,12 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 		}
 
 	case *ast.BinaryExpression:
-		l, err := ev.doExpression(e.Left, scope)
+		l, err := itrp.doExpression(e.Left, scope)
 		if err != nil {
 			return nil, err
 		}
 
-		r, err := ev.doExpression(e.Right, scope)
+		r, err := itrp.doExpression(e.Right, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 		}
 		return bf(l, r), nil
 	case *ast.LogicalExpression:
-		l, err := ev.doExpression(e.Left, scope)
+		l, err := itrp.doExpression(e.Left, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +176,7 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 			return NewBoolValue(true), nil
 		}
 
-		r, err := ev.doExpression(e.Right, scope)
+		r, err := itrp.doExpression(e.Right, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -206,13 +206,13 @@ func (ev evaluator) doExpression(expr ast.Expression, scope *Scope) (Value, erro
 	}
 }
 
-func (ev evaluator) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error) {
+func (itrp interpreter) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
 		Type:     TInvalid,
 		Elements: make([]Value, len(a.Elements)),
 	}
 	for i, el := range a.Elements {
-		v, err := ev.doExpression(el, scope)
+		v, err := itrp.doExpression(el, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -230,12 +230,12 @@ func (ev evaluator) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error)
 	}, nil
 }
 
-func (ev evaluator) doMap(m *ast.ObjectExpression, scope *Scope) (Value, error) {
+func (itrp interpreter) doMap(m *ast.ObjectExpression, scope *Scope) (Value, error) {
 	mapValue := Map{
 		Elements: make(map[string]Value, len(m.Properties)),
 	}
 	for _, p := range m.Properties {
-		v, err := ev.doExpression(p.Value, scope)
+		v, err := itrp.doExpression(p.Value, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +247,7 @@ func (ev evaluator) doMap(m *ast.ObjectExpression, scope *Scope) (Value, error) 
 	return mapValue, nil
 }
 
-func (ev evaluator) doLiteral(lit ast.Literal) (Value, error) {
+func (itrp interpreter) doLiteral(lit ast.Literal) (Value, error) {
 	switch l := lit.(type) {
 	case *ast.DateTimeLiteral:
 		return value{
@@ -306,8 +306,8 @@ func functionName(call *ast.CallExpression) string {
 	}
 }
 
-func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value, error) {
-	callee, err := ev.doExpression(call.Callee, scope)
+func (itrp interpreter) callFunction(call *ast.CallExpression, scope *Scope) (Value, error) {
+	callee, err := itrp.doExpression(call.Callee, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -315,19 +315,19 @@ func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value,
 		return nil, fmt.Errorf("cannot call function, value is of type %v", callee.Type())
 	}
 	f := callee.Value().(Function)
-	arguments, err := ev.doArguments(call.Arguments, scope)
+	arguments, err := itrp.doArguments(call.Arguments, scope)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if the function is an arrowFunc and rebind it.
 	if af, ok := f.(arrowFunc); ok {
-		af.ev = ev
+		af.itrp = itrp
 		f = af
 	}
 
 	// Call the function
-	v, err := f.Call(arguments, ev.d)
+	v, err := f.Call(arguments, itrp.d)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ func (ev evaluator) callFunction(call *ast.CallExpression, scope *Scope) (Value,
 	return v, nil
 }
 
-func (ev evaluator) doArguments(args []ast.Expression, scope *Scope) (Arguments, error) {
+func (itrp interpreter) doArguments(args []ast.Expression, scope *Scope) (Arguments, error) {
 	if l := len(args); l > 1 {
 		return nil, fmt.Errorf("arguments not a single object expression %v", args)
 	} else if l == 0 {
@@ -349,7 +349,7 @@ func (ev evaluator) doArguments(args []ast.Expression, scope *Scope) (Arguments,
 	}
 	paramsMap := make(map[string]Value, len(params.Properties))
 	for _, p := range params.Properties {
-		value, err := ev.doExpression(p.Value, scope)
+		value, err := itrp.doExpression(p.Value, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -561,7 +561,7 @@ type arrowFunc struct {
 	scope *Scope
 	call  func(Arguments, Domain) (Value, error)
 
-	ev evaluator
+	itrp interpreter
 }
 
 func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
@@ -581,7 +581,7 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 					return nil, fmt.Errorf("function parameter %q default values is not a literal", p.Key.Name)
 				}
 				var err error
-				v, err = f.ev.doLiteral(lit)
+				v, err = f.itrp.doLiteral(lit)
 				if err != nil {
 					return nil, err
 				}
@@ -591,9 +591,9 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 	}
 	switch n := f.e.Body.(type) {
 	case ast.Expression:
-		return f.ev.doExpression(n, f.scope)
+		return f.itrp.doExpression(n, f.scope)
 	case ast.Statement:
-		err := f.ev.doStatement(n, f.scope)
+		err := f.itrp.doStatement(n, f.scope)
 		if err != nil {
 			return nil, err
 		}

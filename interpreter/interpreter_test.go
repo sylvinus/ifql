@@ -1,4 +1,4 @@
-package ifql_test
+package interpreter_test
 
 import (
 	"errors"
@@ -8,33 +8,34 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/ast/asttest"
-	"github.com/influxdata/ifql/ifql"
+	"github.com/influxdata/ifql/interpreter"
+	"github.com/influxdata/ifql/parser"
 )
 
-var testScope = ifql.NewScope()
+var testScope = interpreter.NewScope()
 
 func init() {
 	testScope.Set("fortyTwo", function{
 		name: "fortyTwo",
-		call: func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
-			return ifql.NewFloatValue(42.0), nil
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
+			return interpreter.NewFloatValue(42.0), nil
 		},
 	})
 	testScope.Set("six", function{
 		name: "six",
-		call: func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
-			return ifql.NewFloatValue(6.0), nil
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
+			return interpreter.NewFloatValue(6.0), nil
 		},
 	})
 	testScope.Set("nine", function{
 		name: "nine",
-		call: func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
-			return ifql.NewFloatValue(9.0), nil
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
+			return interpreter.NewFloatValue(9.0), nil
 		},
 	})
 	testScope.Set("fail", function{
 		name: "fail",
-		call: func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
 			return nil, errors.New("fail")
 		},
 	})
@@ -144,12 +145,12 @@ func TestEval(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			program, err := ifql.NewAST(tc.query)
+			program, err := parser.NewAST(tc.query)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = ifql.Eval(program, testScope.Nest(), nil)
+			err = interpreter.Eval(program, testScope.Nest(), nil)
 			if !tc.wantErr && err != nil {
 				t.Fatal(err)
 			} else if tc.wantErr && err == nil {
@@ -161,10 +162,10 @@ func TestEval(t *testing.T) {
 }
 func TestFunction_Resolve(t *testing.T) {
 	var got *ast.ArrowFunctionExpression
-	scope := ifql.NewScope()
+	scope := interpreter.NewScope()
 	scope.Set("resolver", function{
 		name: "resolver",
-		call: func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
 			f, err := args.GetRequiredFunction("f")
 			if err != nil {
 				return nil, err
@@ -177,7 +178,7 @@ func TestFunction_Resolve(t *testing.T) {
 		},
 	})
 
-	program, err := ifql.NewAST(`
+	program, err := parser.NewAST(`
 	x = 42
 	resolver(f: (r) => r + x)
 `)
@@ -185,7 +186,7 @@ func TestFunction_Resolve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ifql.Eval(program, scope, nil); err != nil {
+	if err := interpreter.Eval(program, scope, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,21 +205,21 @@ func TestFunction_Resolve(t *testing.T) {
 
 type function struct {
 	name string
-	call func(args ifql.Arguments, d ifql.Domain) (ifql.Value, error)
+	call func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error)
 }
 
-func (f function) Type() ifql.Type {
-	return ifql.TFunction
+func (f function) Type() interpreter.Type {
+	return interpreter.TFunction
 }
 
 func (f function) Value() interface{} {
 	return f
 }
-func (f function) Property(name string) (ifql.Value, error) {
+func (f function) Property(name string) (interpreter.Value, error) {
 	return nil, fmt.Errorf("property %q does not exist", name)
 }
 
-func (f function) Call(args ifql.Arguments, d ifql.Domain) (ifql.Value, error) {
+func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
 	return f.call(args, d)
 }
 
