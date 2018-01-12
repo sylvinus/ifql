@@ -11,13 +11,8 @@ Start
     }
 
 Program
-  = pkg:PackageDeclaration? __ imprts:Imports  __ body:Statements {
+  = pkg:("package" __ pkg:Identifier)? __ imprts:Imports  __ body:Statements {
       return program(pkg, imprts, body, c.text, c.pos)
-    }
-
-PackageDeclaration
-  = "package" __ name:Identifier {
-      return packageDecl(name, c.text, c.pos)
     }
 
 Imports

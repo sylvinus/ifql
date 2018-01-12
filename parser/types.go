@@ -17,22 +17,15 @@ func toIfaceSlice(v interface{}) []interface{} {
 	return v.([]interface{})
 }
 
-func program(pkg, imports, body interface{}, text []byte, pos position) (*ast.Program, error) {
-	var pkgDecl *ast.PackageDeclaration
+func program(pkg, imports, body interface{}, text []byte, pos position) (*ast.File, error) {
+	var pkgIdent *ast.Identifier
 	if pkg != nil {
-		pkgDecl = pkg.(*ast.PackageDeclaration)
+		pkgIdent = toIfaceSlice(pkg)[2].(*ast.Identifier)
 	}
-	return &ast.Program{
-		Package:  pkgDecl,
+	return &ast.File{
+		Package:  pkgIdent,
 		Imports:  imports.([]*ast.ImportDeclaration),
 		Body:     body.([]ast.Statement),
-		BaseNode: base(text, pos),
-	}, nil
-}
-
-func packageDecl(name interface{}, text []byte, pos position) (*ast.PackageDeclaration, error) {
-	return &ast.PackageDeclaration{
-		ID:       name.(*ast.Identifier),
 		BaseNode: base(text, pos),
 	}, nil
 }

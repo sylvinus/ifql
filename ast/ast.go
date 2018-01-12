@@ -31,9 +31,9 @@ type Node interface {
 	json.Marshaler
 }
 
-func (*Program) node() {}
+func (*Package) node() {}
+func (*File) node()    {}
 
-func (*PackageDeclaration) node() {}
 func (*ImportDeclaration) node()  {}
 func (*VersionDeclaration) node() {}
 func (*VersionNumber) node()      {}
@@ -74,55 +74,50 @@ type BaseNode struct {
 // Location is the source location of the Node
 func (b *BaseNode) Location() *SourceLocation { return b.Loc }
 
-// Program represents a complete program source tree
-type Program struct {
+// Package represents a set of source files.
+type Package struct {
 	*BaseNode
-	Package *PackageDeclaration  `json:"package,omitempty"`
-	Imports []*ImportDeclaration `json:"imports,omitempty"`
-	Body    []Statement          `json:"body"`
+	Name  string           `json:"name"`
+	Files map[string]*File `json:"files"`
 }
 
 // Type is the abstract type
-func (*Program) Type() string { return "Program" }
+func (*Package) Type() string { return "Package" }
 
-func (p *Program) Copy() Node {
-	np := new(Program)
-	*np = *p
-
-	np.Package = p.Package.Copy().(*PackageDeclaration)
-
-	if len(p.Imports) > 0 {
-		np.Imports = make([]*ImportDeclaration, len(p.Body))
-		for i, s := range p.Imports {
-			np.Imports[i] = s.Copy().(*ImportDeclaration)
-		}
-	}
-	if len(p.Body) > 0 {
-		np.Body = make([]Statement, len(p.Body))
-		for i, s := range p.Body {
-			np.Body[i] = s.Copy().(Statement)
-		}
-	}
-	return np
-}
-
-// PackageDeclaration represents a complete program source tree
-type PackageDeclaration struct {
+// File represents the AST from a single source file.
+type File struct {
 	*BaseNode
-	ID *Identifier `json:"id"`
+	Package    *Identifier          `json:"package,omitempty"`
+	Imports    []*ImportDeclaration `json:"imports,omitempty"`
+	Unresolved []*Identifier        `json:"unresolved,omitempty"`
+	Body       []Statement          `json:"body"`
 }
 
 // Type is the abstract type
-func (*PackageDeclaration) Type() string { return "PackageDeclaration" }
+func (*File) Type() string { return "File" }
 
-func (d *PackageDeclaration) Copy() Node {
-	if d == nil {
-		return d
+func (f *File) Copy() Node {
+	nf := new(File)
+	*nf = *f
+
+	nf.Package = f.Package.Copy().(*Identifier)
+
+	if len(f.Imports) > 0 {
+		nf.Imports = make([]*ImportDeclaration, len(f.Body))
+		for i, s := range f.Imports {
+			nf.Imports[i] = s.Copy().(*ImportDeclaration)
+		}
 	}
-	nd := new(PackageDeclaration)
-	*nd = *d
-	nd.ID = d.ID.Copy().(*Identifier)
-	return nd
+	if len(f.Body) > 0 {
+		nf.Body = make([]Statement, len(f.Body))
+		for i, s := range f.Body {
+			nf.Body[i] = s.Copy().(Statement)
+		}
+	}
+	return nf
+}
+
+func MergePackageFiles(files []*File) {
 }
 
 // ImportDeclaration represents a complete program source tree

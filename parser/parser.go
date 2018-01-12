@@ -9,10 +9,10 @@ import (
 )
 
 // NewAST parses ifql query and produces an ast.Program
-func NewAST(ifql string, opts ...Option) (*ast.Program, error) {
+func NewAST(ifql string, opts ...Option) (*ast.File, error) {
 	f, err := Parse("", []byte(ifql), opts...)
 	if err != nil {
 		return nil, err
 	}
-	return f.(*ast.Program), nil
+	return f.(*ast.File), nil
 }

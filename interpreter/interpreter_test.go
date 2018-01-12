@@ -225,7 +225,7 @@ func (p *pkg) SetScope(s *interpreter.Scope) {
 func (p *pkg) Complete() bool {
 	return true
 }
-func (p *pkg) Program() *ast.Program {
+func (p *pkg) Program() *ast.File {
 	return nil
 }
 

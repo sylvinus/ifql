@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func Eval(program *ast.Program, scope *Scope, d Domain, imp Importer) error {
+func Eval(program *ast.File, scope *Scope, d Domain, imp Importer) error {
 	if imp == nil {
 		imp = DisabledImporter
 	}
@@ -35,7 +35,7 @@ type Package interface {
 	Scope() *Scope
 	SetScope(scope *Scope)
 
-	Program() *ast.Program
+	File() *ast.File
 }
 
 // Domain represents any specific domain being used during evaluation.
@@ -46,7 +46,7 @@ type interpreter struct {
 	d   Domain
 }
 
-func (itrp interpreter) eval(program *ast.Program, scope *Scope) error {
+func (itrp interpreter) eval(program *ast.File, scope *Scope) error {
 	for _, imp := range program.Imports {
 		if err := itrp.doImport(imp, scope); err != nil {
 			return err
@@ -67,7 +67,7 @@ func (itrp interpreter) doImport(imp *ast.ImportDeclaration, scope *Scope) error
 	}
 	if !p.Complete() {
 		s := scope.Nest()
-		if err := itrp.eval(p.Program(), s); err != nil {
+		if err := itrp.eval(p.File(), s); err != nil {
 			return err
 		}
 		p.SetScope(s)

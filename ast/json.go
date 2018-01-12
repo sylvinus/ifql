@@ -8,19 +8,19 @@ import (
 	"time"
 )
 
-func (p *Program) MarshalJSON() ([]byte, error) {
-	type Alias Program
+func (f *File) MarshalJSON() ([]byte, error) {
+	type Alias File
 	raw := struct {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  p.Type(),
-		Alias: (*Alias)(p),
+		Type:  f.Type(),
+		Alias: (*Alias)(f),
 	}
 	return json.Marshal(raw)
 }
-func (p *Program) UnmarshalJSON(data []byte) error {
-	type Alias Program
+func (f *File) UnmarshalJSON(data []byte) error {
+	type Alias File
 	raw := struct {
 		*Alias
 		Imports []json.RawMessage `json:"imports"`
@@ -30,11 +30,11 @@ func (p *Program) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if raw.Alias != nil {
-		*p = *(*Program)(raw.Alias)
+		*f = *(*File)(raw.Alias)
 	}
 
 	if len(raw.Imports) > 0 {
-		p.Imports = make([]*ImportDeclaration, len(raw.Imports))
+		f.Imports = make([]*ImportDeclaration, len(raw.Imports))
 		for i, r := range raw.Imports {
 			n, err := unmarshalNode(r)
 			if err != nil {
@@ -44,30 +44,19 @@ func (p *Program) UnmarshalJSON(data []byte) error {
 			if !ok {
 				return fmt.Errorf("unexpected import node", n)
 			}
-			p.Imports[i] = id
+			f.Imports[i] = id
 		}
 	}
 
-	p.Body = make([]Statement, len(raw.Body))
+	f.Body = make([]Statement, len(raw.Body))
 	for i, r := range raw.Body {
 		s, err := unmarshalStatement(r)
 		if err != nil {
 			return err
 		}
-		p.Body[i] = s
+		f.Body[i] = s
 	}
 	return nil
-}
-func (d *PackageDeclaration) MarshalJSON() ([]byte, error) {
-	type Alias PackageDeclaration
-	raw := struct {
-		Type string `json:"type"`
-		*Alias
-	}{
-		Type:  d.Type(),
-		Alias: (*Alias)(d),
-	}
-	return json.Marshal(raw)
 }
 func (d *ImportDeclaration) MarshalJSON() ([]byte, error) {
 	type Alias ImportDeclaration
@@ -837,10 +826,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 
 	var node Node
 	switch typ.Type {
-	case "Program":
-		node = new(Program)
-	case "PackageDeclaration":
-		node = new(PackageDeclaration)
+	case "File":
+		node = new(File)
 	case "ImportDeclaration":
 		node = new(ImportDeclaration)
 	case "VersionDeclaration":

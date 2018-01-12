@@ -14,13 +14,13 @@ func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		raw     string
-		want    *ast.Program
+		want    *ast.File
 		wantErr bool
 	}{
 		{
 			name: "from",
 			raw:  `from()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -36,7 +36,7 @@ func TestParse(t *testing.T) {
 			name: "comment",
 			raw: `// Comment
 			from()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -51,7 +51,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "identifier with number",
 			raw:  `tan2()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -66,7 +66,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "declare variable as an int",
 			raw:  `howdy = 1`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -80,7 +80,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "declare variable as a float",
 			raw:  `howdy = 1.1`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -94,7 +94,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "declare variable as an array",
 			raw:  `howdy = [1, 2, 3, 4]`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -116,7 +116,7 @@ func TestParse(t *testing.T) {
 			name: "use variable to declare something",
 			raw: `howdy = 1
 			from()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -138,7 +138,7 @@ func TestParse(t *testing.T) {
 			name: "variable is from statement",
 			raw: `howdy = from()
 			howdy.count()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -173,7 +173,7 @@ func TestParse(t *testing.T) {
 			doody = from()
 			howdy.count()
 			doody.sum()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -230,7 +230,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "from with database",
 			raw:  `from(db:"telegraf")`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -262,7 +262,7 @@ func TestParse(t *testing.T) {
 			m.key1
 			m["key2"]
 			`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -304,7 +304,7 @@ func TestParse(t *testing.T) {
             b = 2
             c = a + b
             d = a`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -349,7 +349,7 @@ func TestParse(t *testing.T) {
 			name: "var as unary expression of other vars",
 			raw: `a = 5
             c = -a`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -377,7 +377,7 @@ func TestParse(t *testing.T) {
 			name: "var as both binary and unary expressions",
 			raw: `a = 5
             c = 10 * -a`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -409,7 +409,7 @@ func TestParse(t *testing.T) {
 			name: "unary expressions within logical expression",
 			raw: `a = 5.0
             10.0 * -a == -0.5 or a == 6.0`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -455,7 +455,7 @@ a = 5.0
 10.0 * -a == -0.5
 	// or this
 	or a == 6.0`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -496,7 +496,7 @@ a = 5.0
 		{
 			name: "expressions with function calls",
 			raw:  `a = foo() == 10`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -519,7 +519,7 @@ a = 5.0
 			name: "mix unary logical and binary expressions",
 			raw: `
             not (f() == 6.0 * x) or fail()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.LogicalExpression{
@@ -550,7 +550,7 @@ a = 5.0
 			name: "mix unary logical and binary expressions with extra parens",
 			raw: `
             (not (f() == 6.0 * x) or fail())`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.LogicalExpression{
@@ -582,7 +582,7 @@ a = 5.0
 			raw: `plusOne = (r) => r + 1
 			plusOne(r:5)
 			`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -624,7 +624,7 @@ a = 5.0
 		{
 			name: "arrow function return map",
 			raw:  `toMap = (r) =>({r:r})`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -648,7 +648,7 @@ a = 5.0
 		{
 			name: "arrow function with default arg",
 			raw:  `addN = (r, n=5) => r + n`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -677,7 +677,7 @@ a = 5.0
             plusOne = (r) => r + 1
             plusOne(r:5) == 6 or die()
 			`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -729,7 +729,7 @@ a = 5.0
 		{
 			name: "arrow function as single expression",
 			raw:  `f = (r) => r["_measurement"] == "cpu"`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -758,7 +758,7 @@ a = 5.0
                 m = r["_measurement"]
                 return m == "cpu"
             }`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -798,7 +798,7 @@ a = 5.0
 		{
 			name: "from with filter with no parens",
 			raw:  `from(db:"telegraf").filter(fn: (r) => r["other"]=="mem" and r["this"]=="that" or r["these"]!="those")`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -870,7 +870,7 @@ a = 5.0
 		{
 			name: "from with range",
 			raw:  `from(db:"telegraf").range(start:-1h, end:10m)`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -915,7 +915,7 @@ a = 5.0
 		{
 			name: "from with limit",
 			raw:  `from(db:"telegraf").limit(limit:100, offset:10)`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -959,7 +959,7 @@ a = 5.0
 			raw: `from(db:"mydb")
 						.range(start:-4h, stop:-2h)
 						.count()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -1016,7 +1016,7 @@ a = 5.0
 						.range(start:-4h, stop:-2h)
 						.limit(limit:10)
 						.count()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -1088,7 +1088,7 @@ a = 5.0
                         .filter(fn: (r) => r["_field"] == 10.1)
                         .range(start:-4h, stop:-2h)
                         .count()`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -1170,7 +1170,7 @@ a = 5.0
 a = from(db:"dbA").range(start:-1h)
 b = from(db:"dbB").range(start:-1h)
 join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -1302,7 +1302,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			raw: `a = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "a").range(start:-1h)
 			b = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "b").range(start:-1h)
 			join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_field"])`,
-			want: &ast.Program{
+			want: &ast.File{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{
@@ -1496,7 +1496,7 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 import "boolean" =1.0.0
 boolean.true
 `,
-			want: &ast.Program{
+			want: &ast.File{
 				Imports: []*ast.ImportDeclaration{
 					{
 						Path: &ast.StringLiteral{Value: "boolean"},
@@ -1532,7 +1532,7 @@ import "e" =v3.2.1 as f
 
 from()
 `,
-			want: &ast.Program{
+			want: &ast.File{
 				Imports: []*ast.ImportDeclaration{
 					{
 						Path: &ast.StringLiteral{Value: "a"},
@@ -1606,10 +1606,8 @@ package boolean
 
 t = true
 `,
-			want: &ast.Program{
-				Package: &ast.PackageDeclaration{
-					ID: &ast.Identifier{Name: "boolean"},
-				},
+			want: &ast.File{
+				Package: &ast.Identifier{Name: "boolean"},
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{{

@@ -35,14 +35,13 @@ func (fi *FileImporter) Import(p string, dir string) (Package, error) {
 		return nil, fmt.Errorf("could not find package %q at %q", p, fp)
 	}
 
-	files, err := ioutil.ReadDir(fp)
+	srcFiles, err := ioutil.ReadDir(fp)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read package %q", p)
 	}
 
-	var packageName string
-	program := new(ast.Program)
-	for _, fi := range files {
+	files := make(map[string]*ast.File)
+	for _, fi := range srcFiles {
 		if fi.IsDir() || filepath.Ext(fi.Name()) != ".ifql" {
 			continue
 		}
@@ -55,48 +54,38 @@ func (fi *FileImporter) Import(p string, dir string) (Package, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to read package file %q", fi.Name())
 		}
-		p, err := parser.NewAST(string(data))
+		file, err := parser.NewAST(string(data))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse package file %q", fi.Name())
 		}
-		if p.Package == nil {
+		if file.Package == nil {
 			return nil, fmt.Errorf("no package name declared in file %q", fi.Name())
 		}
-		if packageName == "" {
-			packageName = p.Package.ID.Name
-		}
-		if packageName != p.Package.ID.Name {
-			return nil, fmt.Errorf("found conflicting package names [%q, %q] declared in file %q", packageName, p.Package.ID.Name, fi.Name())
-		}
-		program.Imports = append(program.Imports, p.Imports...)
-		program.Body = append(program.Body, p.Body...)
-	}
-	if packageName == "" {
-		return nil, errors.New("no package name declared")
+		files[fi.Name()] = file
 	}
 
+	pkgFile := ast.MergePackageFiles(files)
+
 	pkg := &SourcePackage{
-		name:    packageName,
-		path:    p,
-		program: program,
+		path: p,
+		file: pkgFile,
 	}
 	fi.cache[fp] = pkg
 	return pkg, nil
 }
 
 type SourcePackage struct {
-	name  string
 	path  string
 	scope *Scope
 
-	program *ast.Program
+	file *ast.File
 }
 
 func (p *SourcePackage) String() string {
 	return fmt.Sprintf("package: %q path: %q scope: %p", p.name, p.path, p.scope)
 }
 func (p *SourcePackage) Name() string {
-	return p.name
+	return p.file.Package.Name
 }
 
 func (p *SourcePackage) Path() string {
@@ -115,8 +104,8 @@ func (p *SourcePackage) SetScope(scope *Scope) {
 	p.scope = scope
 }
 
-func (p *SourcePackage) Program() *ast.Program {
-	return p.program
+func (p *SourcePackage) File() *ast.File {
+	return p.file
 }
 
 var DisabledImporter = disabledImporter{}
