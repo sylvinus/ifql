@@ -117,7 +117,7 @@ func (f *File) Copy() Node {
 	return nf
 }
 
-func MergePackageFiles(files []*File) {
+func MergePackageFiles(files []*File) *File {
 }
 
 // ImportDeclaration represents a complete program source tree

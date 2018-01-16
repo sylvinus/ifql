@@ -14,7 +14,7 @@ import (
 const pkgdir = "ifql_pkgs"
 
 // FileImporter implements Importer using the local filesystem.
-// Package are expected to be in the `ifql_pkg` directories.
+// Package are expected to be in the `ifql_pkgs` directories.
 type FileImporter struct {
 	cache map[string]*SourcePackage
 }
