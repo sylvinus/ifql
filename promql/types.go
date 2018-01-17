@@ -9,6 +9,7 @@ import (
 	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/semantic"
 )
 
 type ArgKind int
@@ -207,16 +208,16 @@ var operatorLookup = map[MatchKind]ast.OperatorKind{
 }
 
 func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operation, error) {
-	var node ast.Expression
-	node = &ast.BinaryExpression{
+	var node semantic.Expression
+	node = &semantic.BinaryExpression{
 		Operator: ast.EqualOperator,
-		Left: &ast.MemberExpression{
-			Object: &ast.Identifier{
+		Left: &semantic.MemberExpression{
+			Object: &semantic.Identifier{
 				Name: "r",
 			},
-			Property: &ast.StringLiteral{Value: "_metric"},
+			Property: "_metric",
 		},
-		Right: &ast.StringLiteral{
+		Right: &semantic.StringLiteral{
 			Value: metricName,
 		},
 	}
@@ -225,26 +226,26 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 		if !ok {
 			return nil, fmt.Errorf("unknown label match kind %d", label.Kind)
 		}
-		ref := &ast.MemberExpression{
-			Object: &ast.Identifier{
+		ref := &semantic.MemberExpression{
+			Object: &semantic.Identifier{
 				Name: "r",
 			},
-			Property: &ast.StringLiteral{Value: label.Name},
+			Property: label.Name,
 		}
-		var value ast.Expression
+		var value semantic.Expression
 		if label.Value.Type() == StringKind {
-			value = &ast.StringLiteral{
+			value = &semantic.StringLiteral{
 				Value: label.Value.Value().(string),
 			}
 		} else if label.Value.Type() == NumberKind {
-			value = &ast.FloatLiteral{
+			value = &semantic.FloatLiteral{
 				Value: label.Value.Value().(float64),
 			}
 		}
-		node = &ast.LogicalExpression{
+		node = &semantic.LogicalExpression{
 			Operator: ast.AndOperator,
 			Left:     node,
-			Right: &ast.BinaryExpression{
+			Right: &semantic.BinaryExpression{
 				Operator: op,
 				Left:     ref,
 				Right:    value,
@@ -255,8 +256,8 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.FilterOpSpec{
-			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
+			Fn: &semantic.ArrowFunctionExpression{
+				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 				Body:   node,
 			},
 		},

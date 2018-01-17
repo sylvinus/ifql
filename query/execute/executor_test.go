@@ -13,6 +13,7 @@ import (
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 var epoch = time.Unix(0, 0)
@@ -175,27 +176,27 @@ func TestExecutor_Execute(t *testing.T) {
 								plan.ProcedureIDFromOperationID("sum"):   "sum",
 								plan.ProcedureIDFromOperationID("count"): "count",
 							},
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-								Body: &ast.BinaryExpression{
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+								Body: &semantic.BinaryExpression{
 									Operator: ast.DivisionOperator,
-									Left: &ast.MemberExpression{
-										Object: &ast.MemberExpression{
-											Object: &ast.Identifier{
+									Left: &semantic.MemberExpression{
+										Object: &semantic.MemberExpression{
+											Object: &semantic.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "sum"},
+											Property: "sum",
 										},
-										Property: &ast.StringLiteral{Value: "_value"},
+										Property: "_value",
 									},
-									Right: &ast.MemberExpression{
-										Object: &ast.MemberExpression{
-											Object: &ast.Identifier{
+									Right: &semantic.MemberExpression{
+										Object: &semantic.MemberExpression{
+											Object: &semantic.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "count"},
+											Property: "count",
 										},
-										Property: &ast.StringLiteral{Value: "_value"},
+										Property: "_value",
 									},
 								},
 							},

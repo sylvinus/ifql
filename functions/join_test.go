@@ -14,6 +14,7 @@ import (
 	"github.com/influxdata/ifql/query/plan"
 	"github.com/influxdata/ifql/query/plan/plantest"
 	"github.com/influxdata/ifql/query/querytest"
+	"github.com/influxdata/ifql/semantic"
 )
 
 func TestJoin_NewQuery(t *testing.T) {
@@ -67,27 +68,27 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"host"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-								Body: &ast.BinaryExpression{
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+								Body: &semantic.BinaryExpression{
 									Operator: ast.AdditionOperator,
-									Left: &ast.MemberExpression{
-										Object: &ast.MemberExpression{
-											Object: &ast.Identifier{
+									Left: &semantic.MemberExpression{
+										Object: &semantic.MemberExpression{
+											Object: &semantic.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "a"},
+											Property: "a",
 										},
-										Property: &ast.StringLiteral{Value: "_value"},
+										Property: "_value",
 									},
-									Right: &ast.MemberExpression{
-										Object: &ast.MemberExpression{
-											Object: &ast.Identifier{
+									Right: &semantic.MemberExpression{
+										Object: &semantic.MemberExpression{
+											Object: &semantic.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "b"},
+											Property: "b",
 										},
-										Property: &ast.StringLiteral{Value: "_value"},
+										Property: "_value",
 									},
 								},
 							},
@@ -161,39 +162,39 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"t1"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-								Body: &ast.BinaryExpression{
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+								Body: &semantic.BinaryExpression{
 									Operator: ast.DivisionOperator,
-									Left: &ast.BinaryExpression{
+									Left: &semantic.BinaryExpression{
 										Operator: ast.SubtractionOperator,
-										Left: &ast.MemberExpression{
-											Object: &ast.MemberExpression{
-												Object: &ast.Identifier{
+										Left: &semantic.MemberExpression{
+											Object: &semantic.MemberExpression{
+												Object: &semantic.Identifier{
 													Name: "t",
 												},
-												Property: &ast.Identifier{Name: "a"},
+												Property: "a",
 											},
-											Property: &ast.StringLiteral{Value: "_value"},
+											Property: "_value",
 										},
-										Right: &ast.MemberExpression{
-											Object: &ast.MemberExpression{
-												Object: &ast.Identifier{
+										Right: &semantic.MemberExpression{
+											Object: &semantic.MemberExpression{
+												Object: &semantic.Identifier{
 													Name: "t",
 												},
-												Property: &ast.Identifier{Name: "b"},
+												Property: "b",
 											},
-											Property: &ast.StringLiteral{Value: "_value"},
+											Property: "_value",
 										},
 									},
-									Right: &ast.MemberExpression{
-										Object: &ast.MemberExpression{
-											Object: &ast.Identifier{
+									Right: &semantic.MemberExpression{
+										Object: &semantic.MemberExpression{
+											Object: &semantic.Identifier{
 												Name: "t",
 											},
-											Property: &ast.Identifier{Name: "b"},
+											Property: "b",
 										},
-										Property: &ast.StringLiteral{Value: "_value"},
+										Property: "_value",
 									},
 								},
 							},
@@ -226,7 +227,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 			"on":["t1","t2"],
 			"table_names": {"sum1":"a","count3":"b"},
 			"fn":{
-				"params": [{"type":"Property","key":{"type":"Identifier","name":"t"}}],
+				"params": [{"type":"FunctionParam","key":{"type":"Identifier","name":"t"}}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "+",
@@ -236,7 +237,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 							"type":"Identifier",
 							"name":"a"
 						},
-						"property": {"type":"StringLiteral","value":"_value"}
+						"property": "_value"
 					},
 					"right":{
 						"type": "MemberExpression",
@@ -244,7 +245,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 							"type":"Identifier",
 							"name":"b"
 						},
-						"property": {"type":"StringLiteral","value":"_value"}
+						"property": "_value"
 					}
 				}
 			}
@@ -255,21 +256,21 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		Spec: &functions.JoinOpSpec{
 			On:         []string{"t1", "t2"},
 			TableNames: map[query.OperationID]string{"sum1": "a", "count3": "b"},
-			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-				Body: &ast.BinaryExpression{
+			Fn: &semantic.ArrowFunctionExpression{
+				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+				Body: &semantic.BinaryExpression{
 					Operator: ast.AdditionOperator,
-					Left: &ast.MemberExpression{
-						Object: &ast.Identifier{
+					Left: &semantic.MemberExpression{
+						Object: &semantic.Identifier{
 							Name: "a",
 						},
-						Property: &ast.StringLiteral{Value: "_value"},
+						Property: "_value",
 					},
-					Right: &ast.MemberExpression{
-						Object: &ast.Identifier{
+					Right: &semantic.MemberExpression{
+						Object: &semantic.Identifier{
 							Name: "b",
 						},
-						Property: &ast.StringLiteral{Value: "_value"},
+						Property: "_value",
 					},
 				},
 			},
@@ -279,56 +280,56 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 }
 
 func TestMergeJoin_Process(t *testing.T) {
-	addFunction := &ast.ArrowFunctionExpression{
-		Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-		Body: &ast.BinaryExpression{
+	addFunction := &semantic.ArrowFunctionExpression{
+		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
-			Left: &ast.MemberExpression{
-				Object: &ast.MemberExpression{
-					Object: &ast.Identifier{
+			Left: &semantic.MemberExpression{
+				Object: &semantic.MemberExpression{
+					Object: &semantic.Identifier{
 						Name: "t",
 					},
-					Property: &ast.Identifier{Name: "a"},
+					Property: "a",
 				},
-				Property: &ast.StringLiteral{Value: "_value"},
+				Property: "_value",
 			},
-			Right: &ast.MemberExpression{
-				Object: &ast.MemberExpression{
-					Object: &ast.Identifier{
+			Right: &semantic.MemberExpression{
+				Object: &semantic.MemberExpression{
+					Object: &semantic.Identifier{
 						Name: "t",
 					},
-					Property: &ast.Identifier{Name: "b"},
+					Property: "b",
 				},
-				Property: &ast.StringLiteral{Value: "_value"},
+				Property: "_value",
 			},
 		},
 	}
-	passThroughFunc := &ast.ArrowFunctionExpression{
-		Params: []*ast.Property{{Key: &ast.Identifier{Name: "t"}}},
-		Body: &ast.ObjectExpression{
-			Properties: []*ast.Property{
+	passThroughFunc := &semantic.ArrowFunctionExpression{
+		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
+		Body: &semantic.ObjectExpression{
+			Properties: []*semantic.Property{
 				{
-					Key: &ast.Identifier{Name: "a"},
-					Value: &ast.MemberExpression{
-						Object: &ast.MemberExpression{
-							Object: &ast.Identifier{
+					Key: &semantic.Identifier{Name: "a"},
+					Value: &semantic.MemberExpression{
+						Object: &semantic.MemberExpression{
+							Object: &semantic.Identifier{
 								Name: "t",
 							},
-							Property: &ast.Identifier{Name: "a"},
+							Property: "a",
 						},
-						Property: &ast.StringLiteral{Value: "_value"},
+						Property: "_value",
 					},
 				},
 				{
-					Key: &ast.Identifier{Name: "b"},
-					Value: &ast.MemberExpression{
-						Object: &ast.MemberExpression{
-							Object: &ast.Identifier{
+					Key: &semantic.Identifier{Name: "b"},
+					Value: &semantic.MemberExpression{
+						Object: &semantic.MemberExpression{
+							Object: &semantic.Identifier{
 								Name: "t",
 							},
-							Property: &ast.Identifier{Name: "b"},
+							Property: "b",
 						},
-						Property: &ast.StringLiteral{Value: "_value"},
+						Property: "_value",
 					},
 				},
 			},

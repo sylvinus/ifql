@@ -10,6 +10,7 @@ import (
 	"github.com/influxdata/ifql/ast/asttest"
 	"github.com/influxdata/ifql/interpreter"
 	"github.com/influxdata/ifql/parser"
+	"github.com/influxdata/ifql/semantic"
 )
 
 var testScope = interpreter.NewScope()
@@ -109,18 +110,6 @@ func TestEval(t *testing.T) {
 			`,
 		},
 		{
-			name: "extra statements after return",
-			query: `
-            f = (r) => {
-                r2 = r * r
-                return (r - r2) / r2
-                x = r2 * r
-            }
-            f(r:2.0)
-			`,
-			wantErr: true,
-		},
-		{
 			name: "scope closing",
 			query: `
 			x = 5
@@ -149,8 +138,12 @@ func TestEval(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			graph, err := semantic.New(program)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-			err = interpreter.Eval(program, testScope.Nest(), nil)
+			err = interpreter.Eval(graph, testScope.Nest(), nil)
 			if !tc.wantErr && err != nil {
 				t.Fatal(err)
 			} else if tc.wantErr && err == nil {
@@ -161,7 +154,7 @@ func TestEval(t *testing.T) {
 
 }
 func TestFunction_Resolve(t *testing.T) {
-	var got *ast.ArrowFunctionExpression
+	var got *semantic.ArrowFunctionExpression
 	scope := interpreter.NewScope()
 	scope.Set("resolver", function{
 		name: "resolver",
@@ -186,16 +179,21 @@ func TestFunction_Resolve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := interpreter.Eval(program, scope, nil); err != nil {
+	graph, err := semantic.New(program)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := &ast.ArrowFunctionExpression{
-		Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-		Body: &ast.BinaryExpression{
+	if err := interpreter.Eval(graph, scope, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	want := &semantic.ArrowFunctionExpression{
+		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
-			Left:     &ast.Identifier{Name: "r"},
-			Right:    &ast.IntegerLiteral{Value: 42},
+			Left:     &semantic.Identifier{Name: "r"},
+			Right:    &semantic.IntegerLiteral{Value: 42},
 		},
 	}
 	if !cmp.Equal(want, got, asttest.CompareOptions...) {
@@ -223,6 +221,6 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 	return f.call(args, d)
 }
 
-func (f function) Resolve() (*ast.ArrowFunctionExpression, error) {
+func (f function) Resolve() (*semantic.ArrowFunctionExpression, error) {
 	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }

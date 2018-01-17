@@ -3,10 +3,10 @@ package functions
 import (
 	"fmt"
 
-	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const FromKind = "from"
@@ -56,7 +56,7 @@ type FromProcedureSpec struct {
 	Bounds    plan.BoundsSpec
 
 	FilterSet bool
-	Filter    *ast.ArrowFunctionExpression
+	Filter    *semantic.ArrowFunctionExpression
 
 	DescendingSet bool
 	Descending    bool

@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const MapKind = "map"
 
 type MapOpSpec struct {
-	Fn *ast.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.ArrowFunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -46,7 +46,7 @@ func (s *MapOpSpec) Kind() query.OperationKind {
 }
 
 type MapProcedureSpec struct {
-	Fn *ast.ArrowFunctionExpression
+	Fn *semantic.ArrowFunctionExpression
 }
 
 func newMapProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -65,7 +65,7 @@ func (s *MapProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *MapProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(MapProcedureSpec)
-	ns.Fn = s.Fn.Copy().(*ast.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
 	return ns
 }
 
@@ -137,7 +137,7 @@ func (t *mapTransformation) Process(id execute.DatasetID, b execute.Block) error
 	for _, p := range meta.Properties {
 		builder.AddCol(execute.ColMeta{
 			Label: p.Key,
-			Type:  p.Type,
+			Type:  execute.ConvertFromCompilerType(p.Type),
 			Kind:  execute.ValueColKind,
 		})
 	}
@@ -177,7 +177,7 @@ func (t *mapTransformation) Process(id execute.DatasetID, b execute.Block) error
 					case execute.Time:
 						builder.AppendTime(j, val)
 					default:
-						execute.PanicUnknownType(v.Type)
+						execute.PanicUnknownType(execute.ConvertFromCompilerType(v.Type))
 					}
 				default:
 					log.Printf("unknown column kind %v", c.Kind)

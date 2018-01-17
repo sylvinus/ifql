@@ -6,94 +6,95 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/query/execute"
+	"github.com/influxdata/ifql/compiler"
+	"github.com/influxdata/ifql/semantic"
 )
 
 func TestCompilationCache(t *testing.T) {
-	add := &ast.ArrowFunctionExpression{
-		Params: []*ast.Property{
-			{Key: &ast.Identifier{Name: "a"}},
-			{Key: &ast.Identifier{Name: "b"}},
+	add := &semantic.ArrowFunctionExpression{
+		Params: []*semantic.FunctionParam{
+			{Key: &semantic.Identifier{Name: "a"}},
+			{Key: &semantic.Identifier{Name: "b"}},
 		},
-		Body: &ast.BinaryExpression{
+		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
-			Left:     &ast.Identifier{Name: "a"},
-			Right:    &ast.Identifier{Name: "b"},
+			Left:     &semantic.Identifier{Name: "a"},
+			Right:    &semantic.Identifier{Name: "b"},
 		},
 	}
 	testCases := []struct {
 		name  string
-		types map[execute.ReferencePath]execute.DataType
-		scope map[execute.ReferencePath]execute.Value
-		want  execute.Value
+		types map[compiler.ReferencePath]compiler.Type
+		scope map[compiler.ReferencePath]compiler.Value
+		want  compiler.Value
 	}{
 		{
 			name: "floats",
-			types: map[execute.ReferencePath]execute.DataType{
-				"a": execute.TFloat,
-				"b": execute.TFloat,
+			types: map[compiler.ReferencePath]compiler.Type{
+				"a": compiler.TFloat,
+				"b": compiler.TFloat,
 			},
-			scope: map[execute.ReferencePath]execute.Value{
-				"a": execute.Value{
-					Type:  execute.TFloat,
+			scope: map[compiler.ReferencePath]compiler.Value{
+				"a": compiler.Value{
+					Type:  compiler.TFloat,
 					Value: float64(5.0),
 				},
-				"b": execute.Value{
-					Type:  execute.TFloat,
+				"b": compiler.Value{
+					Type:  compiler.TFloat,
 					Value: float64(4.0),
 				},
 			},
-			want: execute.Value{
-				Type:  execute.TFloat,
+			want: compiler.Value{
+				Type:  compiler.TFloat,
 				Value: float64(9.0),
 			},
 		},
 		{
 			name: "ints",
-			types: map[execute.ReferencePath]execute.DataType{
-				"a": execute.TInt,
-				"b": execute.TInt,
+			types: map[compiler.ReferencePath]compiler.Type{
+				"a": compiler.TInt,
+				"b": compiler.TInt,
 			},
-			scope: map[execute.ReferencePath]execute.Value{
-				"a": execute.Value{
-					Type:  execute.TInt,
+			scope: map[compiler.ReferencePath]compiler.Value{
+				"a": compiler.Value{
+					Type:  compiler.TInt,
 					Value: int64(5),
 				},
-				"b": execute.Value{
-					Type:  execute.TInt,
+				"b": compiler.Value{
+					Type:  compiler.TInt,
 					Value: int64(4),
 				},
 			},
-			want: execute.Value{
-				Type:  execute.TInt,
+			want: compiler.Value{
+				Type:  compiler.TInt,
 				Value: int64(9),
 			},
 		},
 		{
 			name: "uints",
-			types: map[execute.ReferencePath]execute.DataType{
-				"a": execute.TUInt,
-				"b": execute.TUInt,
+			types: map[compiler.ReferencePath]compiler.Type{
+				"a": compiler.TUInt,
+				"b": compiler.TUInt,
 			},
-			scope: map[execute.ReferencePath]execute.Value{
-				"a": execute.Value{
-					Type:  execute.TUInt,
+			scope: map[compiler.ReferencePath]compiler.Value{
+				"a": compiler.Value{
+					Type:  compiler.TUInt,
 					Value: uint64(5),
 				},
-				"b": execute.Value{
-					Type:  execute.TUInt,
+				"b": compiler.Value{
+					Type:  compiler.TUInt,
 					Value: uint64(4),
 				},
 			},
-			want: execute.Value{
-				Type:  execute.TUInt,
+			want: compiler.Value{
+				Type:  compiler.TUInt,
 				Value: uint64(9),
 			},
 		},
 	}
 
 	//Reuse the same cache for all test cases
-	cache := execute.NewCompilationCache(add, []execute.ReferencePath{"a", "b"})
+	cache := compiler.NewCompilationCache(add, []compiler.ReferencePath{"a", "b"})
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {

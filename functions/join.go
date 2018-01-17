@@ -7,10 +7,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/influxdata/ifql/ast"
+	"github.com/influxdata/ifql/compiler"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +23,7 @@ type JoinOpSpec struct {
 	On []string `json:"on"`
 	// Fn is a function accepting a single parameter.
 	// The parameter is map if records for each of the parent operations.
-	Fn *ast.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.ArrowFunctionExpression `json:"fn"`
 	// TableNames are the names to give to each parent when populating the parameter for the function.
 	// The first parent is referenced by the first name and so forth.
 	// TODO(nathanielc): Change this to a map of parent operation IDs to names.
@@ -83,9 +84,9 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On         []string                     `json:"keys"`
-	Fn         *ast.ArrowFunctionExpression `json:"f"`
-	TableNames map[plan.ProcedureID]string  `json:"table_names"`
+	On         []string                          `json:"keys"`
+	Fn         *semantic.ArrowFunctionExpression `json:"f"`
+	TableNames map[plan.ProcedureID]string       `json:"table_names"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -118,7 +119,7 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.On = make([]string, len(s.On))
 	copy(ns.On, s.On)
 
-	ns.Fn = s.Fn.Copy().(*ast.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
 
 	return ns
 }
@@ -463,7 +464,7 @@ func (t *joinTables) Join() (execute.Block, error) {
 	for _, p := range meta.Properties {
 		builder.AddCol(execute.ColMeta{
 			Label: p.Key,
-			Type:  p.Type,
+			Type:  execute.ConvertFromCompilerType(p.Type),
 			Kind:  execute.ValueColKind,
 		})
 	}
@@ -540,7 +541,7 @@ func (t *joinTables) Join() (execute.Block, error) {
 							case execute.Time:
 								builder.AppendTime(j, val)
 							default:
-								execute.PanicUnknownType(v.Type)
+								execute.PanicUnknownType(execute.ConvertFromCompilerType(v.Type))
 							}
 						default:
 							log.Printf("unexpected column %v", c)
@@ -639,30 +640,30 @@ func (k joinKey) Less(o joinKey) bool {
 }
 
 type joinFunc struct {
-	references       []execute.Reference
-	referencePaths   []execute.ReferencePath
-	compilationCache *execute.CompilationCache
-	scope            execute.Scope
+	references       []compiler.Reference
+	referencePaths   []compiler.ReferencePath
+	compilationCache *compiler.CompilationCache
+	scope            compiler.Scope
 
-	scopeCols map[execute.ReferencePath]int
-	types     map[execute.ReferencePath]execute.DataType
+	scopeCols map[compiler.ReferencePath]int
+	types     map[compiler.ReferencePath]compiler.Type
 
 	tables     map[string]*execute.ColListBlock
-	preparedFn execute.CompiledFn
+	preparedFn compiler.Func
 
 	isWrap  bool
-	wrapMap execute.Map
+	wrapMap compiler.Map
 }
 
-func NewRowJoinFunction(fn *ast.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
+func NewRowJoinFunction(fn *semantic.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
 	if len(fn.Params) != 1 {
 		return nil, errors.New("join function should only have one parameter for the map of tables")
 	}
-	references, err := execute.FindReferences(fn)
+	references, err := compiler.FindReferences(fn)
 	if err != nil {
 		return nil, err
 	}
-	referencePaths := make([]execute.ReferencePath, len(references))
+	referencePaths := make([]compiler.ReferencePath, len(references))
 	for i, r := range references {
 		if len(r) != 3 {
 			return nil, fmt.Errorf("unknown reference %v", r.Path())
@@ -672,15 +673,15 @@ func NewRowJoinFunction(fn *ast.ArrowFunctionExpression, parentIDs []execute.Dat
 	return &joinFunc{
 		references:       references,
 		referencePaths:   referencePaths,
-		compilationCache: execute.NewCompilationCache(fn, referencePaths),
-		scope:            make(execute.Scope, len(references)),
-		scopeCols:        make(map[execute.ReferencePath]int, len(references)),
-		types:            make(map[execute.ReferencePath]execute.DataType, len(references)),
-		wrapMap: execute.Map{
-			Meta: execute.MapMeta{
-				Properties: []execute.MapPropertyMeta{{Key: execute.DefaultValueColLabel}},
+		compilationCache: compiler.NewCompilationCache(fn, referencePaths),
+		scope:            make(compiler.Scope, len(references)),
+		scopeCols:        make(map[compiler.ReferencePath]int, len(references)),
+		types:            make(map[compiler.ReferencePath]compiler.Type, len(references)),
+		wrapMap: compiler.Map{
+			Meta: compiler.MapMeta{
+				Properties: []compiler.MapPropertyMeta{{Key: execute.DefaultValueColLabel}},
 			},
-			Values: make(map[string]execute.Value, 1),
+			Values: make(map[string]compiler.Value, 1),
 		},
 	}, nil
 }
@@ -696,7 +697,7 @@ func (f *joinFunc) Prepare(tables map[string]*execute.ColListBlock) error {
 		for j, c := range cols {
 			if r[2] == c.Label {
 				f.scopeCols[rp] = j
-				f.types[rp] = c.Type
+				f.types[rp] = execute.ConvertToCompilerType(c.Type)
 				found = true
 				break
 			}
@@ -713,21 +714,21 @@ func (f *joinFunc) Prepare(tables map[string]*execute.ColListBlock) error {
 	f.preparedFn = fn
 
 	t := f.preparedFn.Type()
-	f.isWrap = t != execute.TMap
+	f.isWrap = t != compiler.TMap
 	if f.isWrap {
 		f.wrapMap.Meta.Properties[0].Type = t
 	}
 	return nil
 }
 
-func (f *joinFunc) MapMeta() execute.MapMeta {
+func (f *joinFunc) MapMeta() compiler.MapMeta {
 	if f.isWrap {
 		return f.wrapMap.Meta
 	}
 	return f.preparedFn.MapMeta()
 }
 
-func (f *joinFunc) Eval(rows map[string]int) (execute.Map, error) {
+func (f *joinFunc) Eval(rows map[string]int) (compiler.Map, error) {
 	for i, r := range f.references {
 		rp := f.referencePaths[i]
 		tableName := r[1]
@@ -736,7 +737,7 @@ func (f *joinFunc) Eval(rows map[string]int) (execute.Map, error) {
 	}
 	v, err := f.preparedFn.Eval(f.scope)
 	if err != nil {
-		return execute.Map{}, err
+		return compiler.Map{}, err
 	}
 	if f.isWrap {
 		f.wrapMap.Values[execute.DefaultValueColLabel] = v
@@ -745,7 +746,7 @@ func (f *joinFunc) Eval(rows map[string]int) (execute.Map, error) {
 	return v.Map(), nil
 }
 
-func readValue(i, j int, table *execute.ColListBlock) execute.Value {
+func readValue(i, j int, table *execute.ColListBlock) compiler.Value {
 	var v interface{}
 	cols := table.Cols()
 	switch cols[j].Type {
@@ -760,8 +761,8 @@ func readValue(i, j int, table *execute.ColListBlock) execute.Value {
 	case execute.TString:
 		v = table.AtString(i, j)
 	}
-	return execute.Value{
-		Type:  cols[j].Type,
+	return compiler.Value{
+		Type:  execute.ConvertToCompilerType(cols[j].Type),
 		Value: v,
 	}
 }

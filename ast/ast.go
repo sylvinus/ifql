@@ -164,14 +164,6 @@ func (s *ReturnStatement) Copy() Node {
 	return ns
 }
 
-// Declaration statements are used to declare the type of one or more local variables.
-type Declaration interface {
-	Statement
-	declaration()
-}
-
-func (*VariableDeclaration) declaration() {}
-
 // VariableDeclaration declares one or more variables using assignment
 type VariableDeclaration struct {
 	*BaseNode

@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/interpreter"
 	"github.com/influxdata/ifql/parser"
+	"github.com/influxdata/ifql/semantic"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -30,7 +30,11 @@ const (
 // Compile parses IFQL into an AST; validates and checks the AST; and produces a query Spec.
 func Compile(ctx context.Context, q string) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
-	program, err := parser.NewAST(q)
+	astProg, err := parser.NewAST(q)
+	if err != nil {
+		return nil, err
+	}
+	semProg, err := semantic.New(astProg)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +48,7 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := interpreter.Eval(program, scope, d); err != nil {
+	if err := interpreter.Eval(semProg, scope, d); err != nil {
 		return nil, err
 	}
 	spec := d.ToSpec()
@@ -85,7 +89,11 @@ var builtinScope = interpreter.NewScope()
 
 // RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
 func RegisterBuiltIn(script string) {
-	program, err := parser.NewAST(script)
+	astProg, err := parser.NewAST(script)
+	if err != nil {
+		panic(err)
+	}
+	semProg, err := semantic.New(astProg)
 	if err != nil {
 		panic(err)
 	}
@@ -93,7 +101,7 @@ func RegisterBuiltIn(script string) {
 	// Create new query domain
 	d := new(queryDomain)
 
-	if err := interpreter.Eval(program, builtinScope, d); err != nil {
+	if err := interpreter.Eval(semProg, builtinScope, d); err != nil {
 		panic(err)
 	}
 }
@@ -232,7 +240,7 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 	}, nil
 }
 
-func (f function) Resolve() (*ast.ArrowFunctionExpression, error) {
+func (f function) Resolve() (*semantic.ArrowFunctionExpression, error) {
 	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }
 
