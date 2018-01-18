@@ -12,21 +12,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-// Pass through interpreter types so that consumers of the query package need not know about the interpreter package.
-const (
-	TInvalid  = interpreter.TInvalid
-	TString   = interpreter.TString
-	TInt      = interpreter.TInt
-	TUInt     = interpreter.TUInt
-	TFloat    = interpreter.TFloat
-	TBool     = interpreter.TBool
-	TTime     = interpreter.TTime
-	TDuration = interpreter.TDuration
-	TFunction = interpreter.TFunction
-	TArray    = interpreter.TArray
-	TMap      = interpreter.TMap
-)
-
 // Compile parses IFQL into an AST; validates and checks the AST; and produces a query Spec.
 func Compile(ctx context.Context, q string) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
@@ -34,13 +19,15 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.Finish()
+	s, _ = opentracing.StartSpanFromContext(ctx, "compile")
+	defer s.Finish()
+
+	// Convert AST program to a semantic program
 	semProg, err := semantic.New(astProg)
 	if err != nil {
 		return nil, err
 	}
-	s.Finish()
-	s, _ = opentracing.StartSpanFromContext(ctx, "compile")
-	defer s.Finish()
 
 	// Create top-level builtin scope
 	scope := builtinScope.Nest()
@@ -172,14 +159,15 @@ func (d *queryDomain) ToSpec() *Spec {
 	}
 }
 
-var TTable = interpreter.RegisterType("table")
+//var TTable = semantic.RegisterKind("table")
+var TTable = semantic.Kind(42)
 
 // Table represents a table created via a function call.
 type Table struct {
 	ID OperationID
 }
 
-func (t Table) Type() interpreter.Type {
+func (t Table) Type() semantic.Kind {
 	return TTable
 }
 
@@ -204,8 +192,8 @@ type function struct {
 	parentID     OperationID
 }
 
-func (f function) Type() interpreter.Type {
-	return interpreter.TFunction
+func (f function) Type() semantic.Kind {
+	return semantic.Function
 }
 
 func (f function) Value() interface{} {
@@ -240,7 +228,7 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 	}, nil
 }
 
-func (f function) Resolve() (*semantic.ArrowFunctionExpression, error) {
+func (f function) Resolve() (*semantic.FunctionExpression, error) {
 	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }
 

@@ -82,7 +82,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 								"from0": "x",
 								"from1": "y",
 							},
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{
 									{Key: &semantic.Identifier{Name: "t"}},
 								},
@@ -92,7 +92,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 											Key: &semantic.Identifier{Name: "x"},
 											Value: &semantic.MemberExpression{
 												Object: &semantic.MemberExpression{
-													Object:   &semantic.Identifier{Name: "t"},
+													Object:   &semantic.IdentifierExpression{Name: "t"},
 													Property: "x",
 												},
 												Property: "_value",
@@ -102,7 +102,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 											Key: &semantic.Identifier{Name: "y"},
 											Value: &semantic.MemberExpression{
 												Object: &semantic.MemberExpression{
-													Object:   &semantic.Identifier{Name: "t"},
+													Object:   &semantic.IdentifierExpression{Name: "t"},
 													Property: "y",
 												},
 												Property: "_value",

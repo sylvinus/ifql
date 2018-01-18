@@ -32,7 +32,7 @@ func createFromOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		Database: db,
 	}
 
-	if array, ok, err := args.GetArray("hosts", query.TString); err != nil {
+	if array, ok, err := args.GetArray("hosts", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Hosts = array.AsStrings()
@@ -56,7 +56,7 @@ type FromProcedureSpec struct {
 	Bounds    plan.BoundsSpec
 
 	FilterSet bool
-	Filter    *semantic.ArrowFunctionExpression
+	Filter    *semantic.FunctionExpression
 
 	DescendingSet bool
 	Descending    bool

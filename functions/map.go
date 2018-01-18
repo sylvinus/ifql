@@ -13,7 +13,7 @@ import (
 const MapKind = "map"
 
 type MapOpSpec struct {
-	Fn *semantic.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.FunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -46,7 +46,7 @@ func (s *MapOpSpec) Kind() query.OperationKind {
 }
 
 type MapProcedureSpec struct {
-	Fn *semantic.ArrowFunctionExpression
+	Fn *semantic.FunctionExpression
 }
 
 func newMapProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -65,7 +65,7 @@ func (s *MapProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *MapProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(MapProcedureSpec)
-	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.FunctionExpression)
 	return ns
 }
 
@@ -132,12 +132,12 @@ func (t *mapTransformation) Process(id execute.DatasetID, b execute.Block) error
 		}
 	}
 
-	meta := t.fn.MapMeta()
+	mapType := t.fn.Type()
 	// Add new value columns
-	for _, p := range meta.Properties {
+	for k, t := range mapType.Properties() {
 		builder.AddCol(execute.ColMeta{
-			Label: p.Key,
-			Type:  execute.ConvertFromCompilerType(p.Type),
+			Label: k,
+			Type:  execute.ConvertFromKind(t.Kind()),
 			Kind:  execute.ValueColKind,
 		})
 	}
@@ -162,23 +162,8 @@ func (t *mapTransformation) Process(id execute.DatasetID, b execute.Block) error
 				case execute.TagColKind:
 					builder.AppendString(j, rr.AtString(i, colMap[j]))
 				case execute.ValueColKind:
-					v := m.Values[c.Label]
-					switch val := v.Value.(type) {
-					case bool:
-						builder.AppendBool(j, val)
-					case int64:
-						builder.AppendInt(j, val)
-					case uint64:
-						builder.AppendUInt(j, val)
-					case float64:
-						builder.AppendFloat(j, val)
-					case string:
-						builder.AppendString(j, val)
-					case execute.Time:
-						builder.AppendTime(j, val)
-					default:
-						execute.PanicUnknownType(execute.ConvertFromCompilerType(v.Type))
-					}
+					v := m.Get(c.Label)
+					execute.AppendValue(builder, j, v)
 				default:
 					log.Printf("unknown column kind %v", c.Kind)
 				}

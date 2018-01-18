@@ -8,6 +8,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const GroupKind = "group"
@@ -27,17 +28,17 @@ func init() {
 
 func createGroupOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(GroupOpSpec)
-	if array, ok, err := args.GetArray("by", query.TString); err != nil {
+	if array, ok, err := args.GetArray("by", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.By = array.AsStrings()
 	}
-	if array, ok, err := args.GetArray("keep", query.TString); err != nil {
+	if array, ok, err := args.GetArray("keep", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Keep = array.AsStrings()
 	}
-	if array, ok, err := args.GetArray("except", query.TString); err != nil {
+	if array, ok, err := args.GetArray("except", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Except = array.AsStrings()

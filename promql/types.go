@@ -212,7 +212,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	node = &semantic.BinaryExpression{
 		Operator: ast.EqualOperator,
 		Left: &semantic.MemberExpression{
-			Object: &semantic.Identifier{
+			Object: &semantic.IdentifierExpression{
 				Name: "r",
 			},
 			Property: "_metric",
@@ -227,7 +227,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 			return nil, fmt.Errorf("unknown label match kind %d", label.Kind)
 		}
 		ref := &semantic.MemberExpression{
-			Object: &semantic.Identifier{
+			Object: &semantic.IdentifierExpression{
 				Name: "r",
 			},
 			Property: label.Name,
@@ -256,7 +256,7 @@ func NewWhereOperation(metricName string, labels []*LabelMatcher) (*query.Operat
 	return &query.Operation{
 		ID: "where", // TODO: Change this to a UUID
 		Spec: &functions.FilterOpSpec{
-			Fn: &semantic.ArrowFunctionExpression{
+			Fn: &semantic.FunctionExpression{
 				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 				Body:   node,
 			},

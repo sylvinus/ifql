@@ -10,6 +10,7 @@ import (
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/semantic"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 func TestParsePromQL(t *testing.T) {
@@ -371,7 +372,7 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 								Body: &semantic.LogicalExpression{
 									Operator: ast.AndOperator,
@@ -380,7 +381,7 @@ func TestBuild(t *testing.T) {
 										Left: &semantic.BinaryExpression{
 											Operator: ast.EqualOperator,
 											Left: &semantic.MemberExpression{
-												Object: &semantic.Identifier{
+												Object: &semantic.IdentifierExpression{
 													Name: "r",
 												},
 												Property: "_metric",
@@ -392,7 +393,7 @@ func TestBuild(t *testing.T) {
 										Right: &semantic.BinaryExpression{
 											Operator: ast.EqualOperator,
 											Left: &semantic.MemberExpression{
-												Object: &semantic.Identifier{
+												Object: &semantic.IdentifierExpression{
 													Name: "r",
 												},
 												Property: "mode",
@@ -405,7 +406,7 @@ func TestBuild(t *testing.T) {
 									Right: &semantic.BinaryExpression{
 										Operator: ast.EqualOperator,
 										Left: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "r",
 											},
 											Property: "cpu",
@@ -452,14 +453,14 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 								Body: &semantic.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &semantic.BinaryExpression{
 										Operator: ast.EqualOperator,
 										Left: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "r",
 											},
 											Property: "_metric",
@@ -471,7 +472,7 @@ func TestBuild(t *testing.T) {
 									Right: &semantic.BinaryExpression{
 										Operator: ast.EqualOperator,
 										Left: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "r",
 											},
 											Property: "mode",
@@ -516,14 +517,14 @@ func TestBuild(t *testing.T) {
 					{
 						ID: "where",
 						Spec: &functions.FilterOpSpec{
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 								Body: &semantic.LogicalExpression{
 									Operator: ast.AndOperator,
 									Left: &semantic.BinaryExpression{
 										Operator: ast.EqualOperator,
 										Left: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "r",
 											},
 											Property: "_metric",
@@ -535,7 +536,7 @@ func TestBuild(t *testing.T) {
 									Right: &semantic.BinaryExpression{
 										Operator: ast.EqualOperator,
 										Left: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "r",
 											},
 											Property: "_measurement",
@@ -577,7 +578,7 @@ func TestBuild(t *testing.T) {
 				t.Errorf("Build() %s error = %v, wantErr %v", tt.promql, err, tt.wantErr)
 				return
 			}
-			opts := []cmp.Option{cmp.AllowUnexported(query.Spec{}), cmpopts.IgnoreUnexported(query.Spec{})}
+			opts := append(semantictest.CmpOptions, []cmp.Option{cmp.AllowUnexported(query.Spec{}), cmpopts.IgnoreUnexported(query.Spec{})}...)
 			if !cmp.Equal(tt.want, got, opts...) {
 				t.Errorf("Build() = %s -want/+got\n%s", tt.promql, cmp.Diff(tt.want, got, opts...))
 			}

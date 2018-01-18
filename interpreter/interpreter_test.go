@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/ast/asttest"
 	"github.com/influxdata/ifql/interpreter"
 	"github.com/influxdata/ifql/parser"
 	"github.com/influxdata/ifql/semantic"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 var testScope = interpreter.NewScope()
@@ -76,7 +76,7 @@ func TestEval(t *testing.T) {
 			`,
 		},
 		{
-			name: "logcial expressions short circuit",
+			name: "logical expressions short circuit",
 			query: `
             six = six()
             nine = nine()
@@ -154,7 +154,7 @@ func TestEval(t *testing.T) {
 
 }
 func TestFunction_Resolve(t *testing.T) {
-	var got *semantic.ArrowFunctionExpression
+	var got *semantic.FunctionExpression
 	scope := interpreter.NewScope()
 	scope.Set("resolver", function{
 		name: "resolver",
@@ -188,16 +188,16 @@ func TestFunction_Resolve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := &semantic.ArrowFunctionExpression{
+	want := &semantic.FunctionExpression{
 		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
-			Left:     &semantic.Identifier{Name: "r"},
+			Left:     &semantic.IdentifierExpression{Name: "r"},
 			Right:    &semantic.IntegerLiteral{Value: 42},
 		},
 	}
-	if !cmp.Equal(want, got, asttest.CompareOptions...) {
-		t.Errorf("unexpected resoved function: -want/+got\n%s", cmp.Diff(want, got, asttest.CompareOptions...))
+	if !cmp.Equal(want, got, semantictest.CmpOptions...) {
+		t.Errorf("unexpected resoved function: -want/+got\n%s", cmp.Diff(want, got, semantictest.CmpOptions...))
 	}
 }
 
@@ -206,8 +206,8 @@ type function struct {
 	call func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error)
 }
 
-func (f function) Type() interpreter.Type {
-	return interpreter.TFunction
+func (f function) Type() semantic.Kind {
+	return semantic.Function
 }
 
 func (f function) Value() interface{} {
@@ -221,6 +221,6 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 	return f.call(args, d)
 }
 
-func (f function) Resolve() (*semantic.ArrowFunctionExpression, error) {
+func (f function) Resolve() (*semantic.FunctionExpression, error) {
 	return nil, fmt.Errorf("function %q cannot be resolved", f.name)
 }

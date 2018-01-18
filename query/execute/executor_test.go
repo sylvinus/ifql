@@ -176,13 +176,13 @@ func TestExecutor_Execute(t *testing.T) {
 								plan.ProcedureIDFromOperationID("sum"):   "sum",
 								plan.ProcedureIDFromOperationID("count"): "count",
 							},
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 								Body: &semantic.BinaryExpression{
 									Operator: ast.DivisionOperator,
 									Left: &semantic.MemberExpression{
 										Object: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "t",
 											},
 											Property: "sum",
@@ -191,7 +191,7 @@ func TestExecutor_Execute(t *testing.T) {
 									},
 									Right: &semantic.MemberExpression{
 										Object: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "t",
 											},
 											Property: "count",
