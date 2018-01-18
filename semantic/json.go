@@ -14,7 +14,7 @@ func (p *Program) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  p.Type(),
+		Type:  p.NodeType(),
 		Alias: (*Alias)(p),
 	}
 	return json.Marshal(raw)
@@ -48,7 +48,7 @@ func (s *BlockStatement) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  s.Type(),
+		Type:  s.NodeType(),
 		Alias: (*Alias)(s),
 	}
 	return json.Marshal(raw)
@@ -82,7 +82,7 @@ func (s *ExpressionStatement) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  s.Type(),
+		Type:  s.NodeType(),
 		Alias: (*Alias)(s),
 	}
 	return json.Marshal(raw)
@@ -113,7 +113,7 @@ func (s *ReturnStatement) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  s.Type(),
+		Type:  s.NodeType(),
 		Alias: (*Alias)(s),
 	}
 	return json.Marshal(raw)
@@ -144,24 +144,13 @@ func (d *VariableDeclaration) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  d.Type(),
+		Type:  d.NodeType(),
 		Alias: (*Alias)(d),
 	}
 	return json.Marshal(raw)
 }
-func (d *VariableDeclarator) MarshalJSON() ([]byte, error) {
-	type Alias VariableDeclarator
-	raw := struct {
-		Type string `json:"type"`
-		*Alias
-	}{
-		Type:  d.Type(),
-		Alias: (*Alias)(d),
-	}
-	return json.Marshal(raw)
-}
-func (d *VariableDeclarator) UnmarshalJSON(data []byte) error {
-	type Alias VariableDeclarator
+func (d *VariableDeclaration) UnmarshalJSON(data []byte) error {
+	type Alias VariableDeclaration
 	raw := struct {
 		*Alias
 		Init json.RawMessage `json:"init"`
@@ -170,7 +159,7 @@ func (d *VariableDeclarator) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if raw.Alias != nil {
-		*d = *(*VariableDeclarator)(raw.Alias)
+		*d = *(*VariableDeclaration)(raw.Alias)
 	}
 
 	e, err := unmarshalExpression(raw.Init)
@@ -186,7 +175,7 @@ func (e *CallExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -218,7 +207,7 @@ func (e *MemberExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -250,7 +239,7 @@ func (e *ArrowFunctionExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -281,7 +270,7 @@ func (e *FunctionParam) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -312,7 +301,7 @@ func (e *BinaryExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -350,7 +339,7 @@ func (e *UnaryExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -382,7 +371,7 @@ func (e *LogicalExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -420,7 +409,7 @@ func (e *ArrayExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -454,7 +443,7 @@ func (e *ObjectExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -465,7 +454,7 @@ func (e *ConditionalExpression) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  e.Type(),
+		Type:  e.NodeType(),
 		Alias: (*Alias)(e),
 	}
 	return json.Marshal(raw)
@@ -510,7 +499,7 @@ func (p *Property) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  p.Type(),
+		Type:  p.NodeType(),
 		Alias: (*Alias)(p),
 	}
 	return json.Marshal(raw)
@@ -537,13 +526,24 @@ func (p *Property) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+func (e *IdentifierExpression) MarshalJSON() ([]byte, error) {
+	type Alias IdentifierExpression
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  e.NodeType(),
+		Alias: (*Alias)(e),
+	}
+	return json.Marshal(raw)
+}
 func (i *Identifier) MarshalJSON() ([]byte, error) {
 	type Alias Identifier
 	raw := struct {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  i.Type(),
+		Type:  i.NodeType(),
 		Alias: (*Alias)(i),
 	}
 	return json.Marshal(raw)
@@ -554,7 +554,7 @@ func (l *StringLiteral) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 	}
 	return json.Marshal(raw)
@@ -565,7 +565,7 @@ func (l *BooleanLiteral) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 	}
 	return json.Marshal(raw)
@@ -576,7 +576,7 @@ func (l *FloatLiteral) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 	}
 	return json.Marshal(raw)
@@ -588,7 +588,7 @@ func (l *IntegerLiteral) MarshalJSON() ([]byte, error) {
 		*Alias
 		Value string `json:"value"`
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 		Value: strconv.FormatInt(l.Value, 10),
 	}
@@ -622,7 +622,7 @@ func (l *UnsignedIntegerLiteral) MarshalJSON() ([]byte, error) {
 		*Alias
 		Value string `json:"value"`
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 		Value: strconv.FormatUint(l.Value, 10),
 	}
@@ -656,7 +656,7 @@ func (l *RegexpLiteral) MarshalJSON() ([]byte, error) {
 		*Alias
 		Value string `json:"value"`
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 		Value: l.Value.String(),
 	}
@@ -690,7 +690,7 @@ func (l *DurationLiteral) MarshalJSON() ([]byte, error) {
 		*Alias
 		Value string `json:"value"`
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 		Value: l.Value.String(),
 	}
@@ -724,7 +724,7 @@ func (l *DateTimeLiteral) MarshalJSON() ([]byte, error) {
 		Type string `json:"type"`
 		*Alias
 	}{
-		Type:  l.Type(),
+		Type:  l.NodeType(),
 		Alias: (*Alias)(l),
 	}
 	return json.Marshal(raw)
@@ -750,7 +750,7 @@ func unmarshalStatement(msg json.RawMessage) (Statement, error) {
 	}
 	s, ok := n.(Statement)
 	if !ok {
-		return nil, fmt.Errorf("node %q is not a statement", n.Type())
+		return nil, fmt.Errorf("node %q is not a statement", n.NodeType())
 	}
 	return s, nil
 }
@@ -764,7 +764,7 @@ func unmarshalExpression(msg json.RawMessage) (Expression, error) {
 	}
 	e, ok := n.(Expression)
 	if !ok {
-		return nil, fmt.Errorf("node %q is not an expression", n.Type())
+		return nil, fmt.Errorf("node %q is not an expression", n.NodeType())
 	}
 	return e, nil
 }
@@ -778,7 +778,7 @@ func unmarshalLiteral(msg json.RawMessage) (Literal, error) {
 	}
 	e, ok := n.(Literal)
 	if !ok {
-		return nil, fmt.Errorf("node %q is not a literal", n.Type())
+		return nil, fmt.Errorf("node %q is not a literal", n.NodeType())
 	}
 	return e, nil
 }
@@ -808,8 +808,6 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(ReturnStatement)
 	case "VariableDeclaration":
 		node = new(VariableDeclaration)
-	case "VariableDeclarator":
-		node = new(VariableDeclarator)
 	case "CallExpression":
 		node = new(CallExpression)
 	case "MemberExpression":
@@ -828,6 +826,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(ArrayExpression)
 	case "Identifier":
 		node = new(Identifier)
+	case "IdentifierExpression":
+		node = new(IdentifierExpression)
 	case "StringLiteral":
 		node = new(StringLiteral)
 	case "BooleanLiteral":

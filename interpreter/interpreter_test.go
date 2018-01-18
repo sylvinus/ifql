@@ -192,7 +192,7 @@ func TestFunction_Resolve(t *testing.T) {
 		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
 		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
-			Left:     &semantic.Identifier{Name: "r"},
+			Left:     &semantic.IdentifierExpression{Name: "r"},
 			Right:    &semantic.IntegerLiteral{Value: 42},
 		},
 	}
@@ -206,8 +206,8 @@ type function struct {
 	call func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error)
 }
 
-func (f function) Type() interpreter.Type {
-	return interpreter.TFunction
+func (f function) Type() semantic.Kind {
+	return semantic.KFunction
 }
 
 func (f function) Value() interface{} {

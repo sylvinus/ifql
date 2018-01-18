@@ -14,17 +14,18 @@ import (
 
 // Pass through interpreter types so that consumers of the query package need not know about the interpreter package.
 const (
-	TInvalid  = interpreter.TInvalid
-	TString   = interpreter.TString
-	TInt      = interpreter.TInt
-	TUInt     = interpreter.TUInt
-	TFloat    = interpreter.TFloat
-	TBool     = interpreter.TBool
-	TTime     = interpreter.TTime
-	TDuration = interpreter.TDuration
-	TFunction = interpreter.TFunction
-	TArray    = interpreter.TArray
-	TMap      = interpreter.TMap
+	TInvalid  = semantic.KInvalid
+	TString   = semantic.KString
+	TInt      = semantic.KInt
+	TUInt     = semantic.KUInt
+	TFloat    = semantic.KFloat
+	TBool     = semantic.KBool
+	TTime     = semantic.KTime
+	TDuration = semantic.KDuration
+	TFunction = semantic.KFunction
+	TArray    = semantic.KArray
+	TMap      = semantic.KMap
+	TRegex    = semantic.KRegex
 )
 
 // Compile parses IFQL into an AST; validates and checks the AST; and produces a query Spec.
@@ -34,13 +35,15 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.Finish()
+	s, _ = opentracing.StartSpanFromContext(ctx, "compile")
+	defer s.Finish()
+
+	// Convert AST program to a semantic program
 	semProg, err := semantic.New(astProg)
 	if err != nil {
 		return nil, err
 	}
-	s.Finish()
-	s, _ = opentracing.StartSpanFromContext(ctx, "compile")
-	defer s.Finish()
 
 	// Create top-level builtin scope
 	scope := builtinScope.Nest()
@@ -172,14 +175,15 @@ func (d *queryDomain) ToSpec() *Spec {
 	}
 }
 
-var TTable = interpreter.RegisterType("table")
+//var TTable = semantic.RegisterKind("table")
+var TTable = semantic.Kind(42)
 
 // Table represents a table created via a function call.
 type Table struct {
 	ID OperationID
 }
 
-func (t Table) Type() interpreter.Type {
+func (t Table) Type() semantic.Kind {
 	return TTable
 }
 
@@ -204,8 +208,8 @@ type function struct {
 	parentID     OperationID
 }
 
-func (f function) Type() interpreter.Type {
-	return interpreter.TFunction
+func (f function) Type() semantic.Kind {
+	return semantic.KFunction
 }
 
 func (f function) Value() interface{} {

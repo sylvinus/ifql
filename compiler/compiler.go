@@ -73,7 +73,7 @@ func findReferences(n semantic.Expression) ([]Reference, error) {
 			return nil, err
 		}
 		return []Reference{r}, nil
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		r, err := determineReference(n)
 		if err != nil {
 			return nil, err
@@ -115,7 +115,7 @@ func determineReference(n semantic.Expression) (Reference, error) {
 		}
 		r = append(r, n.Property)
 		return r, nil
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		return Reference{n.Name}, nil
 	default:
 		return nil, fmt.Errorf("unexpected reference expression type %T", n)
@@ -226,18 +226,11 @@ func compile(n semantic.Node, types map[ReferencePath]Type) (Evaluator, error) {
 			Evaluator: node,
 		}, nil
 	case *semantic.VariableDeclaration:
-		if len(n.Declarations) != 1 {
-			return nil, errors.New("var declaration must have exactly one declaration")
-		}
-		d := n.Declarations[0]
-		node, err := compile(d.Init, types)
+		node, err := compile(n.Init, types)
 		if err != nil {
 			return nil, err
 		}
-		r, err := determineReference(d.ID)
-		if err != nil {
-			return nil, err
-		}
+		r := Reference{n.ID.Name}
 		rp := r.Path()
 		// Update type information with new type
 		types[rp] = node.Type()
@@ -266,7 +259,7 @@ func compile(n semantic.Node, types map[ReferencePath]Type) (Evaluator, error) {
 			meta:         meta,
 			properties:   properties,
 		}, nil
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		r, err := determineReference(n)
 		if err != nil {
 			return nil, err

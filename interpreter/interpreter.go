@@ -71,14 +71,12 @@ func (itrp interpreter) doStatement(stmt semantic.Statement, scope *Scope) error
 	return nil
 }
 
-func (itrp interpreter) doVariableDeclaration(declarations *semantic.VariableDeclaration, scope *Scope) error {
-	for _, vd := range declarations.Declarations {
-		value, err := itrp.doExpression(vd.Init, scope)
-		if err != nil {
-			return err
-		}
-		scope.Set(vd.ID.Name, value)
+func (itrp interpreter) doVariableDeclaration(declaration *semantic.VariableDeclaration, scope *Scope) error {
+	value, err := itrp.doExpression(declaration.Init, scope)
+	if err != nil {
+		return err
 	}
+	scope.Set(declaration.ID.Name, value)
 	return nil
 }
 
@@ -88,7 +86,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		return itrp.doLiteral(e)
 	case *semantic.ArrayExpression:
 		return itrp.doArray(e, scope)
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		value, ok := scope.Lookup(e.Name)
 		if !ok {
 			return nil, fmt.Errorf("undefined identifier %q", e.Name)
@@ -116,17 +114,17 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		}
 		switch e.Operator {
 		case ast.NotOperator:
-			if v.Type() != TBool {
+			if v.Type() != semantic.KBool {
 				return nil, fmt.Errorf("operand to unary expression is not a boolean value, got %v", v.Type())
 			}
 			return NewBoolValue(!v.Value().(bool)), nil
 		case ast.SubtractionOperator:
 			switch t := v.Type(); t {
-			case TInt:
+			case semantic.KInt:
 				return NewIntValue(-v.Value().(int64)), nil
-			case TFloat:
+			case semantic.KFloat:
 				return NewFloatValue(-v.Value().(float64)), nil
-			case TDuration:
+			case semantic.KDuration:
 				return NewDurationValue(-v.Value().(time.Duration)), nil
 			default:
 				return nil, fmt.Errorf("operand to unary expression is not a number value, got %v", v.Type())
@@ -160,7 +158,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		if err != nil {
 			return nil, err
 		}
-		if l.Type() != TBool {
+		if l.Type() != semantic.KBool {
 			return nil, fmt.Errorf("left operand to logcial expression is not a boolean value, got %v", l.Type())
 		}
 		left := l.Value().(bool)
@@ -177,7 +175,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		if err != nil {
 			return nil, err
 		}
-		if r.Type() != TBool {
+		if r.Type() != semantic.KBool {
 			return nil, errors.New("right operand to logcial expression is not a boolean value")
 		}
 		right := r.Value().(bool)
@@ -192,7 +190,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		}
 	case *semantic.ArrowFunctionExpression:
 		return value{
-			t: TFunction,
+			t: semantic.KFunction,
 			v: arrowFunc{
 				e:     e,
 				scope: scope.Nest(),
@@ -205,7 +203,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 
 func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
-		Type:     TInvalid,
+		Type:     semantic.KInvalid,
 		Elements: make([]Value, len(a.Elements)),
 	}
 	for i, el := range a.Elements {
@@ -213,7 +211,7 @@ func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Valu
 		if err != nil {
 			return nil, err
 		}
-		if array.Type == TInvalid {
+		if array.Type == semantic.KInvalid {
 			array.Type = v.Type()
 		}
 		if array.Type != v.Type() {
@@ -222,7 +220,7 @@ func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Valu
 		array.Elements[i] = v
 	}
 	return value{
-		t: TArray,
+		t: semantic.KArray,
 		v: array,
 	}, nil
 }
@@ -248,40 +246,40 @@ func (itrp interpreter) doLiteral(lit semantic.Literal) (Value, error) {
 	switch l := lit.(type) {
 	case *semantic.DateTimeLiteral:
 		return value{
-			t: TTime,
+			t: semantic.KTime,
 			v: l.Value,
 		}, nil
 	case *semantic.DurationLiteral:
 		return value{
-			t: TDuration,
+			t: semantic.KDuration,
 			v: l.Value,
 		}, nil
 	case *semantic.FloatLiteral:
 		return value{
-			t: TFloat,
+			t: semantic.KFloat,
 			v: l.Value,
 		}, nil
 	case *semantic.IntegerLiteral:
 		return value{
-			t: TInt,
+			t: semantic.KInt,
 			v: l.Value,
 		}, nil
 	case *semantic.UnsignedIntegerLiteral:
 		return value{
-			t: TUInt,
+			t: semantic.KUInt,
 			v: l.Value,
 		}, nil
 	case *semantic.StringLiteral:
 		return value{
-			t: TString,
+			t: semantic.KString,
 			v: l.Value,
 		}, nil
 	case *semantic.BooleanLiteral:
 		return value{
-			t: TBool,
+			t: semantic.KBool,
 			v: l.Value,
 		}, nil
-	// TODO(nathanielc): Support lists and maps
+	// semantic.TODO(nathanielc): Support lists and maps
 	default:
 		return nil, fmt.Errorf("unknown literal type %T", lit)
 	}
@@ -290,7 +288,7 @@ func (itrp interpreter) doLiteral(lit semantic.Literal) (Value, error) {
 
 func functionName(call *semantic.CallExpression) string {
 	switch callee := call.Callee.(type) {
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		return callee.Name
 	case *semantic.MemberExpression:
 		return callee.Property
@@ -304,7 +302,7 @@ func (itrp interpreter) doCall(call *semantic.CallExpression, scope *Scope) (Val
 	if err != nil {
 		return nil, err
 	}
-	if callee.Type() != TFunction {
+	if callee.Type() != semantic.KFunction {
 		return nil, fmt.Errorf("cannot call function, value is of type %v", callee.Type())
 	}
 	f := callee.Value().(Function)
@@ -357,7 +355,7 @@ type Scope struct {
 func NewScope() *Scope {
 	return &Scope{
 		values:      make(map[string]Value),
-		returnValue: value{t: TInvalid},
+		returnValue: value{t: semantic.KInvalid},
 	}
 }
 
@@ -381,7 +379,7 @@ func (s *Scope) SetReturn(value Value) {
 	s.returnValue = value
 }
 
-// Return reports the return value for this scope. If no return value has been set a value with type TInvalid is returned.
+// Return reports the return value for this scope. If no return value has been set a value with type semantic.TInvalid is returned.
 func (s *Scope) Return() Value {
 	return s.returnValue
 }
@@ -395,8 +393,8 @@ func (s *Scope) Nest() *Scope {
 
 // Value represents any value that can be the result of evaluating any expression.
 type Value interface {
-	// Type reports the type of value
-	Type() Type
+	// semantic.Type reports the type of value
+	Type() semantic.Kind
 	// Value returns the actual value represented.
 	Value() interface{}
 	// Property returns a new value which is a property of this value.
@@ -404,11 +402,11 @@ type Value interface {
 }
 
 type value struct {
-	t Type
+	t semantic.Kind
 	v interface{}
 }
 
-func (v value) Type() Type {
+func (v value) Type() semantic.Kind {
 	return v.t
 }
 func (v value) Value() interface{} {
@@ -418,110 +416,46 @@ func (v value) Property(name string) (Value, error) {
 	return nil, fmt.Errorf("property %q does not exist", name)
 }
 
-// Type represents the builtin supported types within IFQL
-type Type int
-
-const (
-	TInvalid  Type = iota // Go type nil
-	TString               // Go type string
-	TInt                  // Go type int64
-	TUInt                 // Go type uint64
-	TFloat                // Go type float64
-	TBool                 // Go type bool
-	TTime                 // Go type time.Time
-	TDuration             // Go type time.Duration
-	TFunction             // Go type Function
-	TArray                // Go type Array
-	TMap                  // Go type Map
-	endBuiltInTypes
-)
-
 func NewBoolValue(v bool) Value {
 	return value{
-		t: TBool,
+		t: semantic.KBool,
 		v: v,
 	}
 }
 func NewIntValue(v int64) Value {
 	return value{
-		t: TInt,
+		t: semantic.KInt,
 		v: v,
 	}
 }
 func NewUIntValue(v uint64) Value {
 	return value{
-		t: TUInt,
+		t: semantic.KUInt,
 		v: v,
 	}
 }
 func NewFloatValue(v float64) Value {
 	return value{
-		t: TFloat,
+		t: semantic.KFloat,
 		v: v,
 	}
 }
 func NewStringValue(v string) Value {
 	return value{
-		t: TString,
+		t: semantic.KString,
 		v: v,
 	}
 }
 func NewTimeValue(v time.Time) Value {
 	return value{
-		t: TTime,
+		t: semantic.KTime,
 		v: v,
 	}
 }
 func NewDurationValue(v time.Duration) Value {
 	return value{
-		t: TDuration,
+		t: semantic.KDuration,
 		v: v,
-	}
-}
-
-var lastType = endBuiltInTypes
-var extraTypes = make(map[string]Type)
-var extraTypesLookup = make(map[Type]string)
-
-func RegisterType(name string) Type {
-	if _, ok := extraTypes[name]; ok {
-		panic(fmt.Errorf("duplicate registration for ifql type %q", name))
-	}
-	lastType++
-	extraTypes[name] = lastType
-	extraTypesLookup[lastType] = name
-	return lastType
-}
-
-// String converts Type into a string representation of the type's name
-func (t Type) String() string {
-	switch t {
-	case TInvalid:
-		return "invalid"
-	case TString:
-		return "string"
-	case TInt:
-		return "int"
-	case TFloat:
-		return "float"
-	case TBool:
-		return "bool"
-	case TTime:
-		return "time"
-	case TDuration:
-		return "duration"
-	case TFunction:
-		return "function"
-	case TArray:
-		return "array"
-	case TMap:
-		return "map"
-	default:
-		name, ok := extraTypesLookup[t]
-		if !ok {
-			return fmt.Sprintf("unknown type %d", int(t))
-		}
-		return name
 	}
 }
 
@@ -570,7 +504,7 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 			return nil, err
 		}
 		v := f.scope.Return()
-		if v.Type() == TInvalid {
+		if v.Type() == semantic.KInvalid {
 			return nil, errors.New("arrow function has no return value")
 		}
 		return v, nil
@@ -591,7 +525,7 @@ func (f arrowFunc) Resolve() (*semantic.ArrowFunctionExpression, error) {
 
 func (f arrowFunc) resolveIdentifiers(n semantic.Node) (semantic.Node, error) {
 	switch n := n.(type) {
-	case *semantic.Identifier:
+	case *semantic.IdentifierExpression:
 		for _, p := range f.e.Params {
 			if n.Name == p.Key.Name {
 				// Identifier is a parameter do not resolve
@@ -624,14 +558,6 @@ func (f arrowFunc) resolveIdentifiers(n semantic.Node) (semantic.Node, error) {
 		}
 		n.Argument = node.(semantic.Expression)
 	case *semantic.VariableDeclaration:
-		for i, d := range n.Declarations {
-			node, err := f.resolveIdentifiers(d)
-			if err != nil {
-				return nil, err
-			}
-			n.Declarations[i] = node.(*semantic.VariableDeclarator)
-		}
-	case *semantic.VariableDeclarator:
 		node, err := f.resolveIdentifiers(n.Init)
 		if err != nil {
 			return nil, err
@@ -724,37 +650,37 @@ func (f arrowFunc) resolveIdentifiers(n semantic.Node) (semantic.Node, error) {
 
 func resolveValue(v Value) (semantic.Node, error) {
 	switch t := v.Type(); t {
-	case TString:
+	case semantic.KString:
 		return &semantic.StringLiteral{
 			Value: v.Value().(string),
 		}, nil
-	case TInt:
+	case semantic.KInt:
 		return &semantic.IntegerLiteral{
 			Value: v.Value().(int64),
 		}, nil
-	case TUInt:
+	case semantic.KUInt:
 		return &semantic.UnsignedIntegerLiteral{
 			Value: v.Value().(uint64),
 		}, nil
-	case TFloat:
+	case semantic.KFloat:
 		return &semantic.FloatLiteral{
 			Value: v.Value().(float64),
 		}, nil
-	case TBool:
+	case semantic.KBool:
 		return &semantic.BooleanLiteral{
 			Value: v.Value().(bool),
 		}, nil
-	case TTime:
+	case semantic.KTime:
 		return &semantic.DateTimeLiteral{
 			Value: v.Value().(time.Time),
 		}, nil
-	case TDuration:
+	case semantic.KDuration:
 		return &semantic.DurationLiteral{
 			Value: v.Value().(time.Duration),
 		}, nil
-	case TFunction:
+	case semantic.KFunction:
 		return v.Value().(Function).Resolve()
-	case TArray:
+	case semantic.KArray:
 		arr := v.Value().(Array)
 		node := new(semantic.ArrayExpression)
 		node.Elements = make([]semantic.Expression, len(arr.Elements))
@@ -766,7 +692,7 @@ func resolveValue(v Value) (semantic.Node, error) {
 			node.Elements[i] = n.(semantic.Expression)
 		}
 		return node, nil
-	case TMap:
+	case semantic.KMap:
 		m := v.Value().(Map)
 		node := new(semantic.ObjectExpression)
 		node.Properties = make([]*semantic.Property, 0, len(m.Elements))
@@ -789,12 +715,12 @@ func resolveValue(v Value) (semantic.Node, error) {
 // Array represents an sequence of elements
 // All elements must be the same type
 type Array struct {
-	Type     Type
+	Type     semantic.Kind
 	Elements []Value
 }
 
 func (a Array) AsStrings() []string {
-	if a.Type != TString {
+	if a.Type != semantic.KString {
 		return nil
 	}
 	strs := make([]string, len(a.Elements))
@@ -810,8 +736,8 @@ type Map struct {
 	Elements map[string]Value
 }
 
-func (m Map) Type() Type {
-	return TMap
+func (m Map) Type() semantic.Kind {
+	return semantic.KMap
 }
 func (m Map) Value() interface{} {
 	return m
@@ -825,9 +751,9 @@ func (m Map) Property(name string) (Value, error) {
 }
 
 // Arguments provides access to the keyword arguments passed to a function.
-// The Get{Type} methods return three values: the typed value of the arg,
+// semantic.The Get{Type} methods return three values: the typed value of the arg,
 // whether the argument was specified and any errors about the argument type.
-// The GetRequired{Type} methods return only two values, the typed value of the arg and any errors, a missing argument is considered an error in this case.
+// semantic.The GetRequired{Type} methods return only two values, the typed value of the arg and any errors, a missing argument is considered an error in this case.
 type Arguments interface {
 	Get(name string) (Value, bool)
 	GetRequired(name string) (Value, error)
@@ -837,7 +763,7 @@ type Arguments interface {
 	GetFloat(name string) (float64, bool, error)
 	GetBool(name string) (bool, bool, error)
 	GetFunction(name string) (Function, bool, error)
-	GetArray(name string, t Type) (Array, bool, error)
+	GetArray(name string, t semantic.Kind) (Array, bool, error)
 	GetMap(name string) (Map, bool, error)
 
 	GetRequiredString(name string) (string, error)
@@ -845,7 +771,7 @@ type Arguments interface {
 	GetRequiredFloat(name string) (float64, error)
 	GetRequiredBool(name string) (bool, error)
 	GetRequiredFunction(name string) (Function, error)
-	GetRequiredArray(name string, t Type) (Array, error)
+	GetRequiredArray(name string, t semantic.Kind) (Array, error)
 	GetRequiredMap(name string) (Map, error)
 
 	// listUnused returns the list of provided arguments that were not used by the function.
@@ -880,64 +806,64 @@ func (a *arguments) GetRequired(name string) (Value, error) {
 }
 
 func (a *arguments) GetString(name string) (string, bool, error) {
-	v, ok, err := a.get(name, TString, false)
+	v, ok, err := a.get(name, semantic.KString, false)
 	if err != nil || !ok {
 		return "", ok, err
 	}
 	return v.Value().(string), ok, nil
 }
 func (a *arguments) GetRequiredString(name string) (string, error) {
-	v, _, err := a.get(name, TString, true)
+	v, _, err := a.get(name, semantic.KString, true)
 	if err != nil {
 		return "", err
 	}
 	return v.Value().(string), nil
 }
 func (a *arguments) GetInt(name string) (int64, bool, error) {
-	v, ok, err := a.get(name, TInt, false)
+	v, ok, err := a.get(name, semantic.KInt, false)
 	if err != nil || !ok {
 		return 0, ok, err
 	}
 	return v.Value().(int64), ok, nil
 }
 func (a *arguments) GetRequiredInt(name string) (int64, error) {
-	v, _, err := a.get(name, TInt, true)
+	v, _, err := a.get(name, semantic.KInt, true)
 	if err != nil {
 		return 0, err
 	}
 	return v.Value().(int64), nil
 }
 func (a *arguments) GetFloat(name string) (float64, bool, error) {
-	v, ok, err := a.get(name, TFloat, false)
+	v, ok, err := a.get(name, semantic.KFloat, false)
 	if err != nil || !ok {
 		return 0, ok, err
 	}
 	return v.Value().(float64), ok, nil
 }
 func (a *arguments) GetRequiredFloat(name string) (float64, error) {
-	v, _, err := a.get(name, TFloat, true)
+	v, _, err := a.get(name, semantic.KFloat, true)
 	if err != nil {
 		return 0, err
 	}
 	return v.Value().(float64), nil
 }
 func (a *arguments) GetBool(name string) (bool, bool, error) {
-	v, ok, err := a.get(name, TBool, false)
+	v, ok, err := a.get(name, semantic.KBool, false)
 	if err != nil || !ok {
 		return false, ok, err
 	}
 	return v.Value().(bool), ok, nil
 }
 func (a *arguments) GetRequiredBool(name string) (bool, error) {
-	v, _, err := a.get(name, TBool, true)
+	v, _, err := a.get(name, semantic.KBool, true)
 	if err != nil {
 		return false, err
 	}
 	return v.Value().(bool), nil
 }
 
-func (a *arguments) GetArray(name string, t Type) (Array, bool, error) {
-	v, ok, err := a.get(name, TArray, false)
+func (a *arguments) GetArray(name string, t semantic.Kind) (Array, bool, error) {
+	v, ok, err := a.get(name, semantic.KArray, false)
 	if err != nil || !ok {
 		return Array{}, ok, err
 	}
@@ -947,8 +873,8 @@ func (a *arguments) GetArray(name string, t Type) (Array, bool, error) {
 	}
 	return v.Value().(Array), ok, nil
 }
-func (a *arguments) GetRequiredArray(name string, t Type) (Array, error) {
-	v, _, err := a.get(name, TArray, true)
+func (a *arguments) GetRequiredArray(name string, t semantic.Kind) (Array, error) {
+	v, _, err := a.get(name, semantic.KArray, true)
 	if err != nil {
 		return Array{}, err
 	}
@@ -959,14 +885,14 @@ func (a *arguments) GetRequiredArray(name string, t Type) (Array, error) {
 	return arr, nil
 }
 func (a *arguments) GetFunction(name string) (Function, bool, error) {
-	v, ok, err := a.get(name, TFunction, false)
+	v, ok, err := a.get(name, semantic.KFunction, false)
 	if err != nil || !ok {
 		return nil, ok, err
 	}
 	return v.Value().(Function), ok, nil
 }
 func (a *arguments) GetRequiredFunction(name string) (Function, error) {
-	v, _, err := a.get(name, TFunction, true)
+	v, _, err := a.get(name, semantic.KFunction, true)
 	if err != nil {
 		return nil, err
 	}
@@ -974,21 +900,21 @@ func (a *arguments) GetRequiredFunction(name string) (Function, error) {
 }
 
 func (a *arguments) GetMap(name string) (Map, bool, error) {
-	v, ok, err := a.get(name, TMap, false)
+	v, ok, err := a.get(name, semantic.KMap, false)
 	if err != nil || !ok {
 		return Map{}, ok, err
 	}
 	return v.Value().(Map), ok, nil
 }
 func (a *arguments) GetRequiredMap(name string) (Map, error) {
-	v, _, err := a.get(name, TMap, true)
+	v, _, err := a.get(name, semantic.KMap, true)
 	if err != nil {
 		return Map{}, err
 	}
 	return v.Value().(Map), nil
 }
 
-func (a *arguments) get(name string, typ Type, required bool) (Value, bool, error) {
+func (a *arguments) get(name string, typ semantic.Kind, required bool) (Value, bool, error) {
 	a.used[name] = true
 	v, ok := a.params[name]
 	if !ok {
@@ -1018,69 +944,69 @@ type binaryFunc func(l, r Value) Value
 
 type binaryFuncSignature struct {
 	operator    ast.OperatorKind
-	left, right Type
+	left, right semantic.Kind
 }
 
 var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 	//---------------
 	// Math Operators
 	//---------------
-	{operator: ast.AdditionOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.AdditionOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewIntValue(l + r)
 	},
-	{operator: ast.AdditionOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.AdditionOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewUIntValue(l + r)
 	},
-	{operator: ast.AdditionOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.AdditionOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewFloatValue(l + r)
 	},
-	{operator: ast.SubtractionOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.SubtractionOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewIntValue(l - r)
 	},
-	{operator: ast.SubtractionOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.SubtractionOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewUIntValue(l - r)
 	},
-	{operator: ast.SubtractionOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.SubtractionOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewFloatValue(l - r)
 	},
-	{operator: ast.MultiplicationOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.MultiplicationOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewIntValue(l * r)
 	},
-	{operator: ast.MultiplicationOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.MultiplicationOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewUIntValue(l * r)
 	},
-	{operator: ast.MultiplicationOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.MultiplicationOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewFloatValue(l * r)
 	},
-	{operator: ast.DivisionOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.DivisionOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewIntValue(l / r)
 	},
-	{operator: ast.DivisionOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.DivisionOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewUIntValue(l / r)
 	},
-	{operator: ast.DivisionOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.DivisionOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewFloatValue(l / r)
@@ -1092,12 +1018,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// LessThanEqualOperator
 
-	{operator: ast.LessThanEqualOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l <= r)
 	},
-	{operator: ast.LessThanEqualOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1105,12 +1031,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) <= r)
 	},
-	{operator: ast.LessThanEqualOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) <= r)
 	},
-	{operator: ast.LessThanEqualOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1118,27 +1044,27 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l <= uint64(r))
 	},
-	{operator: ast.LessThanEqualOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l <= r)
 	},
-	{operator: ast.LessThanEqualOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) <= r)
 	},
-	{operator: ast.LessThanEqualOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l <= float64(r))
 	},
-	{operator: ast.LessThanEqualOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l <= float64(r))
 	},
-	{operator: ast.LessThanEqualOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanEqualOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l <= r)
@@ -1146,12 +1072,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// LessThanOperator
 
-	{operator: ast.LessThanOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l < r)
 	},
-	{operator: ast.LessThanOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1159,12 +1085,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) < r)
 	},
-	{operator: ast.LessThanOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) < r)
 	},
-	{operator: ast.LessThanOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1172,27 +1098,27 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l < uint64(r))
 	},
-	{operator: ast.LessThanOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l < r)
 	},
-	{operator: ast.LessThanOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) < r)
 	},
-	{operator: ast.LessThanOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l < float64(r))
 	},
-	{operator: ast.LessThanOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l < float64(r))
 	},
-	{operator: ast.LessThanOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.LessThanOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l < r)
@@ -1200,12 +1126,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// GreaterThanEqualOperator
 
-	{operator: ast.GreaterThanEqualOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l >= r)
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1213,12 +1139,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) >= r)
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) >= r)
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1226,27 +1152,27 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l >= uint64(r))
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l >= r)
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) >= r)
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l >= float64(r))
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l >= float64(r))
 	},
-	{operator: ast.GreaterThanEqualOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanEqualOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l >= r)
@@ -1254,12 +1180,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// GreaterThanOperator
 
-	{operator: ast.GreaterThanOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l > r)
 	},
-	{operator: ast.GreaterThanOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1267,12 +1193,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) > r)
 	},
-	{operator: ast.GreaterThanOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) > r)
 	},
-	{operator: ast.GreaterThanOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1280,27 +1206,27 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l > uint64(r))
 	},
-	{operator: ast.GreaterThanOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l > r)
 	},
-	{operator: ast.GreaterThanOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) > r)
 	},
-	{operator: ast.GreaterThanOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l > float64(r))
 	},
-	{operator: ast.GreaterThanOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l > float64(r))
 	},
-	{operator: ast.GreaterThanOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.GreaterThanOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l > r)
@@ -1308,12 +1234,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// EqualOperator
 
-	{operator: ast.EqualOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l == r)
 	},
-	{operator: ast.EqualOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1321,12 +1247,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) == r)
 	},
-	{operator: ast.EqualOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) == r)
 	},
-	{operator: ast.EqualOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1334,32 +1260,32 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l == uint64(r))
 	},
-	{operator: ast.EqualOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l == r)
 	},
-	{operator: ast.EqualOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) == r)
 	},
-	{operator: ast.EqualOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l == float64(r))
 	},
-	{operator: ast.EqualOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l == float64(r))
 	},
-	{operator: ast.EqualOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l == r)
 	},
-	{operator: ast.EqualOperator, left: TString, right: TString}: func(lv, rv Value) Value {
+	{operator: ast.EqualOperator, left: semantic.KString, right: semantic.KString}: func(lv, rv Value) Value {
 		l := lv.Value().(string)
 		r := rv.Value().(string)
 		return NewBoolValue(l == r)
@@ -1367,12 +1293,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 
 	// NotEqualOperator
 
-	{operator: ast.NotEqualOperator, left: TInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l != r)
 	},
-	{operator: ast.NotEqualOperator, left: TInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(uint64)
 		if l < 0 {
@@ -1380,12 +1306,12 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(uint64(l) != r)
 	},
-	{operator: ast.NotEqualOperator, left: TInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(int64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) != r)
 	},
-	{operator: ast.NotEqualOperator, left: TUInt, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KUInt, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(int64)
 		if r < 0 {
@@ -1393,27 +1319,27 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		}
 		return NewBoolValue(l != uint64(r))
 	},
-	{operator: ast.NotEqualOperator, left: TUInt, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KUInt, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l != r)
 	},
-	{operator: ast.NotEqualOperator, left: TUInt, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KUInt, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(uint64)
 		r := rv.Value().(float64)
 		return NewBoolValue(float64(l) != r)
 	},
-	{operator: ast.NotEqualOperator, left: TFloat, right: TInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KFloat, right: semantic.KInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(int64)
 		return NewBoolValue(l != float64(r))
 	},
-	{operator: ast.NotEqualOperator, left: TFloat, right: TUInt}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KFloat, right: semantic.KUInt}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(uint64)
 		return NewBoolValue(l != float64(r))
 	},
-	{operator: ast.NotEqualOperator, left: TFloat, right: TFloat}: func(lv, rv Value) Value {
+	{operator: ast.NotEqualOperator, left: semantic.KFloat, right: semantic.KFloat}: func(lv, rv Value) Value {
 		l := lv.Value().(float64)
 		r := rv.Value().(float64)
 		return NewBoolValue(l != r)

@@ -151,8 +151,9 @@ func mergeArrowFunction(a, b *semantic.ArrowFunctionExpression) *semantic.ArrowF
 	}
 	for i, p := range a.Params {
 		passThroughArgs.Properties[i] = &semantic.Property{
-			Key:   p.Key,
-			Value: p.Key,
+			Key: p.Key,
+			//TODO(nathanielc): Construct valid IdentifierExpression with Declaration for the value.
+			//Value: p.Key,
 		}
 	}
 

@@ -58,38 +58,26 @@ func TestJSONMarshal(t *testing.T) {
 		{
 			name: "variable declaration",
 			node: &semantic.VariableDeclaration{
-				Declarations: []*semantic.VariableDeclarator{
-					{
-						ID:   &semantic.Identifier{Name: "a"},
-						Init: &semantic.StringLiteral{Value: "hello"},
-					},
-				},
-			},
-			want: `{"type":"VariableDeclaration","declarations":[{"type":"VariableDeclarator","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}]}`,
-		},
-		{
-			name: "variable declarator",
-			node: &semantic.VariableDeclarator{
 				ID:   &semantic.Identifier{Name: "a"},
 				Init: &semantic.StringLiteral{Value: "hello"},
 			},
-			want: `{"type":"VariableDeclarator","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
+			want: `{"type":"VariableDeclaration","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
 		},
 		{
 			name: "call expression",
 			node: &semantic.CallExpression{
-				Callee:    &semantic.Identifier{Name: "a"},
+				Callee:    &semantic.IdentifierExpression{Name: "a"},
 				Arguments: &semantic.ObjectExpression{Properties: []*semantic.Property{{Key: &semantic.Identifier{Name: "s"}, Value: &semantic.StringLiteral{Value: "hello"}}}},
 			},
-			want: `{"type":"CallExpression","callee":{"type":"Identifier","name":"a"},"arguments":{"type":"ObjectExpression","properties":[{"type":"Property","key":{"type":"Identifier","name":"s"},"value":{"type":"StringLiteral","value":"hello"}}]}}`,
+			want: `{"type":"CallExpression","callee":{"type":"IdentifierExpression","name":"a"},"arguments":{"type":"ObjectExpression","properties":[{"type":"Property","key":{"type":"Identifier","name":"s"},"value":{"type":"StringLiteral","value":"hello"}}]}}`,
 		},
 		{
 			name: "member expression",
 			node: &semantic.MemberExpression{
-				Object:   &semantic.Identifier{Name: "a"},
+				Object:   &semantic.IdentifierExpression{Name: "a"},
 				Property: "hello",
 			},
-			want: `{"type":"MemberExpression","object":{"type":"Identifier","name":"a"},"property":"hello"}`,
+			want: `{"type":"MemberExpression","object":{"type":"IdentifierExpression","name":"a"},"property":"hello"}`,
 		},
 		{
 			name: "arrow function expression",

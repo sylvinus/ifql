@@ -331,7 +331,7 @@ func toStoragePredicate(n semantic.Expression, objectName string) (*storage.Node
 		}, nil
 	case *semantic.MemberExpression:
 		// Sanity check that the object is the objectName identifier
-		if ident, ok := n.Object.(*semantic.Identifier); !ok || ident.Name != objectName {
+		if ident, ok := n.Object.(*semantic.IdentifierExpression); !ok || ident.Name != objectName {
 			return nil, fmt.Errorf("unknown object %q", n.Object)
 		}
 		if n.Property == "_value" {
