@@ -9,33 +9,53 @@ import (
 	"github.com/influxdata/ifql/semantic"
 )
 
+var scope = interpreter.NewScope()
+
 func completer(d prompt.Document) []prompt.Suggest {
-	return nil
+	names := scope.Names()
+	s := make([]prompt.Suggest, len(names))
+	for i, n := range scope.Names() {
+		s[i] = prompt.Suggest{
+			Text: n,
+		}
+	}
+	return s
+}
+
+func input(t string) {
+	if t == "" {
+		return
+	}
+	astProg, err := parser.NewAST(t)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	semProg, err := semantic.New(astProg)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if err := interpreter.Eval(semProg, scope, nil); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	v := scope.Return()
+	if v.Type() != semantic.KInvalid {
+		fmt.Println(v.Value())
+	}
 }
 
 func main() {
-	fmt.Println("Please select table.")
-	for {
-		t := prompt.Input("> ", completer)
-		if t == "exit" {
-			break
-		}
-		astProg, err := parser.NewAST(t)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		semProg, err := semantic.New(astProg)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		if err := interpreter.Eval(semProg, interpreter.NewScope(), nil); err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-	}
+	scope = interpreter.NewScope()
+	p := prompt.New(
+		input,
+		completer,
+		prompt.OptionPrefix("> "),
+		prompt.OptionTitle("ifql"),
+	)
+	p.Run()
 }

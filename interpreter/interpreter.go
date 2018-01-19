@@ -33,16 +33,18 @@ func (itrp interpreter) eval(program *semantic.Program, scope *Scope) error {
 }
 
 func (itrp interpreter) doStatement(stmt semantic.Statement, scope *Scope) error {
+	scope.SetReturn(value{t: semantic.KInvalid})
 	switch s := stmt.(type) {
 	case *semantic.VariableDeclaration:
 		if err := itrp.doVariableDeclaration(s, scope); err != nil {
 			return err
 		}
 	case *semantic.ExpressionStatement:
-		_, err := itrp.doExpression(s.Expression, scope)
+		v, err := itrp.doExpression(s.Expression, scope)
 		if err != nil {
 			return err
 		}
+		scope.SetReturn(v)
 	case *semantic.BlockStatement:
 		nested := scope.Nest()
 		for i, stmt := range s.Body {
@@ -382,6 +384,17 @@ func (s *Scope) SetReturn(value Value) {
 // Return reports the return value for this scope. If no return value has been set a value with type semantic.TInvalid is returned.
 func (s *Scope) Return() Value {
 	return s.returnValue
+}
+
+func (s *Scope) Names() []string {
+	if s == nil {
+		return nil
+	}
+	names := s.parent.Names()
+	for k := range s.values {
+		names = append(names, k)
+	}
+	return names
 }
 
 // Nest returns a new nested scope.
