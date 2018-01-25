@@ -24,6 +24,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io"
+	"strings"
 )
 
 var version string
@@ -92,6 +94,11 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	http.Handle("/query", http.HandlerFunc(HandleQuery))
 	http.Handle("/queries", http.HandlerFunc(HandleQueries))
+	http.Handle("/ping", http.HandlerFunc(HandlePing))
+	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		log.Println(req)
+		w.WriteHeader(http.StatusNotFound)
+	}))
 
 	if !opts.ReportingDisabled {
 		id := ID(string(opts.IDFile))
@@ -106,6 +113,10 @@ func main() {
 	log.Fatal(http.ListenAndServe(opts.Addr, nil))
 }
 
+func HandlePing(w http.ResponseWriter, req *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // TODO (pauldix): pull all this out into a server object that can
 //                 be tested. Alas, demo day waits for no person.
 
@@ -116,6 +127,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 
 	atomic.AddInt64(&queryCount, 1)
 	queryCounter.Inc()
+	log.Println(req)
 
 	var (
 		q   *ifql.Query
@@ -138,6 +150,46 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte("must pass query in q parameter"))
 			return
 		}
+
+		//if query == "SHOW DATABASES" {
+		//	w.WriteHeader(http.StatusOK)
+		//	w.Write([]byte(`{"results":[{"statement_id":0,"series":[{"name":"databases","columns":["name"],"values":[["stress"]]}]}]}`))
+		//	return
+		//
+		//}
+		//
+		//if strings.HasPrefix(query, "SHOW RETENTION POLICIES") {
+		//	w.WriteHeader(http.StatusOK)
+		//	w.Write([]byte(`{"results":[{"statement_id":0,"series":[{"columns":["name","duration","shardGroupDuration","replicaN","default"],"values":[["autogen","0s","168h0m0s",1,true]]}]}]}`))
+		//	return
+		//}
+		//
+		//if strings.HasPrefix(query, "SHOW MEASUREMENTS") {
+		//	w.WriteHeader(http.StatusOK)
+		//	w.Write([]byte(`{"results":[{"statement_id":0,"series":[{"name":"measurements","columns":["name"],"values":[["geo"]]}]}]}`))
+		//	return
+		//}
+
+		if strings.HasPrefix(queryStr, "SHOW") {
+
+			req.URL.Host = "localhost:8086"
+			req.URL.Scheme = "http"
+			req.RequestURI = ""
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(fmt.Sprintf("Error proxying show request %s", err.Error())))
+				log.Println("Error:", err)
+				return
+			}
+			for k, v := range resp.Header {
+				w.Header()[k] = v
+			}
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, resp.Body)
+			return
+		}
+
 		if opts.Verbose {
 			log.Print(queryStr)
 		}
@@ -189,7 +241,7 @@ func HandleQuery(w http.ResponseWriter, req *http.Request) {
 	}
 	switch req.Header.Get("Accept") {
 	case "application/json":
-		writeJSONChunks(results, w)
+		writeJSONLegacy(results, w)
 	default:
 		writeLineResults(results, w)
 	}
@@ -291,6 +343,85 @@ type point struct {
 	Value   interface{}       `json:"value"`
 	Time    int64             `json:"time"`
 	Context map[string]string `json:"context,omitempty"`
+}
+
+type Response struct {
+	Results []Result `json:"results"`
+	Err     string   `json:"err"`
+}
+type Result struct {
+	Series []Series `json:"series"`
+}
+
+type Series struct {
+	Name    string            `json:"name"`
+	Columns []string          `json:"columns"`
+	Tags    map[string]string `json:"tags"`
+	Values  [][]interface{}   `json:"values"`
+}
+
+func writeJSONLegacy(results []execute.Result, w http.ResponseWriter) {
+
+	resp := Response{
+		Results: make([]Result, len(results)),
+	}
+
+	for i, r := range results {
+		blocks := r.Blocks()
+		seriesID := 0
+		result := Result{}
+		err := blocks.Do(func(b execute.Block) error {
+			s := Series{Tags: b.Tags()}
+			for _, c := range b.Cols() {
+				if !c.Common {
+					s.Columns = append(s.Columns, c.Label)
+				}
+			}
+			seriesID++
+			s.Name = strconv.Itoa(seriesID)
+			times := b.Times()
+			times.DoTime(func(ts []execute.Time, rr execute.RowReader) {
+				for i := range ts {
+
+					var v []interface{}
+
+					for j, c := range rr.Cols() {
+						if c.Common {
+							continue
+						}
+
+						switch c.Type {
+						case execute.TFloat:
+							v = append(v, rr.AtFloat(i, j))
+						case execute.TInt:
+							v = append(v, rr.AtInt(i, j))
+						case execute.TString:
+							v = append(v, rr.AtString(i, j))
+						case execute.TUInt:
+							v = append(v, rr.AtUInt(i, j))
+						case execute.TBool:
+							v = append(v, rr.AtBool(i, j))
+						case execute.TTime:
+							v = append(v, rr.AtTime(i, j)/execute.Time(time.Second))
+						default:
+							v = append(v, "unknown")
+						}
+
+					}
+					s.Values = append(s.Values, v)
+				}
+			})
+			result.Series = append(result.Series, s)
+			return nil
+		})
+		if err != nil {
+			log.Println("Error iterating through results:", err)
+		}
+		resp.Results[i] = result
+	}
+
+	json.NewEncoder(w).Encode(resp)
+
 }
 
 func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
