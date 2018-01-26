@@ -38,7 +38,7 @@ ifqld --verbose --host localhost:8082
 ```sh
 curl -XPOST --data-urlencode \
 'q=from(db:"telegraf")
-.filter(fn: r => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
+.filter(fn: (r) => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
 .range(start:-170h).sum()' \
 localhost:8093/query
 ```
@@ -121,8 +121,8 @@ Join two time series together on time and the list of `on` keys.
 Example:
 
 ```
-cpu = from(db: "telegraf").filter(fn: r => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
-mem = from(db: "telegraf").filter(fn: r => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
+cpu = from(db: "telegraf").filter(fn: (r) => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
+mem = from(db: "telegraf").filter(fn: (r) => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
 join(tables:{cpu:cpu, mem:mem}, on:["host"], fn: (tables) => tables.cpu["_value"] + tables.mem["_value"])
 ````
 
@@ -158,7 +158,7 @@ Returns the max value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"]=="cpu" AND
+    .filter(fn: (r) => r["_measurement"]=="cpu" AND
                 r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
     .range(start:-12h)
@@ -172,7 +172,7 @@ Returns the mean of the values within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "mem" AND
+    .filter(fn: (r) => r["_measurement"] == "mem" AND
                 r["_field"] == "used_percent")
     .range(start:-12h)
     .window(every:10m)
@@ -185,7 +185,7 @@ Returns the min value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r[ "_measurement"] == "cpu" AND
+    .filter(fn: (r) => r[ "_measurement"] == "cpu" AND
                 r["_field" ]== "usage_system")
     .range(start:-12h)
     .window(every:10m, period: 5m)
@@ -199,7 +199,7 @@ Filters the results by time boundaries
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "cpu" AND
+    .filter(fn: (r) => r["_measurement"] == "cpu" AND
                 r["_field"] == "usage_system")
     .range(start:-12h, stop: -15m)
 ```
@@ -217,7 +217,7 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"] == "cpu" AND
+    .filter(fn: (r) => r["_measurement"] == "cpu" AND
                 r["_field"] == "usage_system")
     .range(start:-1d)
     .sample(n: 5, pos: 1)
@@ -251,7 +251,7 @@ Default sort is ascending
 Example:
 ```
 from(db:"telegraf")
-    .filter(fn: r => r["_measurement"] == "system" AND
+    .filter(fn: (r) => r["_measurement"] == "system" AND
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(cols:["region", "host", "value"])
@@ -267,7 +267,7 @@ running instances.
 
 ```
 from(db:"telegraf")
-    .filter(fn: r => r["_measurement"] == "system" AND
+    .filter(fn: (r) => r["_measurement"] == "system" AND
                 r["_field"] == "uptime")
     .range(start:-12h)
     .sort(desc: true)
@@ -297,7 +297,7 @@ Filters the results using an expression
 Example:
 ```
 from(db:"foo")
-    .filter(fn: r => r["_measurement"]=="cpu" AND
+    .filter(fn: (r) => r["_measurement"]=="cpu" AND
                 r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
     .range(start:-12h)
