@@ -37,8 +37,8 @@ VariableStatement
 
 ReturnStatement
   = "return" __ argument:Expr {
-    return returnstmt(argument, c.text, c.pos)
-  }
+      return returnstmt(argument, c.text, c.pos)
+    }
 
 ExpressionStatement
   = expr:Expr {
@@ -47,13 +47,14 @@ ExpressionStatement
 
 BlockStatement
   = "{" __ body:( __ Statement __ )* __ "}" {
-    return blockstmt(body, c.text, c.pos)
-  }
+      return blockstmt(body, c.text, c.pos)
+    }
 
 VariableDeclaration
   = id:Identifier __ "=" __ init:Expr {
       return vardecl(id, init, c.text, c.pos)
     }
+
 
 MemberExpressions
   = head:Identifier // TODO: should be primary

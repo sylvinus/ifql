@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/influxdata/ifql/ast"
+	"github.com/influxdata/ifql/semantic"
 	"github.com/pkg/errors"
 )
 
-func Eval(program *ast.Program, scope *Scope, d Domain) error {
+func Eval(program *semantic.Program, scope *Scope, d Domain) error {
 	itrp := interpreter{
 		d: d,
 	}
@@ -22,7 +23,7 @@ type interpreter struct {
 	d Domain
 }
 
-func (itrp interpreter) eval(program *ast.Program, scope *Scope) error {
+func (itrp interpreter) eval(program *semantic.Program, scope *Scope) error {
 	for _, stmt := range program.Body {
 		if err := itrp.doStatement(stmt, scope); err != nil {
 			return err
@@ -31,25 +32,25 @@ func (itrp interpreter) eval(program *ast.Program, scope *Scope) error {
 	return nil
 }
 
-func (itrp interpreter) doStatement(stmt ast.Statement, scope *Scope) error {
+func (itrp interpreter) doStatement(stmt semantic.Statement, scope *Scope) error {
 	switch s := stmt.(type) {
-	case *ast.VariableDeclaration:
+	case *semantic.VariableDeclaration:
 		if err := itrp.doVariableDeclaration(s, scope); err != nil {
 			return err
 		}
-	case *ast.ExpressionStatement:
+	case *semantic.ExpressionStatement:
 		_, err := itrp.doExpression(s.Expression, scope)
 		if err != nil {
 			return err
 		}
-	case *ast.BlockStatement:
+	case *semantic.BlockStatement:
 		nested := scope.Nest()
 		for i, stmt := range s.Body {
 			if err := itrp.doStatement(stmt, nested); err != nil {
 				return err
 			}
 			// Validate a return statement is the last statement
-			if _, ok := stmt.(*ast.ReturnStatement); ok {
+			if _, ok := stmt.(*semantic.ReturnStatement); ok {
 				if i != len(s.Body)-1 {
 					return errors.New("return statement is not the last statement in the block")
 				}
@@ -58,7 +59,7 @@ func (itrp interpreter) doStatement(stmt ast.Statement, scope *Scope) error {
 		// Propgate any return value from the nested scope out.
 		// Since a return statement is always last we do not have to worry about overriding an existing return value.
 		scope.SetReturn(nested.Return())
-	case *ast.ReturnStatement:
+	case *semantic.ReturnStatement:
 		v, err := itrp.doExpression(s.Argument, scope)
 		if err != nil {
 			return err
@@ -70,7 +71,7 @@ func (itrp interpreter) doStatement(stmt ast.Statement, scope *Scope) error {
 	return nil
 }
 
-func (itrp interpreter) doVariableDeclaration(declarations *ast.VariableDeclaration, scope *Scope) error {
+func (itrp interpreter) doVariableDeclaration(declarations *semantic.VariableDeclaration, scope *Scope) error {
 	for _, vd := range declarations.Declarations {
 		value, err := itrp.doExpression(vd.Init, scope)
 		if err != nil {
@@ -81,38 +82,34 @@ func (itrp interpreter) doVariableDeclaration(declarations *ast.VariableDeclarat
 	return nil
 }
 
-func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, error) {
+func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Value, error) {
 	switch e := expr.(type) {
-	case ast.Literal:
+	case semantic.Literal:
 		return itrp.doLiteral(e)
-	case *ast.ArrayExpression:
+	case *semantic.ArrayExpression:
 		return itrp.doArray(e, scope)
-	case *ast.Identifier:
+	case *semantic.Identifier:
 		value, ok := scope.Lookup(e.Name)
 		if !ok {
 			return nil, fmt.Errorf("undefined identifier %q", e.Name)
 		}
 		return value, nil
-	case *ast.CallExpression:
-		v, err := itrp.callFunction(e, scope)
+	case *semantic.CallExpression:
+		v, err := itrp.doCall(e, scope)
 		if err != nil {
 			// Determine function name
 			return nil, errors.Wrapf(err, "error calling funcion %q", functionName(e))
 		}
 		return v, nil
-	case *ast.MemberExpression:
+	case *semantic.MemberExpression:
 		obj, err := itrp.doExpression(e.Object, scope)
 		if err != nil {
 			return nil, err
 		}
-		p, err := propertyName(e)
-		if err != nil {
-			return nil, err
-		}
-		return obj.Property(p)
-	case *ast.ObjectExpression:
+		return obj.Property(e.Property)
+	case *semantic.ObjectExpression:
 		return itrp.doMap(e, scope)
-	case *ast.UnaryExpression:
+	case *semantic.UnaryExpression:
 		v, err := itrp.doExpression(e.Argument, scope)
 		if err != nil {
 			return nil, err
@@ -138,7 +135,7 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 			return nil, fmt.Errorf("unsupported operator %q to unary expression", e.Operator)
 		}
 
-	case *ast.BinaryExpression:
+	case *semantic.BinaryExpression:
 		l, err := itrp.doExpression(e.Left, scope)
 		if err != nil {
 			return nil, err
@@ -158,7 +155,7 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 			return nil, fmt.Errorf("unsupported binary operation: %v %v %v", l.Type(), e.Operator, r.Type())
 		}
 		return bf(l, r), nil
-	case *ast.LogicalExpression:
+	case *semantic.LogicalExpression:
 		l, err := itrp.doExpression(e.Left, scope)
 		if err != nil {
 			return nil, err
@@ -193,7 +190,7 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 		default:
 			return nil, fmt.Errorf("invalid logical operator %v", e.Operator)
 		}
-	case *ast.ArrowFunctionExpression:
+	case *semantic.ArrowFunctionExpression:
 		return value{
 			t: TFunction,
 			v: arrowFunc{
@@ -206,7 +203,7 @@ func (itrp interpreter) doExpression(expr ast.Expression, scope *Scope) (Value, 
 	}
 }
 
-func (itrp interpreter) doArray(a *ast.ArrayExpression, scope *Scope) (Value, error) {
+func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
 		Type:     TInvalid,
 		Elements: make([]Value, len(a.Elements)),
@@ -230,7 +227,7 @@ func (itrp interpreter) doArray(a *ast.ArrayExpression, scope *Scope) (Value, er
 	}, nil
 }
 
-func (itrp interpreter) doMap(m *ast.ObjectExpression, scope *Scope) (Value, error) {
+func (itrp interpreter) doMap(m *semantic.ObjectExpression, scope *Scope) (Value, error) {
 	mapValue := Map{
 		Elements: make(map[string]Value, len(m.Properties)),
 	}
@@ -247,39 +244,39 @@ func (itrp interpreter) doMap(m *ast.ObjectExpression, scope *Scope) (Value, err
 	return mapValue, nil
 }
 
-func (itrp interpreter) doLiteral(lit ast.Literal) (Value, error) {
+func (itrp interpreter) doLiteral(lit semantic.Literal) (Value, error) {
 	switch l := lit.(type) {
-	case *ast.DateTimeLiteral:
+	case *semantic.DateTimeLiteral:
 		return value{
 			t: TTime,
 			v: l.Value,
 		}, nil
-	case *ast.DurationLiteral:
+	case *semantic.DurationLiteral:
 		return value{
 			t: TDuration,
 			v: l.Value,
 		}, nil
-	case *ast.FloatLiteral:
+	case *semantic.FloatLiteral:
 		return value{
 			t: TFloat,
 			v: l.Value,
 		}, nil
-	case *ast.IntegerLiteral:
+	case *semantic.IntegerLiteral:
 		return value{
 			t: TInt,
 			v: l.Value,
 		}, nil
-	case *ast.UnsignedIntegerLiteral:
+	case *semantic.UnsignedIntegerLiteral:
 		return value{
 			t: TUInt,
 			v: l.Value,
 		}, nil
-	case *ast.StringLiteral:
+	case *semantic.StringLiteral:
 		return value{
 			t: TString,
 			v: l.Value,
 		}, nil
-	case *ast.BooleanLiteral:
+	case *semantic.BooleanLiteral:
 		return value{
 			t: TBool,
 			v: l.Value,
@@ -291,22 +288,18 @@ func (itrp interpreter) doLiteral(lit ast.Literal) (Value, error) {
 
 }
 
-func functionName(call *ast.CallExpression) string {
+func functionName(call *semantic.CallExpression) string {
 	switch callee := call.Callee.(type) {
-	case *ast.Identifier:
+	case *semantic.Identifier:
 		return callee.Name
-	case *ast.MemberExpression:
-		name, err := propertyName(callee)
-		if err != nil {
-			return "<anonymous function>"
-		}
-		return name
+	case *semantic.MemberExpression:
+		return callee.Property
 	default:
 		return "<anonymous function>"
 	}
 }
 
-func (itrp interpreter) callFunction(call *ast.CallExpression, scope *Scope) (Value, error) {
+func (itrp interpreter) doCall(call *semantic.CallExpression, scope *Scope) (Value, error) {
 	callee, err := itrp.doExpression(call.Callee, scope)
 	if err != nil {
 		return nil, err
@@ -337,18 +330,12 @@ func (itrp interpreter) callFunction(call *ast.CallExpression, scope *Scope) (Va
 	return v, nil
 }
 
-func (itrp interpreter) doArguments(args []ast.Expression, scope *Scope) (Arguments, error) {
-	if l := len(args); l > 1 {
-		return nil, fmt.Errorf("arguments not a single object expression %v", args)
-	} else if l == 0 {
+func (itrp interpreter) doArguments(args *semantic.ObjectExpression, scope *Scope) (Arguments, error) {
+	if args == nil || len(args.Properties) == 0 {
 		return newArguments(nil), nil
 	}
-	params, ok := args[0].(*ast.ObjectExpression)
-	if !ok {
-		return nil, fmt.Errorf("arguments not a valid object expression")
-	}
-	paramsMap := make(map[string]Value, len(params.Properties))
-	for _, p := range params.Properties {
+	paramsMap := make(map[string]Value, len(args.Properties))
+	for _, p := range args.Properties {
 		value, err := itrp.doExpression(p.Value, scope)
 		if err != nil {
 			return nil, err
@@ -359,17 +346,6 @@ func (itrp interpreter) doArguments(args []ast.Expression, scope *Scope) (Argume
 		paramsMap[p.Key.Name] = value
 	}
 	return newArguments(paramsMap), nil
-}
-
-func propertyName(m *ast.MemberExpression) (string, error) {
-	switch p := m.Property.(type) {
-	case *ast.Identifier:
-		return p.Name, nil
-	case *ast.StringLiteral:
-		return p.Value, nil
-	default:
-		return "", fmt.Errorf("unsupported member property expression of type %T", m.Property)
-	}
 }
 
 type Scope struct {
@@ -553,11 +529,11 @@ func (t Type) String() string {
 type Function interface {
 	Call(args Arguments, d Domain) (Value, error)
 	// Resolve rewrites the function resolving any identifiers not listed in the function params.
-	Resolve() (*ast.ArrowFunctionExpression, error)
+	Resolve() (*semantic.ArrowFunctionExpression, error)
 }
 
 type arrowFunc struct {
-	e     *ast.ArrowFunctionExpression
+	e     *semantic.ArrowFunctionExpression
 	scope *Scope
 	call  func(Arguments, Domain) (Value, error)
 
@@ -566,7 +542,7 @@ type arrowFunc struct {
 
 func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 	for _, p := range f.e.Params {
-		if p.Value == nil {
+		if p.Default == nil {
 			v, err := args.GetRequired(p.Key.Name)
 			if err != nil {
 				return nil, err
@@ -576,12 +552,8 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 			v, ok := args.Get(p.Key.Name)
 			if !ok {
 				// Use default value
-				lit, ok := p.Value.(ast.Literal)
-				if !ok {
-					return nil, fmt.Errorf("function parameter %q default values is not a literal", p.Key.Name)
-				}
 				var err error
-				v, err = f.itrp.doLiteral(lit)
+				v, err = f.itrp.doLiteral(p.Default)
 				if err != nil {
 					return nil, err
 				}
@@ -590,9 +562,9 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 		}
 	}
 	switch n := f.e.Body.(type) {
-	case ast.Expression:
+	case semantic.Expression:
 		return f.itrp.doExpression(n, f.scope)
-	case ast.Statement:
+	case semantic.Statement:
 		err := f.itrp.doStatement(n, f.scope)
 		if err != nil {
 			return nil, err
@@ -608,18 +580,18 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 }
 
 // Resolve rewrites the function resolving any identifiers not listed in the function params.
-func (f arrowFunc) Resolve() (*ast.ArrowFunctionExpression, error) {
+func (f arrowFunc) Resolve() (*semantic.ArrowFunctionExpression, error) {
 	n := f.e.Copy()
 	node, err := f.resolveIdentifiers(n)
 	if err != nil {
 		return nil, err
 	}
-	return node.(*ast.ArrowFunctionExpression), nil
+	return node.(*semantic.ArrowFunctionExpression), nil
 }
 
-func (f arrowFunc) resolveIdentifiers(n ast.Node) (ast.Node, error) {
+func (f arrowFunc) resolveIdentifiers(n semantic.Node) (semantic.Node, error) {
 	switch n := n.(type) {
-	case *ast.Identifier:
+	case *semantic.Identifier:
 		for _, p := range f.e.Params {
 			if n.Name == p.Key.Name {
 				// Identifier is a parameter do not resolve
@@ -631,183 +603,181 @@ func (f arrowFunc) resolveIdentifiers(n ast.Node) (ast.Node, error) {
 			return nil, fmt.Errorf("name %q does not exist in scope", n.Name)
 		}
 		return resolveValue(v)
-	case *ast.BlockStatement:
+	case *semantic.BlockStatement:
 		for i, s := range n.Body {
 			node, err := f.resolveIdentifiers(s)
 			if err != nil {
 				return nil, err
 			}
-			n.Body[i] = node.(ast.Statement)
+			n.Body[i] = node.(semantic.Statement)
 		}
-	case *ast.ExpressionStatement:
+	case *semantic.ExpressionStatement:
 		node, err := f.resolveIdentifiers(n.Expression)
 		if err != nil {
 			return nil, err
 		}
-		n.Expression = node.(ast.Expression)
-	case *ast.ReturnStatement:
+		n.Expression = node.(semantic.Expression)
+	case *semantic.ReturnStatement:
 		node, err := f.resolveIdentifiers(n.Argument)
 		if err != nil {
 			return nil, err
 		}
-		n.Argument = node.(ast.Expression)
-	case *ast.VariableDeclaration:
+		n.Argument = node.(semantic.Expression)
+	case *semantic.VariableDeclaration:
 		for i, d := range n.Declarations {
 			node, err := f.resolveIdentifiers(d)
 			if err != nil {
 				return nil, err
 			}
-			n.Declarations[i] = node.(*ast.VariableDeclarator)
+			n.Declarations[i] = node.(*semantic.VariableDeclarator)
 		}
-	case *ast.VariableDeclarator:
+	case *semantic.VariableDeclarator:
 		node, err := f.resolveIdentifiers(n.Init)
 		if err != nil {
 			return nil, err
 		}
-		n.Init = node.(ast.Expression)
-	case *ast.CallExpression:
-		for i, arg := range n.Arguments {
-			node, err := f.resolveIdentifiers(arg)
-			if err != nil {
-				return nil, err
-			}
-			n.Arguments[i] = node.(ast.Expression)
+		n.Init = node.(semantic.Expression)
+	case *semantic.CallExpression:
+		node, err := f.resolveIdentifiers(n.Arguments)
+		if err != nil {
+			return nil, err
 		}
-	case *ast.ArrowFunctionExpression:
+		n.Arguments = node.(*semantic.ObjectExpression)
+	case *semantic.ArrowFunctionExpression:
 		node, err := f.resolveIdentifiers(n.Body)
 		if err != nil {
 			return nil, err
 		}
 		n.Body = node
-	case *ast.BinaryExpression:
+	case *semantic.BinaryExpression:
 		node, err := f.resolveIdentifiers(n.Left)
 		if err != nil {
 			return nil, err
 		}
-		n.Left = node.(ast.Expression)
+		n.Left = node.(semantic.Expression)
 
 		node, err = f.resolveIdentifiers(n.Right)
 		if err != nil {
 			return nil, err
 		}
-		n.Right = node.(ast.Expression)
-	case *ast.UnaryExpression:
+		n.Right = node.(semantic.Expression)
+	case *semantic.UnaryExpression:
 		node, err := f.resolveIdentifiers(n.Argument)
 		if err != nil {
 			return nil, err
 		}
-		n.Argument = node.(ast.Expression)
-	case *ast.LogicalExpression:
+		n.Argument = node.(semantic.Expression)
+	case *semantic.LogicalExpression:
 		node, err := f.resolveIdentifiers(n.Left)
 		if err != nil {
 			return nil, err
 		}
-		n.Left = node.(ast.Expression)
+		n.Left = node.(semantic.Expression)
 		node, err = f.resolveIdentifiers(n.Right)
 		if err != nil {
 			return nil, err
 		}
-		n.Right = node.(ast.Expression)
-	case *ast.ArrayExpression:
+		n.Right = node.(semantic.Expression)
+	case *semantic.ArrayExpression:
 		for i, el := range n.Elements {
 			node, err := f.resolveIdentifiers(el)
 			if err != nil {
 				return nil, err
 			}
-			n.Elements[i] = node.(ast.Expression)
+			n.Elements[i] = node.(semantic.Expression)
 		}
-	case *ast.ObjectExpression:
+	case *semantic.ObjectExpression:
 		for i, p := range n.Properties {
 			node, err := f.resolveIdentifiers(p)
 			if err != nil {
 				return nil, err
 			}
-			n.Properties[i] = node.(*ast.Property)
+			n.Properties[i] = node.(*semantic.Property)
 		}
-	case *ast.ConditionalExpression:
+	case *semantic.ConditionalExpression:
 		node, err := f.resolveIdentifiers(n.Test)
 		if err != nil {
 			return nil, err
 		}
-		n.Test = node.(ast.Expression)
+		n.Test = node.(semantic.Expression)
 
 		node, err = f.resolveIdentifiers(n.Alternate)
 		if err != nil {
 			return nil, err
 		}
-		n.Alternate = node.(ast.Expression)
+		n.Alternate = node.(semantic.Expression)
 
 		node, err = f.resolveIdentifiers(n.Consequent)
 		if err != nil {
 			return nil, err
 		}
-		n.Consequent = node.(ast.Expression)
-	case *ast.Property:
+		n.Consequent = node.(semantic.Expression)
+	case *semantic.Property:
 		node, err := f.resolveIdentifiers(n.Value)
 		if err != nil {
 			return nil, err
 		}
-		n.Value = node.(ast.Expression)
+		n.Value = node.(semantic.Expression)
 	}
 	return n, nil
 }
 
-func resolveValue(v Value) (ast.Node, error) {
+func resolveValue(v Value) (semantic.Node, error) {
 	switch t := v.Type(); t {
 	case TString:
-		return &ast.StringLiteral{
+		return &semantic.StringLiteral{
 			Value: v.Value().(string),
 		}, nil
 	case TInt:
-		return &ast.IntegerLiteral{
+		return &semantic.IntegerLiteral{
 			Value: v.Value().(int64),
 		}, nil
 	case TUInt:
-		return &ast.UnsignedIntegerLiteral{
+		return &semantic.UnsignedIntegerLiteral{
 			Value: v.Value().(uint64),
 		}, nil
 	case TFloat:
-		return &ast.FloatLiteral{
+		return &semantic.FloatLiteral{
 			Value: v.Value().(float64),
 		}, nil
 	case TBool:
-		return &ast.BooleanLiteral{
+		return &semantic.BooleanLiteral{
 			Value: v.Value().(bool),
 		}, nil
 	case TTime:
-		return &ast.DateTimeLiteral{
+		return &semantic.DateTimeLiteral{
 			Value: v.Value().(time.Time),
 		}, nil
 	case TDuration:
-		return &ast.DurationLiteral{
+		return &semantic.DurationLiteral{
 			Value: v.Value().(time.Duration),
 		}, nil
 	case TFunction:
 		return v.Value().(Function).Resolve()
 	case TArray:
 		arr := v.Value().(Array)
-		node := new(ast.ArrayExpression)
-		node.Elements = make([]ast.Expression, len(arr.Elements))
+		node := new(semantic.ArrayExpression)
+		node.Elements = make([]semantic.Expression, len(arr.Elements))
 		for i, el := range arr.Elements {
 			n, err := resolveValue(el)
 			if err != nil {
 				return nil, err
 			}
-			node.Elements[i] = n.(ast.Expression)
+			node.Elements[i] = n.(semantic.Expression)
 		}
 		return node, nil
 	case TMap:
 		m := v.Value().(Map)
-		node := new(ast.ObjectExpression)
-		node.Properties = make([]*ast.Property, 0, len(m.Elements))
+		node := new(semantic.ObjectExpression)
+		node.Properties = make([]*semantic.Property, 0, len(m.Elements))
 		for k, el := range m.Elements {
 			n, err := resolveValue(el)
 			if err != nil {
 				return nil, err
 			}
-			node.Properties = append(node.Properties, &ast.Property{
-				Key:   &ast.Identifier{Name: k},
-				Value: n.(ast.Expression),
+			node.Properties = append(node.Properties, &semantic.Property{
+				Key:   &semantic.Identifier{Name: k},
+				Value: n.(semantic.Expression),
 			})
 		}
 		return node, nil

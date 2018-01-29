@@ -8,12 +8,13 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const FilterKind = "filter"
 
 type FilterOpSpec struct {
-	Fn *ast.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.ArrowFunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -47,7 +48,7 @@ func (s *FilterOpSpec) Kind() query.OperationKind {
 }
 
 type FilterProcedureSpec struct {
-	Fn *ast.ArrowFunctionExpression
+	Fn *semantic.ArrowFunctionExpression
 }
 
 func newFilterProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -66,7 +67,7 @@ func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FilterProcedureSpec)
-	ns.Fn = s.Fn.Copy().(*ast.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
 	return ns
 }
 
@@ -77,12 +78,12 @@ func (s *FilterProcedureSpec) PushDownRules() []plan.PushDownRule {
 			Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
 			Match: func(spec plan.ProcedureSpec) bool {
 				// TODO(nathanielc): Remove once row functions support calling functions
-				if _, ok := s.Fn.Body.(ast.Expression); !ok {
+				if _, ok := s.Fn.Body.(semantic.Expression); !ok {
 					return false
 				}
 				fs := spec.(*FromProcedureSpec)
 				if fs.Filter != nil {
-					if _, ok := fs.Filter.Body.(ast.Expression); !ok {
+					if _, ok := fs.Filter.Body.(semantic.Expression); !ok {
 						return false
 					}
 				}
@@ -94,11 +95,11 @@ func (s *FilterProcedureSpec) PushDownRules() []plan.PushDownRule {
 			Through: []plan.ProcedureKind{GroupKind, LimitKind, RangeKind},
 			Match: func(spec plan.ProcedureSpec) bool {
 				// TODO(nathanielc): Remove once row functions support calling functions
-				if _, ok := s.Fn.Body.(ast.Expression); !ok {
+				if _, ok := s.Fn.Body.(semantic.Expression); !ok {
 					return false
 				}
 				fs := spec.(*FilterProcedureSpec)
-				if _, ok := fs.Fn.Body.(ast.Expression); !ok {
+				if _, ok := fs.Fn.Body.(semantic.Expression); !ok {
 					return false
 				}
 				return true
@@ -121,14 +122,14 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 	}
 }
 
-func mergeArrowFunction(a, b *ast.ArrowFunctionExpression) *ast.ArrowFunctionExpression {
-	fn := a.Copy().(*ast.ArrowFunctionExpression)
+func mergeArrowFunction(a, b *semantic.ArrowFunctionExpression) *semantic.ArrowFunctionExpression {
+	fn := a.Copy().(*semantic.ArrowFunctionExpression)
 
-	aExp, aOK := a.Body.(ast.Expression)
-	bExp, bOK := b.Body.(ast.Expression)
+	aExp, aOK := a.Body.(semantic.Expression)
+	bExp, bOK := b.Body.(semantic.Expression)
 
 	if aOK && bOK {
-		fn.Body = &ast.LogicalExpression{
+		fn.Body = &semantic.LogicalExpression{
 			Operator: ast.AndOperator,
 			Left:     aExp,
 			Right:    bExp,
@@ -138,18 +139,18 @@ func mergeArrowFunction(a, b *ast.ArrowFunctionExpression) *ast.ArrowFunctionExp
 
 	// TODO(nathanielc): This code is unreachable while the current PushDownRule Match function is inplace.
 
-	and := &ast.LogicalExpression{
+	and := &semantic.LogicalExpression{
 		Operator: ast.AndOperator,
 		Left:     aExp,
 		Right:    bExp,
 	}
 
 	// Create pass through arguments expression
-	passThroughArgs := &ast.ObjectExpression{
-		Properties: make([]*ast.Property, len(a.Params)),
+	passThroughArgs := &semantic.ObjectExpression{
+		Properties: make([]*semantic.Property, len(a.Params)),
 	}
 	for i, p := range a.Params {
-		passThroughArgs.Properties[i] = &ast.Property{
+		passThroughArgs.Properties[i] = &semantic.Property{
 			Key:   p.Key,
 			Value: p.Key,
 		}
@@ -157,16 +158,16 @@ func mergeArrowFunction(a, b *ast.ArrowFunctionExpression) *ast.ArrowFunctionExp
 
 	if !aOK {
 		// Rewrite left expression as a function call.
-		and.Left = &ast.CallExpression{
-			Callee:    a.Copy().(*ast.ArrowFunctionExpression),
-			Arguments: []ast.Expression{passThroughArgs.Copy().(*ast.ObjectExpression)},
+		and.Left = &semantic.CallExpression{
+			Callee:    a.Copy().(*semantic.ArrowFunctionExpression),
+			Arguments: passThroughArgs.Copy().(*semantic.ObjectExpression),
 		}
 	}
 	if !bOK {
 		// Rewrite right expression as a function call.
-		and.Right = &ast.CallExpression{
-			Callee:    b.Copy().(*ast.ArrowFunctionExpression),
-			Arguments: []ast.Expression{passThroughArgs.Copy().(*ast.ObjectExpression)},
+		and.Right = &semantic.CallExpression{
+			Callee:    b.Copy().(*semantic.ArrowFunctionExpression),
+			Arguments: passThroughArgs.Copy().(*semantic.ObjectExpression),
 		}
 	}
 	return fn

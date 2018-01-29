@@ -9,6 +9,7 @@ import (
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/querytest"
+	"github.com/influxdata/ifql/semantic"
 )
 
 func TestMap_NewQuery(t *testing.T) {
@@ -27,17 +28,17 @@ func TestMap_NewQuery(t *testing.T) {
 					{
 						ID: "map1",
 						Spec: &functions.MapOpSpec{
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-								Body: &ast.BinaryExpression{
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+								Body: &semantic.BinaryExpression{
 									Operator: ast.AdditionOperator,
-									Left: &ast.MemberExpression{
-										Object: &ast.Identifier{
+									Left: &semantic.MemberExpression{
+										Object: &semantic.Identifier{
 											Name: "r",
 										},
-										Property: &ast.Identifier{Name: "_value"},
+										Property: "_value",
 									},
-									Right: &ast.IntegerLiteral{Value: 1},
+									Right: &semantic.IntegerLiteral{Value: 1},
 								},
 							},
 						},
@@ -62,17 +63,17 @@ func TestMap_NewQuery(t *testing.T) {
 					{
 						ID: "map1",
 						Spec: &functions.MapOpSpec{
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-								Body: &ast.BinaryExpression{
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+								Body: &semantic.BinaryExpression{
 									Operator: ast.AdditionOperator,
-									Left: &ast.MemberExpression{
-										Object: &ast.Identifier{
+									Left: &semantic.MemberExpression{
+										Object: &semantic.Identifier{
 											Name: "r",
 										},
-										Property: &ast.Identifier{Name: "_value"},
+										Property: "_value",
 									},
-									Right: &ast.IntegerLiteral{Value: 2},
+									Right: &semantic.IntegerLiteral{Value: 2},
 								},
 							},
 						},
@@ -100,7 +101,7 @@ func TestMapOperation_Marshaling(t *testing.T) {
 		"spec":{
 			"fn":{
 				"type": "ArrowFunctionExpression",
-				"params": [{"type":"Property","key":{"type":"Identifier","name":"r"}}],
+				"params": [{"type":"FunctionParam","key":{"type":"Identifier","name":"r"}}],
 				"body":{
 					"type":"BinaryExpression",
 					"operator": "-",
@@ -110,7 +111,7 @@ func TestMapOperation_Marshaling(t *testing.T) {
 							"type": "Identifier",
 							"name":"r"
 						},
-						"property": {"type":"StringLiteral","value":"_value"}
+						"property": "_value"
 					},
 					"right":{
 						"type":"FloatLiteral",
@@ -123,17 +124,17 @@ func TestMapOperation_Marshaling(t *testing.T) {
 	op := &query.Operation{
 		ID: "map",
 		Spec: &functions.MapOpSpec{
-			Fn: &ast.ArrowFunctionExpression{
-				Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-				Body: &ast.BinaryExpression{
+			Fn: &semantic.ArrowFunctionExpression{
+				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+				Body: &semantic.BinaryExpression{
 					Operator: ast.SubtractionOperator,
-					Left: &ast.MemberExpression{
-						Object: &ast.Identifier{
+					Left: &semantic.MemberExpression{
+						Object: &semantic.Identifier{
 							Name: "r",
 						},
-						Property: &ast.StringLiteral{Value: "_value"},
+						Property: "_value",
 					},
-					Right: &ast.FloatLiteral{Value: 5.6},
+					Right: &semantic.FloatLiteral{Value: 5.6},
 				},
 			},
 		},
@@ -150,17 +151,17 @@ func TestMap_Process(t *testing.T) {
 		{
 			name: `_value+5`,
 			spec: &functions.MapProcedureSpec{
-				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-					Body: &ast.BinaryExpression{
+				Fn: &semantic.ArrowFunctionExpression{
+					Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+					Body: &semantic.BinaryExpression{
 						Operator: ast.AdditionOperator,
-						Left: &ast.MemberExpression{
-							Object: &ast.Identifier{
+						Left: &semantic.MemberExpression{
+							Object: &semantic.Identifier{
 								Name: "r",
 							},
-							Property: &ast.StringLiteral{Value: "_value"},
+							Property: "_value",
 						},
-						Right: &ast.FloatLiteral{
+						Right: &semantic.FloatLiteral{
 							Value: 5,
 						},
 					},
@@ -198,21 +199,21 @@ func TestMap_Process(t *testing.T) {
 		{
 			name: `_value*_value`,
 			spec: &functions.MapProcedureSpec{
-				Fn: &ast.ArrowFunctionExpression{
-					Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-					Body: &ast.BinaryExpression{
+				Fn: &semantic.ArrowFunctionExpression{
+					Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "r"}}},
+					Body: &semantic.BinaryExpression{
 						Operator: ast.MultiplicationOperator,
-						Left: &ast.MemberExpression{
-							Object: &ast.Identifier{
+						Left: &semantic.MemberExpression{
+							Object: &semantic.Identifier{
 								Name: "r",
 							},
-							Property: &ast.StringLiteral{Value: "_value"},
+							Property: "_value",
 						},
-						Right: &ast.MemberExpression{
-							Object: &ast.Identifier{
+						Right: &semantic.MemberExpression{
+							Object: &semantic.Identifier{
 								Name: "r",
 							},
-							Property: &ast.StringLiteral{Value: "_value"},
+							Property: "_value",
 						},
 					},
 				},

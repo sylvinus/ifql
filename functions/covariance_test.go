@@ -3,12 +3,12 @@ package functions_test
 import (
 	"testing"
 
-	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/execute/executetest"
 	"github.com/influxdata/ifql/query/querytest"
+	"github.com/influxdata/ifql/semantic"
 )
 
 func TestCovariance_NewQuery(t *testing.T) {
@@ -82,30 +82,30 @@ func TestCovariance_NewQuery(t *testing.T) {
 								"from0": "x",
 								"from1": "y",
 							},
-							Fn: &ast.ArrowFunctionExpression{
-								Params: []*ast.Property{
-									{Key: &ast.Identifier{Name: "t"}},
+							Fn: &semantic.ArrowFunctionExpression{
+								Params: []*semantic.FunctionParam{
+									{Key: &semantic.Identifier{Name: "t"}},
 								},
-								Body: &ast.ObjectExpression{
-									Properties: []*ast.Property{
+								Body: &semantic.ObjectExpression{
+									Properties: []*semantic.Property{
 										{
-											Key: &ast.Identifier{Name: "x"},
-											Value: &ast.MemberExpression{
-												Object: &ast.MemberExpression{
-													Object:   &ast.Identifier{Name: "t"},
-													Property: &ast.Identifier{Name: "x"},
+											Key: &semantic.Identifier{Name: "x"},
+											Value: &semantic.MemberExpression{
+												Object: &semantic.MemberExpression{
+													Object:   &semantic.Identifier{Name: "t"},
+													Property: "x",
 												},
-												Property: &ast.Identifier{Name: "_value"},
+												Property: "_value",
 											},
 										},
 										{
-											Key: &ast.Identifier{Name: "y"},
-											Value: &ast.MemberExpression{
-												Object: &ast.MemberExpression{
-													Object:   &ast.Identifier{Name: "t"},
-													Property: &ast.Identifier{Name: "y"},
+											Key: &semantic.Identifier{Name: "y"},
+											Value: &semantic.MemberExpression{
+												Object: &semantic.MemberExpression{
+													Object:   &semantic.Identifier{Name: "t"},
+													Property: "y",
 												},
-												Property: &ast.Identifier{Name: "_value"},
+												Property: "_value",
 											},
 										},
 									},

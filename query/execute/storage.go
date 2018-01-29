@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/influxdata/ifql/ast"
 	"github.com/influxdata/ifql/query/execute/storage"
+	"github.com/influxdata/ifql/semantic"
 	"github.com/influxdata/yarpc"
 	"github.com/pkg/errors"
 )
@@ -22,7 +22,7 @@ type ReadSpec struct {
 	RAMLimit     uint64
 	Database     string
 	Hosts        []string
-	Predicate    *ast.ArrowFunctionExpression
+	Predicate    *semantic.ArrowFunctionExpression
 	PointsLimit  int64
 	SeriesLimit  int64
 	SeriesOffset int64
