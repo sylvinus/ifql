@@ -17,14 +17,22 @@ type FilterOpSpec struct {
 	Fn *semantic.FunctionExpression `json:"fn"`
 }
 
+var filterSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(FilterKind, createFilterOpSpec)
+	//TODO(nathanielc): Use complete function signature here, or formalize soft kind validation instead of complete function validation.
+	filterSignature.Params["fn"] = semantic.Function
+
+	query.RegisterFunction(FilterKind, createFilterOpSpec, filterSignature)
 	query.RegisterOpSpec(FilterKind, newFilterOp)
 	plan.RegisterProcedureSpec(FilterKind, newFilterProcedure, FilterKind)
 	execute.RegisterTransformation(FilterKind, createFilterTransformation)
 }
 
 func createFilterOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
 	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err

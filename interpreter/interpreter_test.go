@@ -14,6 +14,7 @@ import (
 )
 
 var testScope = interpreter.NewScope()
+var testDeclarations = make(map[string]semantic.VariableDeclaration)
 
 func init() {
 	testScope.Set("fortyTwo", function{
@@ -40,6 +41,24 @@ func init() {
 			return nil, errors.New("fail")
 		},
 	})
+	testScope.Set("plusOne", function{
+		name: "plusOne",
+		call: func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error) {
+			v, err := args.GetRequiredFloat("x")
+			if err != nil {
+				return nil, err
+			}
+			return interpreter.NewFloatValue(v + 1), nil
+		},
+	})
+	testDeclarations["plusOne"] = semantic.NewExternalVariableDeclaration(
+		"plusOne",
+		semantic.NewFunctionType(semantic.FunctionSignature{
+			Params:       map[string]semantic.Type{"x": semantic.Float},
+			ReturnType:   semantic.Float,
+			PipeArgument: "x",
+		}),
+	)
 }
 
 // TestEval tests whether a program can run to completion or not
@@ -129,6 +148,34 @@ func TestEval(t *testing.T) {
             not m.b or fail()
 			`,
 		},
+		{
+			name: "pipe expression",
+			query: `
+			add = (a=<-,b) => a + b
+			one = 1
+			one |> add(b:2) == 3 or fail()
+			`,
+		},
+		{
+			name: "ignore pipe default",
+			query: `
+			add = (a=<-,b) => a + b
+			add(a:1, b:2) == 3 or fail()
+			`,
+		},
+		{
+			name: "pipe expression function",
+			query: `
+			add = (a=<-,b) => a + b
+			six() |> add(b:2.0) == 8.0 or fail()
+			`,
+		},
+		{
+			name: "pipe builtin function",
+			query: `
+			six() |> plusOne() == 7.0 or fail()
+			`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -138,7 +185,7 @@ func TestEval(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			graph, err := semantic.New(program)
+			graph, err := semantic.New(program, testDeclarations)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +226,7 @@ func TestFunction_Resolve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	graph, err := semantic.New(program)
+	graph, err := semantic.New(program, testDeclarations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +253,8 @@ type function struct {
 	call func(args interpreter.Arguments, d interpreter.Domain) (interpreter.Value, error)
 }
 
-func (f function) Type() semantic.Kind {
+func (f function) Type() semantic.Type {
+	//TODO(nathanielc): Return a complete function type
 	return semantic.Function
 }
 

@@ -13,13 +13,19 @@ const MeanKind = "mean"
 type MeanOpSpec struct {
 }
 
+var meanSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(MeanKind, createMeanOpSpec)
+	query.RegisterFunction(MeanKind, createMeanOpSpec, meanSignature)
 	query.RegisterOpSpec(MeanKind, newMeanOp)
 	plan.RegisterProcedureSpec(MeanKind, newMeanProcedure, MeanKind)
 	execute.RegisterTransformation(MeanKind, createMeanTransformation)
 }
 func createMeanOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	return new(MeanOpSpec), nil
 }
 

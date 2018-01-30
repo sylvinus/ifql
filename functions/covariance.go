@@ -7,6 +7,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 	"github.com/pkg/errors"
 )
 
@@ -16,29 +17,37 @@ type CovarianceOpSpec struct {
 	PearsonCorrelation bool `json:"pearsonr"`
 }
 
+var covarianceSignature = query.DefaultFunctionSignature()
+
 func init() {
+	covarianceSignature.Params["pearsonr"] = semantic.Bool
+
 	query.RegisterBuiltIn(covarianceBuiltIn)
-	query.RegisterMethod(CovarianceKind, createCovarianceOpSpec)
+	query.RegisterFunction(CovarianceKind, createCovarianceOpSpec, covarianceSignature)
 	query.RegisterOpSpec(CovarianceKind, newCovarianceOp)
 	plan.RegisterProcedureSpec(CovarianceKind, newCovarianceProcedure, CovarianceKind)
 	execute.RegisterTransformation(CovarianceKind, createCovarianceTransformation)
 }
 
-// covarianceBuiltIn defines a `covariance` function with an automatic join.
+// covarianceBuiltIn defines a `cov` function with an automatic join.
 //TODO(nathanielc): Add support for default values to IFQL arrow functions (i.e. pearsonr=false).
 var covarianceBuiltIn = `
-covariance = (x,y,on,pearsonr=false) =>
+cov = (x,y,on,pearsonr=false) =>
     join(
         tables:{x:x, y:y},
         on:on,
         fn: (t) => ({x:t.x._value, y:t.y._value}),
     )
-    .covariance(pearsonr:pearsonr)
+    |> covariance(pearsonr:pearsonr)
 
-pearsonr = (x,y,on) => covariance(x:x, y:y, on:on, pearsonr:true)
+pearsonr = (x,y,on) => cov(x:x, y:y, on:on, pearsonr:true)
 `
 
 func createCovarianceOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(CovarianceOpSpec)
 	pearsonr, ok, err := args.GetBool("pearsonr")
 	if err != nil {

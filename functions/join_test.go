@@ -22,8 +22,8 @@ func TestJoin_NewQuery(t *testing.T) {
 		{
 			Name: "basic two-way join",
 			Raw: `
-a = from(db:"dbA").range(start:-1h)
-b = from(db:"dbB").range(start:-1h)
+a = from(db:"dbA") |> range(start:-1h)
+b = from(db:"dbB") |> range(start:-1h)
 join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
@@ -104,19 +104,10 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 			},
 		},
 		{
-			Name: "error: join as chain",
-			Raw: `
-				a = from(db:"dbA").range(start:-1h)
-				b = from(db:"dbB").range(start:-1h)
-				a.join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])
-			`,
-			WantErr: true,
-		},
-		{
 			Name: "from with join with complex ast",
 			Raw: `
-				a = from(db:"ifql").range(start:-1h)
-				b = from(db:"ifql").range(start:-1h)
+				a = from(db:"ifql") |> range(start:-1h)
+				b = from(db:"ifql") |> range(start:-1h)
 				join(tables:{a:a,b:b}, on:["t1"], fn: (t) => (t.a["_value"]-t.b["_value"])/t.b["_value"])
 			`,
 			Want: &query.Spec{

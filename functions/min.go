@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const MinKind = "min"
@@ -15,14 +16,23 @@ type MinOpSpec struct {
 	UseRowTime bool   `json:"useRowtime"`
 }
 
+var minSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(MinKind, createMinOpSpec)
+	minSignature.Params["column"] = semantic.String
+	minSignature.Params["useRowTime"] = semantic.Bool
+
+	query.RegisterFunction(MinKind, createMinOpSpec, minSignature)
 	query.RegisterOpSpec(MinKind, newMinOp)
 	plan.RegisterProcedureSpec(MinKind, newMinProcedure, MinKind)
 	execute.RegisterTransformation(MinKind, createMinTransformation)
 }
 
 func createMinOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(MinOpSpec)
 	if c, ok, err := args.GetString("column"); err != nil {
 		return nil, err

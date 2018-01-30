@@ -11,13 +11,19 @@ const CountKind = "count"
 type CountOpSpec struct {
 }
 
+var countSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(CountKind, createCountOpSpec)
+	query.RegisterFunction(CountKind, createCountOpSpec, countSignature)
 	query.RegisterOpSpec(CountKind, newCountOp)
 	plan.RegisterProcedureSpec(CountKind, newCountProcedure, CountKind)
 	execute.RegisterTransformation(CountKind, createCountTransformation)
 }
+
 func createCountOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
 	return new(CountOpSpec), nil
 }
 

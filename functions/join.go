@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/influxdata/ifql/compiler"
+	"github.com/influxdata/ifql/interpreter"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
@@ -31,8 +32,18 @@ type JoinOpSpec struct {
 	TableNames map[query.OperationID]string `json:"table_names"`
 }
 
+var joinSignature = semantic.FunctionSignature{
+	Params: map[string]semantic.Type{
+		"tables": semantic.Object,
+		"fn":     semantic.Function,
+		"on":     semantic.NewArrayType(semantic.String),
+	},
+	ReturnType:   query.TableObjectType,
+	PipeArgument: "tables",
+}
+
 func init() {
-	query.RegisterFunction(JoinKind, createJoinOpSpec)
+	query.RegisterFunction(JoinKind, createJoinOpSpec, semantic.FunctionSignature{})
 	query.RegisterOpSpec(JoinKind, newJoinOp)
 	//TODO(nathanielc): Allow for other types of join implementations
 	plan.RegisterProcedureSpec(MergeJoinKind, newMergeJoinProcedure, JoinKind)
@@ -59,14 +70,14 @@ func createJoinOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		spec.On = array.AsStrings()
 	}
 
-	if m, ok, err := args.GetMap("tables"); err != nil {
+	if m, ok, err := args.GetObject("tables"); err != nil {
 		return nil, err
 	} else if ok {
-		for k, t := range m.Elements {
-			if t.Type() != query.TTable {
-				return nil, fmt.Errorf("tables key %q must be a table: got %v", k, t.Type())
+		for k, t := range m.Properties {
+			if t.Type().Kind() != semantic.Object {
+				return nil, fmt.Errorf("value for key %q in tables must be an object: got %v", k, t.Type().Kind())
 			}
-			id := t.Value().(query.Table).ID
+			id := query.GetIDFromObject(t.(interpreter.Object))
 			a.AddParent(id)
 			spec.TableNames[id] = k
 		}
@@ -460,8 +471,7 @@ func (t *joinTables) Join() (execute.Block, error) {
 	builder.AddCol(execute.TimeCol)
 
 	// Add new value columns in sorted order
-	mapType := t.joinFn.Type()
-	properties := mapType.Properties()
+	properties := t.joinFn.Type().Properties()
 	keys := make([]string, 0, len(properties))
 	for k := range properties {
 		keys = append(keys, k)

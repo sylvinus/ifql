@@ -19,14 +19,24 @@ type GroupOpSpec struct {
 	Except []string `json:"except"`
 }
 
+var groupSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(GroupKind, createGroupOpSpec)
+	groupSignature.Params["by"] = semantic.NewArrayType(semantic.String)
+	groupSignature.Params["keep"] = semantic.NewArrayType(semantic.String)
+	groupSignature.Params["except"] = semantic.NewArrayType(semantic.String)
+
+	query.RegisterFunction(GroupKind, createGroupOpSpec, groupSignature)
 	query.RegisterOpSpec(GroupKind, newGroupOp)
 	plan.RegisterProcedureSpec(GroupKind, newGroupProcedure, GroupKind)
 	execute.RegisterTransformation(GroupKind, createGroupTransformation)
 }
 
 func createGroupOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(GroupOpSpec)
 	if array, ok, err := args.GetArray("by", semantic.String); err != nil {
 		return nil, err

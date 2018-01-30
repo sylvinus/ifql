@@ -16,14 +16,22 @@ type SortOpSpec struct {
 	Desc bool     `json:"desc"`
 }
 
+var sortSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(SortKind, createSortOpSpec)
+	sortSignature.Params["cols"] = semantic.NewArrayType(semantic.String)
+
+	query.RegisterFunction(SortKind, createSortOpSpec, sortSignature)
 	query.RegisterOpSpec(SortKind, newSortOp)
 	plan.RegisterProcedureSpec(SortKind, newSortProcedure, SortKind)
 	execute.RegisterTransformation(SortKind, createSortTransformation)
 }
 
 func createSortOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(SortOpSpec)
 
 	if array, ok, err := args.GetArray("cols", semantic.String); err != nil {

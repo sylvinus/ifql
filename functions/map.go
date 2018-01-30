@@ -16,14 +16,22 @@ type MapOpSpec struct {
 	Fn *semantic.FunctionExpression `json:"fn"`
 }
 
+var mapSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(MapKind, createMapOpSpec)
+	mapSignature.Params["fn"] = semantic.Function
+
+	query.RegisterFunction(MapKind, createMapOpSpec, mapSignature)
 	query.RegisterOpSpec(MapKind, newMapOp)
 	plan.RegisterProcedureSpec(MapKind, newMapProcedure, MapKind)
 	execute.RegisterTransformation(MapKind, createMapTransformation)
 }
 
 func createMapOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	f, err := args.GetRequiredFunction("fn")
 	if err != nil {
 		return nil, err

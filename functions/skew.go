@@ -13,13 +13,19 @@ const SkewKind = "skew"
 type SkewOpSpec struct {
 }
 
+var skewSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(SkewKind, createSkewOpSpec)
+	query.RegisterFunction(SkewKind, createSkewOpSpec, skewSignature)
 	query.RegisterOpSpec(SkewKind, newSkewOp)
 	plan.RegisterProcedureSpec(SkewKind, newSkewProcedure, SkewKind)
 	execute.RegisterTransformation(SkewKind, createSkewTransformation)
 }
 func createSkewOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	return new(SkewOpSpec), nil
 }
 

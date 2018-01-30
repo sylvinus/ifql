@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const FirstKind = "first"
@@ -15,14 +16,23 @@ type FirstOpSpec struct {
 	UseRowTime bool   `json:"useRowtime"`
 }
 
+var firstSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(FirstKind, createFirstOpSpec)
+	firstSignature.Params["column"] = semantic.String
+	firstSignature.Params["useRowTime"] = semantic.Bool
+
+	query.RegisterFunction(FirstKind, createFirstOpSpec, firstSignature)
 	query.RegisterOpSpec(FirstKind, newFirstOp)
 	plan.RegisterProcedureSpec(FirstKind, newFirstProcedure, FirstKind)
 	execute.RegisterTransformation(FirstKind, createFirstTransformation)
 }
 
 func createFirstOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(FirstOpSpec)
 	if c, ok, err := args.GetString("column"); err != nil {
 		return nil, err

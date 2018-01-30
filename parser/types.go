@@ -73,6 +73,26 @@ func returnstmt(argument interface{}, text []byte, pos position) (*ast.ReturnSta
 	}, nil
 }
 
+func pipeExprs(head, tail interface{}, text []byte, pos position) (*ast.PipeExpression, error) {
+	var arg ast.Expression
+	arg = head.(ast.Expression)
+
+	var pe *ast.PipeExpression
+	for _, t := range toIfaceSlice(tail) {
+		pe = toIfaceSlice(t)[1].(*ast.PipeExpression)
+		pe.Argument = arg
+		arg = pe
+	}
+	return pe, nil
+}
+
+func incompletePipeExpr(call interface{}, text []byte, pos position) (*ast.PipeExpression, error) {
+	return &ast.PipeExpression{
+		Call:     call.(*ast.CallExpression),
+		BaseNode: base(text, pos),
+	}, nil
+}
+
 func memberexprs(head, tail interface{}, text []byte, pos position) (ast.Expression, error) {
 	res := head.(ast.Expression)
 	for _, prop := range toIfaceSlice(tail) {
@@ -246,6 +266,12 @@ func stringLiteral(text []byte, pos position) (*ast.StringLiteral, error) {
 		BaseNode: base(text, pos),
 		Value:    s,
 	}, nil
+}
+
+func pipeLiteral(text []byte, pos position) *ast.PipeLiteral {
+	return &ast.PipeLiteral{
+		BaseNode: base(text, pos),
+	}
 }
 
 func booleanLiteral(b bool, text []byte, pos position) (*ast.BooleanLiteral, error) {

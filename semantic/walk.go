@@ -36,11 +36,20 @@ func walk(v Visitor, n Node) {
 		if w != nil {
 			walk(w, n.Argument)
 		}
-	case *VariableDeclaration:
-		w := v.Visit(n)
-		if w != nil {
-			walk(w, n.ID)
-			walk(w, n.Init)
+	case *NativeVariableDeclaration:
+		if n != nil {
+			w := v.Visit(n)
+			if w != nil {
+				walk(w, n.Identifier)
+				walk(w, n.Init)
+			}
+		}
+	case *ExternalVariableDeclaration:
+		if n != nil {
+			w := v.Visit(n)
+			if w != nil {
+				walk(w, n.Identifier)
+			}
 		}
 	case *ArrayExpression:
 		w := v.Visit(n)
@@ -79,9 +88,7 @@ func walk(v Visitor, n Node) {
 	case *IdentifierExpression:
 		w := v.Visit(n)
 		if w != nil {
-			if n.declaration != nil {
-				walk(w, n.declaration)
-			}
+			walk(w, n.declaration)
 		}
 	case *LogicalExpression:
 		w := v.Visit(n)

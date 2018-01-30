@@ -40,9 +40,9 @@ func TestNew(t *testing.T) {
 			},
 			want: &semantic.Program{
 				Body: []semantic.Statement{
-					&semantic.VariableDeclaration{
-						ID:   &semantic.Identifier{Name: "a"},
-						Init: &semantic.BooleanLiteral{Value: true},
+					&semantic.NativeVariableDeclaration{
+						Identifier: &semantic.Identifier{Name: "a"},
+						Init:       &semantic.BooleanLiteral{Value: true},
 					},
 					&semantic.ExpressionStatement{
 						Expression: &semantic.IdentifierExpression{Name: "a"},
@@ -85,8 +85,8 @@ func TestNew(t *testing.T) {
 			},
 			want: &semantic.Program{
 				Body: []semantic.Statement{
-					&semantic.VariableDeclaration{
-						ID: &semantic.Identifier{Name: "f"},
+					&semantic.NativeVariableDeclaration{
+						Identifier: &semantic.Identifier{Name: "f"},
 						Init: &semantic.FunctionExpression{
 							Params: []*semantic.FunctionParam{
 								{Key: &semantic.Identifier{Name: "a"}},
@@ -123,7 +123,7 @@ func TestNew(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := semantic.New(tc.program)
+			got, err := semantic.New(tc.program, nil)
 			if !tc.wantErr && err != nil {
 				t.Fatal(err)
 			} else if tc.wantErr && err == nil {

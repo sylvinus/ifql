@@ -8,6 +8,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const SampleKind = "sample"
@@ -19,14 +20,23 @@ type SampleOpSpec struct {
 	Pos        int64  `json:"pos"`
 }
 
+var sampleSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(SampleKind, createSampleOpSpec)
+	sampleSignature.Params["column"] = semantic.String
+	sampleSignature.Params["useRowTime"] = semantic.Bool
+
+	query.RegisterFunction(SampleKind, createSampleOpSpec, sampleSignature)
 	query.RegisterOpSpec(SampleKind, newSampleOp)
 	plan.RegisterProcedureSpec(SampleKind, newSampleProcedure, SampleKind)
 	execute.RegisterTransformation(SampleKind, createSampleTransformation)
 }
 
 func createSampleOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(SampleOpSpec)
 	if c, ok, err := args.GetString("column"); err != nil {
 		return nil, err

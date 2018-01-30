@@ -34,7 +34,7 @@ func (itrp interpreter) eval(program *semantic.Program, scope *Scope) error {
 
 func (itrp interpreter) doStatement(stmt semantic.Statement, scope *Scope) error {
 	switch s := stmt.(type) {
-	case *semantic.VariableDeclaration:
+	case *semantic.NativeVariableDeclaration:
 		if err := itrp.doVariableDeclaration(s, scope); err != nil {
 			return err
 		}
@@ -71,12 +71,12 @@ func (itrp interpreter) doStatement(stmt semantic.Statement, scope *Scope) error
 	return nil
 }
 
-func (itrp interpreter) doVariableDeclaration(declaration *semantic.VariableDeclaration, scope *Scope) error {
+func (itrp interpreter) doVariableDeclaration(declaration *semantic.NativeVariableDeclaration, scope *Scope) error {
 	value, err := itrp.doExpression(declaration.Init, scope)
 	if err != nil {
 		return err
 	}
-	scope.Set(declaration.ID.Name, value)
+	scope.Set(declaration.Identifier.Name, value)
 	return nil
 }
 
@@ -106,7 +106,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		}
 		return obj.Property(e.Property)
 	case *semantic.ObjectExpression:
-		return itrp.doMap(e, scope)
+		return itrp.doObject(e, scope)
 	case *semantic.UnaryExpression:
 		v, err := itrp.doExpression(e.Argument, scope)
 		if err != nil {
@@ -225,21 +225,21 @@ func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Valu
 	}, nil
 }
 
-func (itrp interpreter) doMap(m *semantic.ObjectExpression, scope *Scope) (Value, error) {
-	mapValue := Map{
-		Elements: make(map[string]Value, len(m.Properties)),
+func (itrp interpreter) doObject(m *semantic.ObjectExpression, scope *Scope) (Value, error) {
+	obj := Object{
+		Properties: make(map[string]Value, len(m.Properties)),
 	}
 	for _, p := range m.Properties {
 		v, err := itrp.doExpression(p.Value, scope)
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := mapValue.Elements[p.Key.Name]; ok {
-			return nil, fmt.Errorf("duplicate key in map: %q", p.Key.Name)
+		if _, ok := obj.Properties[p.Key.Name]; ok {
+			return nil, fmt.Errorf("duplicate key in object: %q", p.Key.Name)
 		}
-		mapValue.Elements[p.Key.Name] = v
+		obj.Properties[p.Key.Name] = v
 	}
-	return mapValue, nil
+	return obj, nil
 }
 
 func (itrp interpreter) doLiteral(lit semantic.Literal) (Value, error) {
@@ -279,7 +279,7 @@ func (itrp interpreter) doLiteral(lit semantic.Literal) (Value, error) {
 			t: semantic.Bool,
 			v: l.Value,
 		}, nil
-	// semantic.TODO(nathanielc): Support lists and maps
+	// semantic.TODO(nathanielc): Support lists and objects
 	default:
 		return nil, fmt.Errorf("unknown literal type %T", lit)
 	}
@@ -393,8 +393,8 @@ func (s *Scope) Nest() *Scope {
 
 // Value represents any value that can be the result of evaluating any expression.
 type Value interface {
-	// semantic.Type reports the type of value
-	Type() semantic.Kind
+	// Type reports the type of value
+	Type() semantic.Type
 	// Value returns the actual value represented.
 	Value() interface{}
 	// Property returns a new value which is a property of this value.
@@ -402,11 +402,11 @@ type Value interface {
 }
 
 type value struct {
-	t semantic.Kind
+	t semantic.Type
 	v interface{}
 }
 
-func (v value) Type() semantic.Kind {
+func (v value) Type() semantic.Type {
 	return v.t
 }
 func (v value) Value() interface{} {
@@ -557,7 +557,7 @@ func (f arrowFunc) resolveIdentifiers(n semantic.Node) (semantic.Node, error) {
 			return nil, err
 		}
 		n.Argument = node.(semantic.Expression)
-	case *semantic.VariableDeclaration:
+	case *semantic.NativeVariableDeclaration:
 		node, err := f.resolveIdentifiers(n.Init)
 		if err != nil {
 			return nil, err
@@ -693,10 +693,10 @@ func resolveValue(v Value) (semantic.Node, error) {
 		}
 		return node, nil
 	case semantic.Object:
-		m := v.Value().(Map)
+		m := v.Value().(Object)
 		node := new(semantic.ObjectExpression)
-		node.Properties = make([]*semantic.Property, 0, len(m.Elements))
-		for k, el := range m.Elements {
+		node.Properties = make([]*semantic.Property, 0, len(m.Properties))
+		for k, el := range m.Properties {
 			n, err := resolveValue(el)
 			if err != nil {
 				return nil, err
@@ -715,7 +715,7 @@ func resolveValue(v Value) (semantic.Node, error) {
 // Array represents an sequence of elements
 // All elements must be the same type
 type Array struct {
-	Type     semantic.Kind
+	Type     semantic.Type
 	Elements []Value
 }
 
@@ -730,20 +730,24 @@ func (a Array) AsStrings() []string {
 	return strs
 }
 
-// Map represents an association of keys to values.
-// Map values may be of any type.
-type Map struct {
-	Elements map[string]Value
+// Object represents an association of keys to values.
+// Object values may be of any type.
+type Object struct {
+	Properties map[string]Value
 }
 
-func (m Map) Type() semantic.Kind {
-	return semantic.Object
+func (m Object) Type() semantic.Type {
+	propertyTypes := make(map[string]semantic.Type)
+	for k, v := range m.Properties {
+		propertyTypes[k] = v.Type()
+	}
+	return semantic.NewObjectType(propertyTypes)
 }
-func (m Map) Value() interface{} {
+func (m Object) Value() interface{} {
 	return m
 }
-func (m Map) Property(name string) (Value, error) {
-	v, ok := m.Elements[name]
+func (m Object) Property(name string) (Value, error) {
+	v, ok := m.Properties[name]
 	if ok {
 		return v, nil
 	}
@@ -764,7 +768,7 @@ type Arguments interface {
 	GetBool(name string) (bool, bool, error)
 	GetFunction(name string) (Function, bool, error)
 	GetArray(name string, t semantic.Kind) (Array, bool, error)
-	GetMap(name string) (Map, bool, error)
+	GetObject(name string) (Object, bool, error)
 
 	GetRequiredString(name string) (string, error)
 	GetRequiredInt(name string) (int64, error)
@@ -772,7 +776,7 @@ type Arguments interface {
 	GetRequiredBool(name string) (bool, error)
 	GetRequiredFunction(name string) (Function, error)
 	GetRequiredArray(name string, t semantic.Kind) (Array, error)
-	GetRequiredMap(name string) (Map, error)
+	GetRequiredObject(name string) (Object, error)
 
 	// listUnused returns the list of provided arguments that were not used by the function.
 	listUnused() []string
@@ -899,22 +903,22 @@ func (a *arguments) GetRequiredFunction(name string) (Function, error) {
 	return v.Value().(Function), nil
 }
 
-func (a *arguments) GetMap(name string) (Map, bool, error) {
+func (a *arguments) GetObject(name string) (Object, bool, error) {
 	v, ok, err := a.get(name, semantic.Object, false)
 	if err != nil || !ok {
-		return Map{}, ok, err
+		return Object{}, ok, err
 	}
-	return v.Value().(Map), ok, nil
+	return v.Value().(Object), ok, nil
 }
-func (a *arguments) GetRequiredMap(name string) (Map, error) {
+func (a *arguments) GetRequiredObject(name string) (Object, error) {
 	v, _, err := a.get(name, semantic.Object, true)
 	if err != nil {
-		return Map{}, err
+		return Object{}, err
 	}
-	return v.Value().(Map), nil
+	return v.Value().(Object), nil
 }
 
-func (a *arguments) get(name string, typ semantic.Kind, required bool) (Value, bool, error) {
+func (a *arguments) get(name string, kind semantic.Kind, required bool) (Value, bool, error) {
 	a.used[name] = true
 	v, ok := a.params[name]
 	if !ok {
@@ -923,8 +927,8 @@ func (a *arguments) get(name string, typ semantic.Kind, required bool) (Value, b
 		}
 		return nil, false, nil
 	}
-	if v.Type() != typ {
-		return nil, true, fmt.Errorf("keyword argument %q should be of type %v, but got %v", name, typ, v.Type())
+	if v.Type().Kind() != kind {
+		return nil, true, fmt.Errorf("keyword argument %q should be of kind %v, but got %v", name, kind, v.Type().Kind())
 	}
 	return v, true, nil
 }
@@ -944,7 +948,7 @@ type binaryFunc func(l, r Value) Value
 
 type binaryFuncSignature struct {
 	operator    ast.OperatorKind
-	left, right semantic.Kind
+	left, right semantic.Type
 }
 
 var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{

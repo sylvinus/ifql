@@ -15,7 +15,7 @@ func TestRange_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with database with range",
-			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).sum()`,
+			Raw:  `from(db:"mydb") |> range(start:-4h, stop:-2h) |> sum()`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{

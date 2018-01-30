@@ -221,6 +221,38 @@ func (e *CallExpression) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+func (e *PipeExpression) MarshalJSON() ([]byte, error) {
+	type Alias PipeExpression
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  e.Type(),
+		Alias: (*Alias)(e),
+	}
+	return json.Marshal(raw)
+}
+func (e *PipeExpression) UnmarshalJSON(data []byte) error {
+	type Alias PipeExpression
+	raw := struct {
+		*Alias
+		Argument json.RawMessage `json:"argument"`
+	}{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw.Alias != nil {
+		*e = *(*PipeExpression)(raw.Alias)
+	}
+
+	arg, err := unmarshalExpression(raw.Argument)
+	if err != nil {
+		return err
+	}
+	e.Argument = arg
+
+	return nil
+}
 func (e *MemberExpression) MarshalJSON() ([]byte, error) {
 	type Alias MemberExpression
 	raw := struct {
@@ -533,6 +565,17 @@ func (i *Identifier) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(raw)
 }
+func (l *PipeLiteral) MarshalJSON() ([]byte, error) {
+	type Alias PipeLiteral
+	raw := struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  l.Type(),
+		Alias: (*Alias)(l),
+	}
+	return json.Marshal(raw)
+}
 func (l *StringLiteral) MarshalJSON() ([]byte, error) {
 	type Alias StringLiteral
 	raw := struct {
@@ -783,6 +826,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(VariableDeclarator)
 	case "CallExpression":
 		node = new(CallExpression)
+	case "PipeExpression":
+		node = new(PipeExpression)
 	case "MemberExpression":
 		node = new(MemberExpression)
 	case "BinaryExpression":
@@ -799,6 +844,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(ArrayExpression)
 	case "Identifier":
 		node = new(Identifier)
+	case "PipeLiteral":
+		node = new(PipeLiteral)
 	case "StringLiteral":
 		node = new(StringLiteral)
 	case "BooleanLiteral":

@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 	"github.com/pkg/errors"
 )
 
@@ -19,14 +20,25 @@ type WindowOpSpec struct {
 	Triggering query.TriggerSpec `json:"triggering"`
 }
 
+var windowSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(WindowKind, createWindowOpSpec)
+	windowSignature.Params["every"] = semantic.Duration
+	windowSignature.Params["period"] = semantic.Duration
+	windowSignature.Params["round"] = semantic.Duration
+	windowSignature.Params["start"] = semantic.Time
+
+	query.RegisterFunction(WindowKind, createWindowOpSpec, windowSignature)
 	query.RegisterOpSpec(WindowKind, newWindowOp)
 	plan.RegisterProcedureSpec(WindowKind, newWindowProcedure, WindowKind)
 	execute.RegisterTransformation(WindowKind, createWindowTransformation)
 }
 
 func createWindowOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(WindowOpSpec)
 	every, everySet, err := args.GetDuration("every")
 	if err != nil {
