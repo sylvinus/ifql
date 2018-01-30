@@ -22,7 +22,7 @@ type ReadSpec struct {
 	RAMLimit     uint64
 	Database     string
 	Hosts        []string
-	Predicate    *semantic.ArrowFunctionExpression
+	Predicate    *semantic.FunctionExpression
 	PointsLimit  int64
 	SeriesLimit  int64
 	SeriesOffset int64

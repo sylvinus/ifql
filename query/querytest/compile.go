@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/influxdata/ifql/ast/asttest"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 type NewQueryTestCase struct {
@@ -17,7 +17,11 @@ type NewQueryTestCase struct {
 	WantErr bool
 }
 
-var opts = append(asttest.CompareOptions, cmp.AllowUnexported(query.Spec{}), cmpopts.IgnoreUnexported(query.Spec{}))
+var opts = append(
+	semantictest.CmpOptions,
+	cmp.AllowUnexported(query.Spec{}),
+	cmpopts.IgnoreUnexported(query.Spec{}),
+)
 
 func NewQueryTestHelper(t *testing.T, tc NewQueryTestCase) {
 	t.Helper()

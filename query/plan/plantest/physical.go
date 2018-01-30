@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 func PhysicalPlan_PushDown_Match_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, matchSpec plan.ProcedureSpec, want []bool) {
@@ -44,7 +45,8 @@ func PhysicalPlan_PushDown_TestHelper(t *testing.T, spec plan.PushDownProcedureS
 		}
 	}
 
-	if !cmp.Equal(got, want, cmpopts.EquateEmpty()) {
-		t.Errorf("unexpected PushDown: -want/+got:\n%s", cmp.Diff(want, got, cmpopts.EquateEmpty()))
+	opts := append(semantictest.CmpOptions, cmpopts.EquateEmpty())
+	if !cmp.Equal(got, want, opts...) {
+		t.Errorf("unexpected PushDown: -want/+got:\n%s", cmp.Diff(want, got, opts...))
 	}
 }

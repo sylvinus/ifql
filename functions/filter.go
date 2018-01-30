@@ -14,7 +14,7 @@ import (
 const FilterKind = "filter"
 
 type FilterOpSpec struct {
-	Fn *semantic.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.FunctionExpression `json:"fn"`
 }
 
 func init() {
@@ -48,7 +48,7 @@ func (s *FilterOpSpec) Kind() query.OperationKind {
 }
 
 type FilterProcedureSpec struct {
-	Fn *semantic.ArrowFunctionExpression
+	Fn *semantic.FunctionExpression
 }
 
 func newFilterProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -67,7 +67,7 @@ func (s *FilterProcedureSpec) Kind() plan.ProcedureKind {
 }
 func (s *FilterProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(FilterProcedureSpec)
-	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.FunctionExpression)
 	return ns
 }
 
@@ -122,8 +122,8 @@ func (s *FilterProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Pr
 	}
 }
 
-func mergeArrowFunction(a, b *semantic.ArrowFunctionExpression) *semantic.ArrowFunctionExpression {
-	fn := a.Copy().(*semantic.ArrowFunctionExpression)
+func mergeArrowFunction(a, b *semantic.FunctionExpression) *semantic.FunctionExpression {
+	fn := a.Copy().(*semantic.FunctionExpression)
 
 	aExp, aOK := a.Body.(semantic.Expression)
 	bExp, bOK := b.Body.(semantic.Expression)
@@ -151,22 +151,23 @@ func mergeArrowFunction(a, b *semantic.ArrowFunctionExpression) *semantic.ArrowF
 	}
 	for i, p := range a.Params {
 		passThroughArgs.Properties[i] = &semantic.Property{
-			Key:   p.Key,
-			Value: p.Key,
+			Key: p.Key,
+			//TODO(nathanielc): Construct valid IdentifierExpression with Declaration for the value.
+			//Value: p.Key,
 		}
 	}
 
 	if !aOK {
 		// Rewrite left expression as a function call.
 		and.Left = &semantic.CallExpression{
-			Callee:    a.Copy().(*semantic.ArrowFunctionExpression),
+			Callee:    a.Copy().(*semantic.FunctionExpression),
 			Arguments: passThroughArgs.Copy().(*semantic.ObjectExpression),
 		}
 	}
 	if !bOK {
 		// Rewrite right expression as a function call.
 		and.Right = &semantic.CallExpression{
-			Callee:    b.Copy().(*semantic.ArrowFunctionExpression),
+			Callee:    b.Copy().(*semantic.FunctionExpression),
 			Arguments: passThroughArgs.Copy().(*semantic.ObjectExpression),
 		}
 	}

@@ -23,7 +23,7 @@ type JoinOpSpec struct {
 	On []string `json:"on"`
 	// Fn is a function accepting a single parameter.
 	// The parameter is map if records for each of the parent operations.
-	Fn *semantic.ArrowFunctionExpression `json:"fn"`
+	Fn *semantic.FunctionExpression `json:"fn"`
 	// TableNames are the names to give to each parent when populating the parameter for the function.
 	// The first parent is referenced by the first name and so forth.
 	// TODO(nathanielc): Change this to a map of parent operation IDs to names.
@@ -53,7 +53,7 @@ func createJoinOpSpec(args query.Arguments, a *query.Administration) (query.Oper
 		TableNames: make(map[query.OperationID]string),
 	}
 
-	if array, ok, err := args.GetArray("on", query.TString); err != nil {
+	if array, ok, err := args.GetArray("on", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.On = array.AsStrings()
@@ -84,9 +84,9 @@ func (s *JoinOpSpec) Kind() query.OperationKind {
 }
 
 type MergeJoinProcedureSpec struct {
-	On         []string                          `json:"keys"`
-	Fn         *semantic.ArrowFunctionExpression `json:"f"`
-	TableNames map[plan.ProcedureID]string       `json:"table_names"`
+	On         []string                     `json:"keys"`
+	Fn         *semantic.FunctionExpression `json:"f"`
+	TableNames map[plan.ProcedureID]string  `json:"table_names"`
 }
 
 func newMergeJoinProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -119,7 +119,7 @@ func (s *MergeJoinProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.On = make([]string, len(s.On))
 	copy(ns.On, s.On)
 
-	ns.Fn = s.Fn.Copy().(*semantic.ArrowFunctionExpression)
+	ns.Fn = s.Fn.Copy().(*semantic.FunctionExpression)
 
 	return ns
 }
@@ -459,12 +459,18 @@ func (t *joinTables) Join() (execute.Block, error) {
 	builder.SetBounds(t.bounds)
 	builder.AddCol(execute.TimeCol)
 
-	// Add new value columns
-	meta := t.joinFn.MapMeta()
-	for _, p := range meta.Properties {
+	// Add new value columns in sorted order
+	mapType := t.joinFn.Type()
+	properties := mapType.Properties()
+	keys := make([]string, 0, len(properties))
+	for k := range properties {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		builder.AddCol(execute.ColMeta{
-			Label: p.Key,
-			Type:  execute.ConvertFromCompilerType(p.Type),
+			Label: k,
+			Type:  execute.ConvertFromKind(properties[k].Kind()),
 			Kind:  execute.ValueColKind,
 		})
 	}
@@ -526,23 +532,8 @@ func (t *joinTables) Join() (execute.Block, error) {
 
 							builder.AppendString(j, leftKey.Tags[c.Label])
 						case execute.ValueColKind:
-							v := m.Values[c.Label]
-							switch val := v.Value.(type) {
-							case bool:
-								builder.AppendBool(j, val)
-							case int64:
-								builder.AppendInt(j, val)
-							case uint64:
-								builder.AppendUInt(j, val)
-							case float64:
-								builder.AppendFloat(j, val)
-							case string:
-								builder.AppendString(j, val)
-							case execute.Time:
-								builder.AppendTime(j, val)
-							default:
-								execute.PanicUnknownType(execute.ConvertFromCompilerType(v.Type))
-							}
+							v := m.Get(c.Label)
+							execute.AppendValue(builder, j, v)
 						default:
 							log.Printf("unexpected column %v", c)
 						}
@@ -640,129 +631,157 @@ func (k joinKey) Less(o joinKey) bool {
 }
 
 type joinFunc struct {
-	references       []compiler.Reference
-	referencePaths   []compiler.ReferencePath
+	fn               *semantic.FunctionExpression
 	compilationCache *compiler.CompilationCache
 	scope            compiler.Scope
 
-	scopeCols map[compiler.ReferencePath]int
-	types     map[compiler.ReferencePath]compiler.Type
-
-	tables     map[string]*execute.ColListBlock
 	preparedFn compiler.Func
 
+	recordName string
+	record     *compiler.Object
+
+	recordCols map[tableCol]int
+	references map[string][]string
+
 	isWrap  bool
-	wrapMap compiler.Map
+	wrapObj *compiler.Object
+
+	tableData map[string]*execute.ColListBlock
 }
 
-func NewRowJoinFunction(fn *semantic.ArrowFunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
+type tableCol struct {
+	table, col string
+}
+
+func NewRowJoinFunction(fn *semantic.FunctionExpression, parentIDs []execute.DatasetID, tableNames map[execute.DatasetID]string) (*joinFunc, error) {
 	if len(fn.Params) != 1 {
 		return nil, errors.New("join function should only have one parameter for the map of tables")
 	}
-	references, err := compiler.FindReferences(fn)
-	if err != nil {
-		return nil, err
-	}
-	referencePaths := make([]compiler.ReferencePath, len(references))
-	for i, r := range references {
-		if len(r) != 3 {
-			return nil, fmt.Errorf("unknown reference %v", r.Path())
-		}
-		referencePaths[i] = r.Path()
-	}
 	return &joinFunc{
-		references:       references,
-		referencePaths:   referencePaths,
-		compilationCache: compiler.NewCompilationCache(fn, referencePaths),
-		scope:            make(compiler.Scope, len(references)),
-		scopeCols:        make(map[compiler.ReferencePath]int, len(references)),
-		types:            make(map[compiler.ReferencePath]compiler.Type, len(references)),
-		wrapMap: compiler.Map{
-			Meta: compiler.MapMeta{
-				Properties: []compiler.MapPropertyMeta{{Key: execute.DefaultValueColLabel}},
-			},
-			Values: make(map[string]compiler.Value, 1),
-		},
+		compilationCache: compiler.NewCompilationCache(fn),
+		scope:            make(compiler.Scope, 1),
+		references:       findTableReferences(fn),
+		recordCols:       make(map[tableCol]int),
+		record:           compiler.NewObject(),
+		recordName:       fn.Params[0].Key.Name,
+		wrapObj:          compiler.NewObject(),
 	}, nil
 }
 
 func (f *joinFunc) Prepare(tables map[string]*execute.ColListBlock) error {
-	f.tables = tables
-	// Prepare types and scopeCols
-	for i, r := range f.references {
-		rp := f.referencePaths[i]
-		found := false
-		tableName := r[1]
-		cols := tables[tableName].Cols()
-		for j, c := range cols {
-			if r[2] == c.Label {
-				f.scopeCols[rp] = j
-				f.types[rp] = execute.ConvertToCompilerType(c.Type)
-				found = true
-				break
+	f.tableData = tables
+	propertyTypes := make(map[string]semantic.Type, len(f.references))
+	// Prepare types and recordcols
+	for tbl, b := range tables {
+		cols := b.Cols()
+		f.record.Set(tbl, compiler.NewObject())
+		tblPropertyTypes := make(map[string]semantic.Type, len(f.references[tbl]))
+		for _, r := range f.references[tbl] {
+			found := false
+			for j, c := range cols {
+				if r == c.Label {
+					f.recordCols[tableCol{table: tbl, col: c.Label}] = j
+					tblPropertyTypes[r] = execute.ConvertToKind(c.Type)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("function references unknown column %q of table %q", r, tbl)
 			}
 		}
-		if !found {
-			return fmt.Errorf("function references unknown value %q", rp)
-		}
+		propertyTypes[tbl] = semantic.NewObjectType(tblPropertyTypes)
 	}
 	// Compile fn for given types
-	fn, err := f.compilationCache.Compile(f.types)
+	fn, err := f.compilationCache.Compile(map[string]semantic.Type{
+		f.recordName: semantic.NewObjectType(propertyTypes),
+	})
 	if err != nil {
 		return err
 	}
 	f.preparedFn = fn
 
-	t := f.preparedFn.Type()
-	f.isWrap = t != compiler.TMap
+	k := f.preparedFn.Type().Kind()
+	f.isWrap = k != semantic.Object
 	if f.isWrap {
-		f.wrapMap.Meta.Properties[0].Type = t
+		f.wrapObj.SetPropertyType(execute.DefaultValueColLabel, f.preparedFn.Type())
 	}
 	return nil
 }
 
-func (f *joinFunc) MapMeta() compiler.MapMeta {
+func (f *joinFunc) Type() semantic.Type {
 	if f.isWrap {
-		return f.wrapMap.Meta
+		return f.wrapObj.Type()
 	}
-	return f.preparedFn.MapMeta()
+	return f.preparedFn.Type()
 }
 
-func (f *joinFunc) Eval(rows map[string]int) (compiler.Map, error) {
-	for i, r := range f.references {
-		rp := f.referencePaths[i]
-		tableName := r[1]
-		row := rows[tableName]
-		f.scope[rp] = readValue(row, f.scopeCols[rp], f.tables[tableName])
+func (f *joinFunc) Eval(rows map[string]int) (*compiler.Object, error) {
+	for tbl, references := range f.references {
+		row := rows[tbl]
+		data := f.tableData[tbl]
+		obj := f.record.Get(tbl).(*compiler.Object)
+		for _, r := range references {
+			obj.Set(r, readValue(row, f.recordCols[tableCol{table: tbl, col: r}], data))
+		}
+		f.record.Set(tbl, obj)
 	}
+	f.scope[f.recordName] = f.record
+
 	v, err := f.preparedFn.Eval(f.scope)
 	if err != nil {
-		return compiler.Map{}, err
+		return nil, err
 	}
 	if f.isWrap {
-		f.wrapMap.Values[execute.DefaultValueColLabel] = v
-		return f.wrapMap, nil
+		f.wrapObj.Set(execute.DefaultValueColLabel, v)
+		return f.wrapObj, nil
 	}
-	return v.Map(), nil
+	return v.Object(), nil
 }
 
 func readValue(i, j int, table *execute.ColListBlock) compiler.Value {
-	var v interface{}
 	cols := table.Cols()
-	switch cols[j].Type {
+	switch t := cols[j].Type; t {
 	case execute.TBool:
-		v = table.AtBool(i, j)
+		return compiler.NewBool(table.AtBool(i, j))
 	case execute.TInt:
-		v = table.AtInt(i, j)
+		return compiler.NewInt(table.AtInt(i, j))
 	case execute.TUInt:
-		v = table.AtUInt(i, j)
+		return compiler.NewUInt(table.AtUInt(i, j))
 	case execute.TFloat:
-		v = table.AtFloat(i, j)
+		return compiler.NewFloat(table.AtFloat(i, j))
 	case execute.TString:
-		v = table.AtString(i, j)
-	}
-	return compiler.Value{
-		Type:  execute.ConvertToCompilerType(cols[j].Type),
-		Value: v,
+		return compiler.NewString(table.AtString(i, j))
+	default:
+		execute.PanicUnknownType(t)
+		return nil
 	}
 }
+
+func findTableReferences(fn *semantic.FunctionExpression) map[string][]string {
+	v := &tableReferenceVisitor{
+		record: fn.Params[0].Key.Name,
+		refs:   make(map[string][]string),
+	}
+	semantic.Walk(v, fn)
+	return v.refs
+}
+
+type tableReferenceVisitor struct {
+	record string
+	refs   map[string][]string
+}
+
+func (c *tableReferenceVisitor) Visit(node semantic.Node) semantic.Visitor {
+	if col, ok := node.(*semantic.MemberExpression); ok {
+		if table, ok := col.Object.(*semantic.MemberExpression); ok {
+			if record, ok := table.Object.(*semantic.IdentifierExpression); ok && record.Name == c.record {
+				c.refs[table.Property] = append(c.refs[table.Property], col.Property)
+				return nil
+			}
+		}
+	}
+	return c
+}
+
+func (c *tableReferenceVisitor) Done() {}

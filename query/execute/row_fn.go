@@ -11,60 +11,54 @@ import (
 )
 
 type rowFn struct {
-	references       []compiler.Reference
-	referencePaths   []compiler.ReferencePath
+	fn               *semantic.FunctionExpression
 	compilationCache *compiler.CompilationCache
 	scope            compiler.Scope
 
-	scopeCols map[compiler.ReferencePath]int
-	types     map[compiler.ReferencePath]compiler.Type
-
 	preparedFn compiler.Func
+
+	recordName string
+	record     *compiler.Object
+
+	recordCols map[string]int
+	references []string
 }
 
-func newRowFn(fn *semantic.ArrowFunctionExpression) (rowFn, error) {
+func newRowFn(fn *semantic.FunctionExpression) (rowFn, error) {
 	if len(fn.Params) != 1 {
-		return rowFn{}, fmt.Errorf("function should only have a single parameter, got %v", fn.Params)
+		return rowFn{}, fmt.Errorf("function should only have a single parameter, got %d", len(fn.Params))
 	}
-	references, err := compiler.FindReferences(fn)
-	if err != nil {
-		return rowFn{}, err
-	}
-
-	referencePaths := make([]compiler.ReferencePath, len(references))
-	for i, r := range references {
-		referencePaths[i] = r.Path()
-	}
-
 	return rowFn{
-		references:       references,
-		referencePaths:   referencePaths,
-		compilationCache: compiler.NewCompilationCache(fn, referencePaths),
-		scope:            make(compiler.Scope, len(references)),
-		scopeCols:        make(map[compiler.ReferencePath]int, len(references)),
-		types:            make(map[compiler.ReferencePath]compiler.Type, len(references)),
+		compilationCache: compiler.NewCompilationCache(fn),
+		scope:            make(compiler.Scope, 1),
+		recordName:       fn.Params[0].Key.Name,
+		references:       findColReferences(fn),
+		recordCols:       make(map[string]int),
+		record:           compiler.NewObject(),
 	}, nil
 }
 
 func (f *rowFn) prepare(cols []ColMeta) error {
-	// Prepare types and scopeCols
-	for i, r := range f.references {
-		rp := f.referencePaths[i]
+	// Prepare types and recordCols
+	propertyTypes := make(map[string]semantic.Type, len(f.references))
+	for _, r := range f.references {
 		found := false
 		for j, c := range cols {
-			if r[1] == c.Label {
-				f.scopeCols[rp] = j
-				f.types[rp] = ConvertToCompilerType(c.Type)
+			if r == c.Label {
+				f.recordCols[r] = j
 				found = true
+				propertyTypes[r] = ConvertToKind(c.Type)
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("function references unknown value %q", rp)
+			return fmt.Errorf("function references unknown column %q", r)
 		}
 	}
 	// Compile fn for given types
-	fn, err := f.compilationCache.Compile(f.types)
+	fn, err := f.compilationCache.Compile(map[string]semantic.Type{
+		f.recordName: semantic.NewObjectType(propertyTypes),
+	})
 	if err != nil {
 		return err
 	}
@@ -72,43 +66,44 @@ func (f *rowFn) prepare(cols []ColMeta) error {
 	return nil
 }
 
-func ConvertToCompilerType(t DataType) compiler.Type {
+func ConvertToKind(t DataType) semantic.Kind {
 	// TODO make this an array lookup.
 	switch t {
 	case TInvalid:
-		return compiler.TInvalid
+		return semantic.Invalid
 	case TBool:
-		return compiler.TBool
+		return semantic.Bool
 	case TInt:
-		return compiler.TInt
+		return semantic.Int
 	case TUInt:
-		return compiler.TUInt
+		return semantic.UInt
 	case TFloat:
-		return compiler.TFloat
+		return semantic.Float
 	case TString:
-		return compiler.TString
+		return semantic.String
 	case TTime:
-		return compiler.TTime
+		return semantic.Time
 	default:
-		return compiler.TInvalid
+		return semantic.Invalid
 	}
 }
-func ConvertFromCompilerType(t compiler.Type) DataType {
+
+func ConvertFromKind(k semantic.Kind) DataType {
 	// TODO make this an array lookup.
-	switch t {
-	case compiler.TInvalid:
+	switch k {
+	case semantic.Invalid:
 		return TInvalid
-	case compiler.TBool:
+	case semantic.Bool:
 		return TBool
-	case compiler.TInt:
+	case semantic.Int:
 		return TInt
-	case compiler.TUInt:
+	case semantic.UInt:
 		return TUInt
-	case compiler.TFloat:
+	case semantic.Float:
 		return TFloat
-	case compiler.TString:
+	case semantic.String:
 		return TString
-	case compiler.TTime:
+	case semantic.Time:
 		return TTime
 	default:
 		return TInvalid
@@ -116,9 +111,10 @@ func ConvertFromCompilerType(t compiler.Type) DataType {
 }
 
 func (f *rowFn) eval(row int, rr RowReader) (compiler.Value, error) {
-	for _, rp := range f.referencePaths {
-		f.scope[rp] = ValueForRow(row, f.scopeCols[rp], rr)
+	for _, r := range f.references {
+		f.record.Set(r, ValueForRow(row, f.recordCols[r], rr))
 	}
+	f.scope[f.recordName] = f.record
 	return f.preparedFn.Eval(f.scope)
 }
 
@@ -126,7 +122,7 @@ type RowPredicateFn struct {
 	rowFn
 }
 
-func NewRowPredicateFn(fn *semantic.ArrowFunctionExpression) (*RowPredicateFn, error) {
+func NewRowPredicateFn(fn *semantic.FunctionExpression) (*RowPredicateFn, error) {
 	r, err := newRowFn(fn)
 	if err != nil {
 		return nil, err
@@ -141,7 +137,7 @@ func (f *RowPredicateFn) Prepare(cols []ColMeta) error {
 	if err != nil {
 		return err
 	}
-	if f.preparedFn.Type() != compiler.TBool {
+	if f.preparedFn.Type() != semantic.Bool {
 		return errors.New("row predicate function does not evaluate to a boolean")
 	}
 	return nil
@@ -159,22 +155,17 @@ type RowMapFn struct {
 	rowFn
 
 	isWrap  bool
-	wrapMap compiler.Map
+	wrapObj *compiler.Object
 }
 
-func NewRowMapFn(fn *semantic.ArrowFunctionExpression) (*RowMapFn, error) {
+func NewRowMapFn(fn *semantic.FunctionExpression) (*RowMapFn, error) {
 	r, err := newRowFn(fn)
 	if err != nil {
 		return nil, err
 	}
 	return &RowMapFn{
-		rowFn: r,
-		wrapMap: compiler.Map{
-			Meta: compiler.MapMeta{
-				Properties: []compiler.MapPropertyMeta{{Key: DefaultValueColLabel}},
-			},
-			Values: make(map[string]compiler.Value, 1),
-		},
+		rowFn:   r,
+		wrapObj: compiler.NewObject(),
 	}, nil
 }
 
@@ -183,56 +174,74 @@ func (f *RowMapFn) Prepare(cols []ColMeta) error {
 	if err != nil {
 		return err
 	}
-	t := f.preparedFn.Type()
-	f.isWrap = t != compiler.TMap
+	k := f.preparedFn.Type().Kind()
+	f.isWrap = k != semantic.Object
 	if f.isWrap {
-		f.wrapMap.Meta.Properties[0].Type = t
+		f.wrapObj.SetPropertyType(DefaultValueColLabel, f.preparedFn.Type())
 	}
 	return nil
 }
 
-func (f *RowMapFn) MapMeta() compiler.MapMeta {
+func (f *RowMapFn) Type() semantic.Type {
 	if f.isWrap {
-		return f.wrapMap.Meta
+		return f.wrapObj.Type()
 	}
-	return f.preparedFn.MapMeta()
+	return f.preparedFn.Type()
 }
 
-func (f *RowMapFn) Eval(row int, rr RowReader) (compiler.Map, error) {
+func (f *RowMapFn) Eval(row int, rr RowReader) (*compiler.Object, error) {
 	v, err := f.rowFn.eval(row, rr)
 	if err != nil {
-		return compiler.Map{}, err
+		return nil, err
 	}
 	if f.isWrap {
-		f.wrapMap.Values[DefaultValueColLabel] = v
-		return f.wrapMap, nil
+		f.wrapObj.Set(DefaultValueColLabel, v)
+		return f.wrapObj, nil
 	}
-	return v.Map(), nil
+	return v.Object(), nil
 }
 
-func ValueForRow(i, j int, rr RowReader) (v compiler.Value) {
+func ValueForRow(i, j int, rr RowReader) compiler.Value {
 	t := rr.Cols()[j].Type
-	v.Type = ConvertToCompilerType(t)
 	switch t {
 	case TBool:
-		v.Value = rr.AtBool(i, j)
+		return compiler.NewBool(rr.AtBool(i, j))
 	case TInt:
-		v.Value = rr.AtInt(i, j)
+		return compiler.NewInt(rr.AtInt(i, j))
 	case TUInt:
-		v.Value = rr.AtUInt(i, j)
+		return compiler.NewUInt(rr.AtUInt(i, j))
 	case TFloat:
-		v.Value = rr.AtFloat(i, j)
+		return compiler.NewFloat(rr.AtFloat(i, j))
 	case TString:
-		v.Value = rr.AtString(i, j)
+		return compiler.NewString(rr.AtString(i, j))
 	case TTime:
-		v.Value = rr.AtTime(i, j)
+		return compiler.NewTime(compiler.Time(rr.AtTime(i, j)))
 	default:
 		PanicUnknownType(t)
+		return nil
 	}
-	return
 }
 
-func ToStoragePredicate(f *semantic.ArrowFunctionExpression) (*storage.Predicate, error) {
+func AppendValue(builder BlockBuilder, j int, v compiler.Value) {
+	switch k := v.Type().Kind(); k {
+	case semantic.Bool:
+		builder.AppendBool(j, v.Bool())
+	case semantic.Int:
+		builder.AppendInt(j, v.Int())
+	case semantic.UInt:
+		builder.AppendUInt(j, v.UInt())
+	case semantic.Float:
+		builder.AppendFloat(j, v.Float())
+	case semantic.String:
+		builder.AppendString(j, v.Str())
+	case semantic.Time:
+		builder.AppendTime(j, Time(v.Time()))
+	default:
+		PanicUnknownType(ConvertFromKind(k))
+	}
+}
+
+func ToStoragePredicate(f *semantic.FunctionExpression) (*storage.Predicate, error) {
 	if len(f.Params) != 1 {
 		return nil, errors.New("storage predicate functions must have exactly one parameter")
 	}
@@ -331,7 +340,7 @@ func toStoragePredicate(n semantic.Expression, objectName string) (*storage.Node
 		}, nil
 	case *semantic.MemberExpression:
 		// Sanity check that the object is the objectName identifier
-		if ident, ok := n.Object.(*semantic.Identifier); !ok || ident.Name != objectName {
+		if ident, ok := n.Object.(*semantic.IdentifierExpression); !ok || ident.Name != objectName {
 			return nil, fmt.Errorf("unknown object %q", n.Object)
 		}
 		if n.Property == "_value" {
@@ -377,3 +386,27 @@ func toComparisonOperator(o ast.OperatorKind) (storage.Node_Comparison, error) {
 		return 0, fmt.Errorf("unknown operator %v", o)
 	}
 }
+
+func findColReferences(fn *semantic.FunctionExpression) []string {
+	v := &colReferenceVisitor{
+		recordName: fn.Params[0].Key.Name,
+	}
+	semantic.Walk(v, fn)
+	return v.refs
+}
+
+type colReferenceVisitor struct {
+	recordName string
+	refs       []string
+}
+
+func (c *colReferenceVisitor) Visit(node semantic.Node) semantic.Visitor {
+	if me, ok := node.(*semantic.MemberExpression); ok {
+		if obj, ok := me.Object.(*semantic.IdentifierExpression); ok && obj.Name == c.recordName {
+			c.refs = append(c.refs, me.Property)
+		}
+	}
+	return c
+}
+
+func (c *colReferenceVisitor) Done() {}

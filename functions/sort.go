@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const SortKind = "sort"
@@ -25,7 +26,7 @@ func init() {
 func createSortOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
 	spec := new(SortOpSpec)
 
-	if array, ok, err := args.GetArray("cols", query.TString); err != nil {
+	if array, ok, err := args.GetArray("cols", semantic.String); err != nil {
 		return nil, err
 	} else if ok {
 		spec.Cols = array.AsStrings()

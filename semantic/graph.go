@@ -12,7 +12,7 @@ import (
 
 type Node interface {
 	node()
-	Type() string
+	NodeType() string
 	Copy() Node
 
 	json.Marshaler
@@ -24,17 +24,17 @@ func (*BlockStatement) node()      {}
 func (*ExpressionStatement) node() {}
 func (*ReturnStatement) node()     {}
 func (*VariableDeclaration) node() {}
-func (*VariableDeclarator) node()  {}
 
-func (*ArrayExpression) node()         {}
-func (*ArrowFunctionExpression) node() {}
-func (*BinaryExpression) node()        {}
-func (*CallExpression) node()          {}
-func (*ConditionalExpression) node()   {}
-func (*LogicalExpression) node()       {}
-func (*MemberExpression) node()        {}
-func (*ObjectExpression) node()        {}
-func (*UnaryExpression) node()         {}
+func (*ArrayExpression) node()       {}
+func (*FunctionExpression) node()    {}
+func (*BinaryExpression) node()      {}
+func (*CallExpression) node()        {}
+func (*ConditionalExpression) node() {}
+func (*IdentifierExpression) node()  {}
+func (*LogicalExpression) node()     {}
+func (*MemberExpression) node()      {}
+func (*ObjectExpression) node()      {}
+func (*UnaryExpression) node()       {}
 
 func (*Identifier) node()    {}
 func (*Property) node()      {}
@@ -61,27 +61,28 @@ func (*VariableDeclaration) stmt() {}
 
 type Expression interface {
 	Node
+	Type() Type
 	expression()
 }
 
-func (*ArrayExpression) expression()         {}
-func (*ArrowFunctionExpression) expression() {}
-func (*BinaryExpression) expression()        {}
-func (*BooleanLiteral) expression()          {}
-func (*CallExpression) expression()          {}
-func (*ConditionalExpression) expression()   {}
-func (*DateTimeLiteral) expression()         {}
-func (*DurationLiteral) expression()         {}
-func (*FloatLiteral) expression()            {}
-func (*Identifier) expression()              {}
-func (*IntegerLiteral) expression()          {}
-func (*LogicalExpression) expression()       {}
-func (*MemberExpression) expression()        {}
-func (*ObjectExpression) expression()        {}
-func (*RegexpLiteral) expression()           {}
-func (*StringLiteral) expression()           {}
-func (*UnaryExpression) expression()         {}
-func (*UnsignedIntegerLiteral) expression()  {}
+func (*ArrayExpression) expression()        {}
+func (*FunctionExpression) expression()     {}
+func (*BinaryExpression) expression()       {}
+func (*BooleanLiteral) expression()         {}
+func (*CallExpression) expression()         {}
+func (*ConditionalExpression) expression()  {}
+func (*DateTimeLiteral) expression()        {}
+func (*DurationLiteral) expression()        {}
+func (*FloatLiteral) expression()           {}
+func (*IdentifierExpression) expression()   {}
+func (*IntegerLiteral) expression()         {}
+func (*LogicalExpression) expression()      {}
+func (*MemberExpression) expression()       {}
+func (*ObjectExpression) expression()       {}
+func (*RegexpLiteral) expression()          {}
+func (*StringLiteral) expression()          {}
+func (*UnaryExpression) expression()        {}
+func (*UnsignedIntegerLiteral) expression() {}
 
 type Literal interface {
 	Expression
@@ -101,7 +102,7 @@ type Program struct {
 	Body []Statement `json:"body"`
 }
 
-func (*Program) Type() string { return "Program" }
+func (*Program) NodeType() string { return "Program" }
 
 func (p *Program) Copy() Node {
 	if p == nil {
@@ -124,7 +125,11 @@ type BlockStatement struct {
 	Body []Statement `json:"body"`
 }
 
-func (*BlockStatement) Type() string { return "BlockStatement" }
+func (*BlockStatement) NodeType() string { return "BlockStatement" }
+
+func (s *BlockStatement) ReturnStatement() *ReturnStatement {
+	return s.Body[len(s.Body)-1].(*ReturnStatement)
+}
 
 func (s *BlockStatement) Copy() Node {
 	if s == nil {
@@ -147,7 +152,7 @@ type ExpressionStatement struct {
 	Expression Expression `json:"expression"`
 }
 
-func (*ExpressionStatement) Type() string { return "ExpressionStatement" }
+func (*ExpressionStatement) NodeType() string { return "ExpressionStatement" }
 
 func (s *ExpressionStatement) Copy() Node {
 	if s == nil {
@@ -165,7 +170,7 @@ type ReturnStatement struct {
 	Argument Expression `json:"argument"`
 }
 
-func (*ReturnStatement) Type() string { return "ReturnStatement" }
+func (*ReturnStatement) NodeType() string { return "ReturnStatement" }
 
 func (s *ReturnStatement) Copy() Node {
 	if s == nil {
@@ -180,10 +185,11 @@ func (s *ReturnStatement) Copy() Node {
 }
 
 type VariableDeclaration struct {
-	Declarations []*VariableDeclarator `json:"declarations"`
+	ID   *Identifier `json:"id"`
+	Init Expression  `json:"init"`
 }
 
-func (*VariableDeclaration) Type() string { return "VariableDeclaration" }
+func (*VariableDeclaration) NodeType() string { return "VariableDeclaration" }
 
 func (s *VariableDeclaration) Copy() Node {
 	if s == nil {
@@ -192,34 +198,6 @@ func (s *VariableDeclaration) Copy() Node {
 	ns := new(VariableDeclaration)
 	*ns = *s
 
-	if len(s.Declarations) > 0 {
-		ns.Declarations = make([]*VariableDeclarator, len(s.Declarations))
-		for i, decl := range s.Declarations {
-			ns.Declarations[i] = decl.Copy().(*VariableDeclarator)
-		}
-	}
-
-	return ns
-}
-
-type VariableDeclarator struct {
-	ID   *Identifier `json:"id"`
-	Init Expression  `json:"init"`
-	// Uses is a list of every place this identifier is used.
-	// TODO(nathanielc): Do we need this?
-	//Uses []Expression
-}
-
-func (*VariableDeclarator) Type() string { return "VariableDeclarator" }
-
-func (s *VariableDeclarator) Copy() Node {
-	if s == nil {
-		return s
-	}
-	ns := new(VariableDeclarator)
-	*ns = *s
-
-	ns.ID = s.ID.Copy().(*Identifier)
 	if s.Init != nil {
 		ns.Init = s.Init.Copy().(Expression)
 	}
@@ -229,9 +207,16 @@ func (s *VariableDeclarator) Copy() Node {
 
 type ArrayExpression struct {
 	Elements []Expression `json:"elements"`
+	typ      Type
 }
 
-func (*ArrayExpression) Type() string { return "ArrayExpression" }
+func (*ArrayExpression) NodeType() string { return "ArrayExpression" }
+func (e *ArrayExpression) Type() Type {
+	if e.typ == nil {
+		e.typ = arrayTypeOf(e)
+	}
+	return e.typ
+}
 
 func (e *ArrayExpression) Copy() Node {
 	if e == nil {
@@ -250,18 +235,26 @@ func (e *ArrayExpression) Copy() Node {
 	return ne
 }
 
-type ArrowFunctionExpression struct {
+type FunctionExpression struct {
 	Params []*FunctionParam `json:"params"`
 	Body   Node             `json:"body"`
+	typ    Type
 }
 
-func (*ArrowFunctionExpression) Type() string { return "ArrowFunctionExpression" }
+func (*FunctionExpression) NodeType() string { return "ArrowFunctionExpression" }
+func (e *FunctionExpression) Type() Type {
+	if e.typ == nil {
+		e.typ = functionTypeOf(e)
+	}
+	return e.typ
 
-func (e *ArrowFunctionExpression) Copy() Node {
+}
+
+func (e *FunctionExpression) Copy() Node {
 	if e == nil {
 		return e
 	}
-	ne := new(ArrowFunctionExpression)
+	ne := new(FunctionExpression)
 	*ne = *e
 
 	if len(e.Params) > 0 {
@@ -276,11 +269,26 @@ func (e *ArrowFunctionExpression) Copy() Node {
 }
 
 type FunctionParam struct {
-	Key     *Identifier `json:"key"`
-	Default Literal     `json:"default"`
+	Key         *Identifier `json:"key"`
+	Default     Literal     `json:"default"`
+	declaration *VariableDeclaration
 }
 
-func (*FunctionParam) Type() string { return "FunctionParam" }
+func (*FunctionParam) NodeType() string { return "FunctionParam" }
+
+func (f *FunctionParam) Type() Type {
+	if f.declaration == nil {
+		if f.Default != nil {
+			f.declaration = &VariableDeclaration{
+				ID:   f.Key,
+				Init: f.Default,
+			}
+		} else {
+			return Invalid
+		}
+	}
+	return f.declaration.Init.Type()
+}
 
 func (p *FunctionParam) Copy() Node {
 	if p == nil {
@@ -303,7 +311,14 @@ type BinaryExpression struct {
 	Right    Expression       `json:"right"`
 }
 
-func (*BinaryExpression) Type() string { return "BinaryExpression" }
+func (*BinaryExpression) NodeType() string { return "BinaryExpression" }
+func (e *BinaryExpression) Type() Type {
+	return binaryTypesLookup[binarySignature{
+		operator: e.Operator,
+		left:     e.Left.Type().Kind(),
+		right:    e.Right.Type().Kind(),
+	}]
+}
 
 func (e *BinaryExpression) Copy() Node {
 	if e == nil {
@@ -323,7 +338,10 @@ type CallExpression struct {
 	Arguments *ObjectExpression `json:"arguments"`
 }
 
-func (*CallExpression) Type() string { return "CallExpression" }
+func (*CallExpression) NodeType() string { return "CallExpression" }
+func (e *CallExpression) Type() Type {
+	return e.Callee.Type()
+}
 
 func (e *CallExpression) Copy() Node {
 	if e == nil {
@@ -344,7 +362,7 @@ type ConditionalExpression struct {
 	Consequent Expression `json:"consequent"`
 }
 
-func (*ConditionalExpression) Type() string { return "ConditionalExpression" }
+func (*ConditionalExpression) NodeType() string { return "ConditionalExpression" }
 
 func (e *ConditionalExpression) Copy() Node {
 	if e == nil {
@@ -366,7 +384,8 @@ type LogicalExpression struct {
 	Right    Expression              `json:"right"`
 }
 
-func (*LogicalExpression) Type() string { return "LogicalExpression" }
+func (*LogicalExpression) NodeType() string { return "LogicalExpression" }
+func (*LogicalExpression) Type() Type       { return Bool }
 
 func (e *LogicalExpression) Copy() Node {
 	if e == nil {
@@ -386,7 +405,15 @@ type MemberExpression struct {
 	Property string     `json:"property"`
 }
 
-func (*MemberExpression) Type() string { return "MemberExpression" }
+func (*MemberExpression) NodeType() string { return "MemberExpression" }
+
+func (e *MemberExpression) Type() Type {
+	t := e.Object.Type()
+	if t.Kind() != Object {
+		return Invalid
+	}
+	return e.Object.Type().PropertyType(e.Property)
+}
 
 func (e *MemberExpression) Copy() Node {
 	if e == nil {
@@ -402,9 +429,16 @@ func (e *MemberExpression) Copy() Node {
 
 type ObjectExpression struct {
 	Properties []*Property `json:"properties"`
+	typ        Type
 }
 
-func (*ObjectExpression) Type() string { return "ObjectExpression" }
+func (*ObjectExpression) NodeType() string { return "ObjectExpression" }
+func (e *ObjectExpression) Type() Type {
+	if e.typ == nil {
+		e.typ = objectTypeOf(e)
+	}
+	return e.typ
+}
 
 func (e *ObjectExpression) Copy() Node {
 	if e == nil {
@@ -428,7 +462,10 @@ type UnaryExpression struct {
 	Argument Expression       `json:"argument"`
 }
 
-func (*UnaryExpression) Type() string { return "UnaryExpression" }
+func (*UnaryExpression) NodeType() string { return "UnaryExpression" }
+func (e *UnaryExpression) Type() Type {
+	return e.Argument.Type()
+}
 
 func (e *UnaryExpression) Copy() Node {
 	if e == nil {
@@ -447,7 +484,7 @@ type Property struct {
 	Value Expression  `json:"value"`
 }
 
-func (*Property) Type() string { return "Property" }
+func (*Property) NodeType() string { return "Property" }
 
 func (p *Property) Copy() Node {
 	if p == nil {
@@ -456,20 +493,43 @@ func (p *Property) Copy() Node {
 	np := new(Property)
 	*np = *p
 
-	np.Key = p.Key.Copy().(*Identifier)
 	np.Value = p.Value.Copy().(Expression)
 
 	return np
 }
 
-type Identifier struct {
+type IdentifierExpression struct {
 	Name string `json:"name"`
-	// Declaration is the node that declares this identifier
-	// TODO(nathanielc): Do we need this?
-	//Declaration *VariableDeclarator
+	// declaration is the node that declares this identifier
+	declaration *VariableDeclaration
 }
 
-func (*Identifier) Type() string { return "Identifier" }
+func (*IdentifierExpression) NodeType() string { return "IdentifierExpression" }
+
+func (e *IdentifierExpression) Type() Type {
+	if e.declaration == nil {
+		return Invalid
+	}
+	return e.declaration.Init.Type()
+}
+
+func (e *IdentifierExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(IdentifierExpression)
+	*ne = *e
+
+	ne.declaration = e.declaration.Copy().(*VariableDeclaration)
+
+	return ne
+}
+
+type Identifier struct {
+	Name string `json:"name"`
+}
+
+func (*Identifier) NodeType() string { return "Identifier" }
 
 func (i *Identifier) Copy() Node {
 	if i == nil {
@@ -485,7 +545,8 @@ type BooleanLiteral struct {
 	Value bool `json:"value"`
 }
 
-func (*BooleanLiteral) Type() string { return "BooleanLiteral" }
+func (*BooleanLiteral) NodeType() string { return "BooleanLiteral" }
+func (*BooleanLiteral) Type() Type       { return Bool }
 
 func (l *BooleanLiteral) Copy() Node {
 	if l == nil {
@@ -501,7 +562,8 @@ type DateTimeLiteral struct {
 	Value time.Time `json:"value"`
 }
 
-func (*DateTimeLiteral) Type() string { return "DateTimeLiteral" }
+func (*DateTimeLiteral) NodeType() string { return "DateTimeLiteral" }
+func (*DateTimeLiteral) Type() Type       { return Time }
 
 func (l *DateTimeLiteral) Copy() Node {
 	if l == nil {
@@ -517,7 +579,8 @@ type DurationLiteral struct {
 	Value time.Duration `json:"value"`
 }
 
-func (*DurationLiteral) Type() string { return "DurationLiteral" }
+func (*DurationLiteral) NodeType() string { return "DurationLiteral" }
+func (*DurationLiteral) Type() Type       { return Duration }
 
 func (l *DurationLiteral) Copy() Node {
 	if l == nil {
@@ -533,7 +596,8 @@ type IntegerLiteral struct {
 	Value int64 `json:"value"`
 }
 
-func (*IntegerLiteral) Type() string { return "IntegerLiteral" }
+func (*IntegerLiteral) NodeType() string { return "IntegerLiteral" }
+func (*IntegerLiteral) Type() Type       { return Int }
 
 func (l *IntegerLiteral) Copy() Node {
 	if l == nil {
@@ -549,7 +613,8 @@ type FloatLiteral struct {
 	Value float64 `json:"value"`
 }
 
-func (*FloatLiteral) Type() string { return "FloatLiteral" }
+func (*FloatLiteral) NodeType() string { return "FloatLiteral" }
+func (*FloatLiteral) Type() Type       { return Float }
 
 func (l *FloatLiteral) Copy() Node {
 	if l == nil {
@@ -565,7 +630,8 @@ type RegexpLiteral struct {
 	Value *regexp.Regexp `json:"value"`
 }
 
-func (*RegexpLiteral) Type() string { return "RegexpLiteral" }
+func (*RegexpLiteral) NodeType() string { return "RegexpLiteral" }
+func (*RegexpLiteral) Type() Type       { return Regex }
 
 func (l *RegexpLiteral) Copy() Node {
 	if l == nil {
@@ -583,7 +649,8 @@ type StringLiteral struct {
 	Value string `json:"value"`
 }
 
-func (*StringLiteral) Type() string { return "StringLiteral" }
+func (*StringLiteral) NodeType() string { return "StringLiteral" }
+func (*StringLiteral) Type() Type       { return String }
 
 func (l *StringLiteral) Copy() Node {
 	if l == nil {
@@ -599,7 +666,8 @@ type UnsignedIntegerLiteral struct {
 	Value uint64 `json:"value"`
 }
 
-func (*UnsignedIntegerLiteral) Type() string { return "UnsignedIntegerLiteral" }
+func (*UnsignedIntegerLiteral) NodeType() string { return "UnsignedIntegerLiteral" }
+func (*UnsignedIntegerLiteral) Type() Type       { return UInt }
 
 func (l *UnsignedIntegerLiteral) Copy() Node {
 	if l == nil {
@@ -615,23 +683,23 @@ func New(prog *ast.Program) (*Program, error) {
 	return analyzeProgram(prog)
 }
 
-func analyzeNode(n ast.Node) (Node, error) {
-	switch n := n.(type) {
-	case ast.Statement:
-		return analyzeStatment(n)
-	case ast.Expression:
-		return analyzeExpression(n)
-	default:
-		return nil, fmt.Errorf("unsupported node %T", n)
+type declarationScope map[string]*VariableDeclaration
+
+func (s declarationScope) Copy() declarationScope {
+	cpy := make(declarationScope, len(s))
+	for k, v := range s {
+		cpy[k] = v
 	}
+	return cpy
 }
 
 func analyzeProgram(prog *ast.Program) (*Program, error) {
+	declarations := make(declarationScope)
 	p := &Program{
 		Body: make([]Statement, len(prog.Body)),
 	}
 	for i, s := range prog.Body {
-		n, err := analyzeStatment(s)
+		n, err := analyzeStatment(s, declarations)
 		if err != nil {
 			return nil, err
 		}
@@ -640,27 +708,43 @@ func analyzeProgram(prog *ast.Program) (*Program, error) {
 	return p, nil
 }
 
-func analyzeStatment(s ast.Statement) (Statement, error) {
+func analyzeNode(n ast.Node, declarations declarationScope) (Node, error) {
+	switch n := n.(type) {
+	case ast.Statement:
+		return analyzeStatment(n, declarations)
+	case ast.Expression:
+		return analyzeExpression(n, declarations)
+	default:
+		return nil, fmt.Errorf("unsupported node %T", n)
+	}
+}
+
+func analyzeStatment(s ast.Statement, declarations declarationScope) (Statement, error) {
 	switch s := s.(type) {
 	case *ast.BlockStatement:
-		return analyzeBlockStatement(s)
+		return analyzeBlockStatement(s, declarations)
 	case *ast.ExpressionStatement:
-		return analyzeExpressionStatement(s)
+		return analyzeExpressionStatement(s, declarations)
 	case *ast.ReturnStatement:
-		return analyzeReturnStatement(s)
+		return analyzeReturnStatement(s, declarations)
 	case *ast.VariableDeclaration:
-		return analyzeVariableDeclaration(s)
+		// Expect a single declaration
+		if len(s.Declarations) != 1 {
+			return nil, fmt.Errorf("only single variable declarations are supported, found %d declarations", len(s.Declarations))
+		}
+		return analyzeVariableDeclaration(s.Declarations[0], declarations)
 	default:
 		return nil, fmt.Errorf("unsupported statement %T", s)
 	}
 }
 
-func analyzeBlockStatement(block *ast.BlockStatement) (*BlockStatement, error) {
+func analyzeBlockStatement(block *ast.BlockStatement, declarations declarationScope) (*BlockStatement, error) {
+	declarations = declarations.Copy()
 	b := &BlockStatement{
 		Body: make([]Statement, len(block.Body)),
 	}
 	for i, s := range block.Body {
-		n, err := analyzeStatment(s)
+		n, err := analyzeStatment(s, declarations)
 		if err != nil {
 			return nil, err
 		}
@@ -673,8 +757,8 @@ func analyzeBlockStatement(block *ast.BlockStatement) (*BlockStatement, error) {
 	return b, nil
 }
 
-func analyzeExpressionStatement(expr *ast.ExpressionStatement) (*ExpressionStatement, error) {
-	e, err := analyzeExpression(expr.Expression)
+func analyzeExpressionStatement(expr *ast.ExpressionStatement, declarations declarationScope) (*ExpressionStatement, error) {
+	e, err := analyzeExpression(expr.Expression, declarations)
 	if err != nil {
 		return nil, err
 	}
@@ -683,8 +767,8 @@ func analyzeExpressionStatement(expr *ast.ExpressionStatement) (*ExpressionState
 	}, nil
 }
 
-func analyzeReturnStatement(ret *ast.ReturnStatement) (*ReturnStatement, error) {
-	arg, err := analyzeExpression(ret.Argument)
+func analyzeReturnStatement(ret *ast.ReturnStatement, declarations declarationScope) (*ReturnStatement, error) {
+	arg, err := analyzeExpression(ret.Argument, declarations)
 	if err != nil {
 		return nil, err
 	}
@@ -693,95 +777,85 @@ func analyzeReturnStatement(ret *ast.ReturnStatement) (*ReturnStatement, error) 
 	}, nil
 }
 
-func analyzeVariableDeclaration(decl *ast.VariableDeclaration) (*VariableDeclaration, error) {
+func analyzeVariableDeclaration(decl *ast.VariableDeclarator, declarations declarationScope) (*VariableDeclaration, error) {
+	id, err := analyzeIdentifier(decl.ID, declarations)
+	if err != nil {
+		return nil, err
+	}
+	init, err := analyzeExpression(decl.Init, declarations)
+	if err != nil {
+		return nil, err
+	}
 	vd := &VariableDeclaration{
-		Declarations: make([]*VariableDeclarator, len(decl.Declarations)),
-	}
-	for i, d := range decl.Declarations {
-		n, err := analyzeVariableDeclarator(d)
-		if err != nil {
-			return nil, err
-		}
-		vd.Declarations[i] = n
-	}
-	return vd, nil
-}
-func analyzeVariableDeclarator(decl *ast.VariableDeclarator) (*VariableDeclarator, error) {
-	id, err := analyzeIdentifier(decl.ID)
-	if err != nil {
-		return nil, err
-	}
-	init, err := analyzeExpression(decl.Init)
-	if err != nil {
-		return nil, err
-	}
-	return &VariableDeclarator{
 		ID:   id,
 		Init: init,
-	}, nil
+	}
+	declarations[vd.ID.Name] = vd
+	return vd, nil
 }
 
-func analyzeExpression(expr ast.Expression) (Expression, error) {
+func analyzeExpression(expr ast.Expression, declarations declarationScope) (Expression, error) {
 	switch expr := expr.(type) {
 	case *ast.ArrowFunctionExpression:
-		return analyzeArrowFunctionExpression(expr)
+		return analyzeArrowFunctionExpression(expr, declarations)
 	case *ast.CallExpression:
-		return analyzeCallExpression(expr)
+		return analyzeCallExpression(expr, declarations)
 	case *ast.MemberExpression:
-		return analyzeMemberExpression(expr)
+		return analyzeMemberExpression(expr, declarations)
 	case *ast.BinaryExpression:
-		return analyzeBinaryExpression(expr)
+		return analyzeBinaryExpression(expr, declarations)
 	case *ast.UnaryExpression:
-		return analyzeUnaryExpression(expr)
+		return analyzeUnaryExpression(expr, declarations)
 	case *ast.LogicalExpression:
-		return analyzeLogicalExpression(expr)
+		return analyzeLogicalExpression(expr, declarations)
 	case *ast.ObjectExpression:
-		return analyzeObjectExpression(expr)
+		return analyzeObjectExpression(expr, declarations)
 	case *ast.ArrayExpression:
-		return analyzeArrayExpression(expr)
+		return analyzeArrayExpression(expr, declarations)
 	case *ast.Identifier:
-		return analyzeIdentifier(expr)
+		return analyzeIdentifierExpression(expr, declarations)
 	case ast.Literal:
-		return analyzeLiteral(expr)
+		return analyzeLiteral(expr, declarations)
 	default:
 		return nil, fmt.Errorf("unsupported expression %T", expr)
 	}
 }
 
-func analyzeLiteral(lit ast.Literal) (Literal, error) {
+func analyzeLiteral(lit ast.Literal, declarations declarationScope) (Literal, error) {
 	switch lit := lit.(type) {
 	case *ast.StringLiteral:
-		return analyzeStringLiteral(lit)
+		return analyzeStringLiteral(lit, declarations)
 	case *ast.BooleanLiteral:
-		return analyzeBooleanLiteral(lit)
+		return analyzeBooleanLiteral(lit, declarations)
 	case *ast.FloatLiteral:
-		return analyzeFloatLiteral(lit)
+		return analyzeFloatLiteral(lit, declarations)
 	case *ast.IntegerLiteral:
-		return analyzeIntegerLiteral(lit)
+		return analyzeIntegerLiteral(lit, declarations)
 	case *ast.UnsignedIntegerLiteral:
-		return analyzeUnsignedIntegerLiteral(lit)
+		return analyzeUnsignedIntegerLiteral(lit, declarations)
 	case *ast.RegexpLiteral:
-		return analyzeRegexpLiteral(lit)
+		return analyzeRegexpLiteral(lit, declarations)
 	case *ast.DurationLiteral:
-		return analyzeDurationLiteral(lit)
+		return analyzeDurationLiteral(lit, declarations)
 	case *ast.DateTimeLiteral:
-		return analyzeDateTimeLiteral(lit)
+		return analyzeDateTimeLiteral(lit, declarations)
 	default:
 		return nil, fmt.Errorf("unsupported literal %T", lit)
 	}
 }
 
-func analyzeArrowFunctionExpression(arrow *ast.ArrowFunctionExpression) (*ArrowFunctionExpression, error) {
-	b, err := analyzeNode(arrow.Body)
+func analyzeArrowFunctionExpression(arrow *ast.ArrowFunctionExpression, declarations declarationScope) (*FunctionExpression, error) {
+	declarations = declarations.Copy()
+	b, err := analyzeNode(arrow.Body, declarations)
 	if err != nil {
 		return nil, err
 	}
-	f := &ArrowFunctionExpression{
+	f := &FunctionExpression{
 		Params: make([]*FunctionParam, len(arrow.Params)),
 		Body:   b,
 	}
 	for i, p := range arrow.Params {
-		key, err := analyzeIdentifier(p.Key)
+		key, err := analyzeIdentifier(p.Key, declarations)
 		if err != nil {
 			return nil, err
 		}
@@ -792,7 +866,7 @@ func analyzeArrowFunctionExpression(arrow *ast.ArrowFunctionExpression) (*ArrowF
 				return nil, fmt.Errorf("function parameter %q default value is not a literal", p.Key.Name)
 			}
 			var err error
-			def, err = analyzeLiteral(lit)
+			def, err = analyzeLiteral(lit, declarations)
 			if err != nil {
 				return nil, err
 			}
@@ -806,8 +880,8 @@ func analyzeArrowFunctionExpression(arrow *ast.ArrowFunctionExpression) (*ArrowF
 	return f, nil
 }
 
-func analyzeCallExpression(call *ast.CallExpression) (*CallExpression, error) {
-	callee, err := analyzeExpression(call.Callee)
+func analyzeCallExpression(call *ast.CallExpression, declarations declarationScope) (*CallExpression, error) {
+	callee, err := analyzeExpression(call.Callee, declarations)
 	if err != nil {
 		return nil, err
 	}
@@ -820,35 +894,78 @@ func analyzeCallExpression(call *ast.CallExpression) (*CallExpression, error) {
 			return nil, fmt.Errorf("arguments not an object expression")
 		}
 		var err error
-		args, err = analyzeObjectExpression(obj)
+		args, err = analyzeObjectExpression(obj, declarations)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		args = new(ObjectExpression)
 	}
-	return &CallExpression{
+
+	expr := &CallExpression{
 		Callee:    callee,
 		Arguments: args,
-	}, nil
+	}
+
+	declarations = declarations.Copy()
+	for _, arg := range args.Properties {
+		declarations[arg.Key.Name] = &VariableDeclaration{
+			ID:   arg.Key,
+			Init: arg.Value,
+		}
+	}
+
+	ApplyNewDeclarations(expr.Callee, declarations)
+	return expr, nil
 }
 
-func analyzeMemberExpression(member *ast.MemberExpression) (*MemberExpression, error) {
-	obj, err := analyzeExpression(member.Object)
-	if err != nil {
-		return nil, err
+func ApplyNewDeclarations(n Node, declarations map[string]*VariableDeclaration) {
+	v := &applyDeclarationsVisitor{
+		declarations: declarations,
 	}
-	property, err := analyzeExpression(member.Property)
+	Walk(v, n)
+}
+
+type applyDeclarationsVisitor struct {
+	declarations declarationScope
+}
+
+func (v *applyDeclarationsVisitor) Visit(n Node) Visitor {
+	switch n := n.(type) {
+	case *IdentifierExpression:
+		if n.declaration == nil {
+			n.declaration = v.declarations[n.Name]
+			// No need to walk further down this branch
+			return nil
+		}
+	case *FunctionExpression:
+		// Remove type information since we may have changed it.
+		n.typ = nil
+	case *FunctionParam:
+		if n.declaration == nil {
+			n.declaration = v.declarations[n.Key.Name]
+			// No need to walk further down this branch
+			return nil
+		}
+	}
+	return v
+}
+func (v *applyDeclarationsVisitor) Done() {}
+
+func analyzeMemberExpression(member *ast.MemberExpression, declarations declarationScope) (*MemberExpression, error) {
+	obj, err := analyzeExpression(member.Object, declarations)
 	if err != nil {
 		return nil, err
 	}
 
 	var propertyName string
-	switch p := property.(type) {
-	case *Identifier:
+	switch p := member.Property.(type) {
+	case *ast.Identifier:
 		propertyName = p.Name
-	case *StringLiteral:
+	case *ast.StringLiteral:
 		propertyName = p.Value
 	default:
-		return nil, fmt.Errorf("unsupported member property expression of type %T", property)
+		return nil, fmt.Errorf("unsupported member property expression of type %T", member.Property)
 	}
 
 	return &MemberExpression{
@@ -857,12 +974,12 @@ func analyzeMemberExpression(member *ast.MemberExpression) (*MemberExpression, e
 	}, nil
 }
 
-func analyzeBinaryExpression(binary *ast.BinaryExpression) (*BinaryExpression, error) {
-	left, err := analyzeExpression(binary.Left)
+func analyzeBinaryExpression(binary *ast.BinaryExpression, declarations declarationScope) (*BinaryExpression, error) {
+	left, err := analyzeExpression(binary.Left, declarations)
 	if err != nil {
 		return nil, err
 	}
-	right, err := analyzeExpression(binary.Right)
+	right, err := analyzeExpression(binary.Right, declarations)
 	if err != nil {
 		return nil, err
 	}
@@ -872,37 +989,49 @@ func analyzeBinaryExpression(binary *ast.BinaryExpression) (*BinaryExpression, e
 		Right:    right,
 	}, nil
 }
-func analyzeUnaryExpression(unary *ast.UnaryExpression) (*UnaryExpression, error) {
-	arg, err := analyzeExpression(unary.Argument)
+func analyzeUnaryExpression(unary *ast.UnaryExpression, declarations declarationScope) (*UnaryExpression, error) {
+	arg, err := analyzeExpression(unary.Argument, declarations)
 	if err != nil {
 		return nil, err
 	}
+	// TODO(nathanielc): validate operand type once we have type inference working with functions.
+	//k := arg.Type().Kind()
+	//if k != Bool && k != Int && k != Float && k != Duration {
+	//	return nil, fmt.Errorf("invalid unary operator %v on type %v", unary.Operator, k)
+	//}
 	return &UnaryExpression{
 		Operator: unary.Operator,
 		Argument: arg,
 	}, nil
 }
-func analyzeLogicalExpression(logical *ast.LogicalExpression) (*LogicalExpression, error) {
-	left, err := analyzeExpression(logical.Left)
+func analyzeLogicalExpression(logical *ast.LogicalExpression, declarations declarationScope) (*LogicalExpression, error) {
+	left, err := analyzeExpression(logical.Left, declarations)
 	if err != nil {
 		return nil, err
 	}
-	right, err := analyzeExpression(logical.Right)
+	// TODO(nathanielc): Validate operand types once we have type inference working with functions.
+	//if k := left.Type().Kind(); k != Bool {
+	//	return nil, fmt.Errorf("left operand to logical expression is not a boolean, got kind %v", k)
+	//}
+	right, err := analyzeExpression(logical.Right, declarations)
 	if err != nil {
 		return nil, err
 	}
+	//if k := right.Type().Kind(); k != Bool {
+	//	return nil, fmt.Errorf("right operand to logical expression is not a boolean, got kind %v", k)
+	//}
 	return &LogicalExpression{
 		Operator: logical.Operator,
 		Left:     left,
 		Right:    right,
 	}, nil
 }
-func analyzeObjectExpression(obj *ast.ObjectExpression) (*ObjectExpression, error) {
+func analyzeObjectExpression(obj *ast.ObjectExpression, declarations declarationScope) (*ObjectExpression, error) {
 	o := &ObjectExpression{
 		Properties: make([]*Property, len(obj.Properties)),
 	}
 	for i, p := range obj.Properties {
-		n, err := analyzeProperty(p)
+		n, err := analyzeProperty(p, declarations)
 		if err != nil {
 			return nil, err
 		}
@@ -910,12 +1039,12 @@ func analyzeObjectExpression(obj *ast.ObjectExpression) (*ObjectExpression, erro
 	}
 	return o, nil
 }
-func analyzeArrayExpression(array *ast.ArrayExpression) (*ArrayExpression, error) {
+func analyzeArrayExpression(array *ast.ArrayExpression, declarations declarationScope) (*ArrayExpression, error) {
 	a := &ArrayExpression{
 		Elements: make([]Expression, len(array.Elements)),
 	}
 	for i, e := range array.Elements {
-		n, err := analyzeExpression(e)
+		n, err := analyzeExpression(e, declarations)
 		if err != nil {
 			return nil, err
 		}
@@ -923,17 +1052,26 @@ func analyzeArrayExpression(array *ast.ArrayExpression) (*ArrayExpression, error
 	}
 	return a, nil
 }
-func analyzeIdentifier(ident *ast.Identifier) (*Identifier, error) {
+
+func analyzeIdentifier(ident *ast.Identifier, declarations declarationScope) (*Identifier, error) {
 	return &Identifier{
 		Name: ident.Name,
 	}, nil
 }
-func analyzeProperty(property *ast.Property) (*Property, error) {
-	key, err := analyzeIdentifier(property.Key)
+
+func analyzeIdentifierExpression(ident *ast.Identifier, declarations declarationScope) (*IdentifierExpression, error) {
+	return &IdentifierExpression{
+		Name:        ident.Name,
+		declaration: declarations[ident.Name],
+	}, nil
+}
+
+func analyzeProperty(property *ast.Property, declarations declarationScope) (*Property, error) {
+	key, err := analyzeIdentifier(property.Key, declarations)
 	if err != nil {
 		return nil, err
 	}
-	value, err := analyzeExpression(property.Value)
+	value, err := analyzeExpression(property.Value, declarations)
 	if err != nil {
 		return nil, err
 	}
@@ -943,42 +1081,42 @@ func analyzeProperty(property *ast.Property) (*Property, error) {
 	}, nil
 }
 
-func analyzeDateTimeLiteral(lit *ast.DateTimeLiteral) (*DateTimeLiteral, error) {
+func analyzeDateTimeLiteral(lit *ast.DateTimeLiteral, declarations declarationScope) (*DateTimeLiteral, error) {
 	return &DateTimeLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeDurationLiteral(lit *ast.DurationLiteral) (*DurationLiteral, error) {
+func analyzeDurationLiteral(lit *ast.DurationLiteral, declarations declarationScope) (*DurationLiteral, error) {
 	return &DurationLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeFloatLiteral(lit *ast.FloatLiteral) (*FloatLiteral, error) {
+func analyzeFloatLiteral(lit *ast.FloatLiteral, declarations declarationScope) (*FloatLiteral, error) {
 	return &FloatLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeIntegerLiteral(lit *ast.IntegerLiteral) (*IntegerLiteral, error) {
+func analyzeIntegerLiteral(lit *ast.IntegerLiteral, declarations declarationScope) (*IntegerLiteral, error) {
 	return &IntegerLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeUnsignedIntegerLiteral(lit *ast.UnsignedIntegerLiteral) (*UnsignedIntegerLiteral, error) {
+func analyzeUnsignedIntegerLiteral(lit *ast.UnsignedIntegerLiteral, declarations declarationScope) (*UnsignedIntegerLiteral, error) {
 	return &UnsignedIntegerLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeStringLiteral(lit *ast.StringLiteral) (*StringLiteral, error) {
+func analyzeStringLiteral(lit *ast.StringLiteral, declarations declarationScope) (*StringLiteral, error) {
 	return &StringLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeBooleanLiteral(lit *ast.BooleanLiteral) (*BooleanLiteral, error) {
+func analyzeBooleanLiteral(lit *ast.BooleanLiteral, declarations declarationScope) (*BooleanLiteral, error) {
 	return &BooleanLiteral{
 		Value: lit.Value,
 	}, nil
 }
-func analyzeRegexpLiteral(lit *ast.RegexpLiteral) (*RegexpLiteral, error) {
+func analyzeRegexpLiteral(lit *ast.RegexpLiteral, declarations declarationScope) (*RegexpLiteral, error) {
 	return &RegexpLiteral{
 		Value: lit.Value,
 	}, nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/query"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Operation) {
@@ -16,8 +17,8 @@ func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Opera
 	if err := json.Unmarshal(data, gotOp); err != nil {
 		t.Fatal(err)
 	}
-	if !cmp.Equal(gotOp, expOp) {
-		t.Errorf("unexpected operation -want/+got %s", cmp.Diff(expOp, gotOp))
+	if !cmp.Equal(gotOp, expOp, semantictest.CmpOptions...) {
+		t.Errorf("unexpected operation -want/+got %s", cmp.Diff(expOp, gotOp, semantictest.CmpOptions...))
 	}
 
 	// Marshal the spec and ensure we can unmarshal it again.
@@ -30,7 +31,7 @@ func OperationMarshalingTestHelper(t *testing.T, data []byte, expOp *query.Opera
 		t.Fatal(err)
 	}
 
-	if !cmp.Equal(gotOp, expOp) {
-		t.Errorf("unexpected operation after marshalling -want/+got %s", cmp.Diff(expOp, gotOp))
+	if !cmp.Equal(gotOp, expOp, semantictest.CmpOptions...) {
+		t.Errorf("unexpected operation after marshalling -want/+got %s", cmp.Diff(expOp, gotOp, semantictest.CmpOptions...))
 	}
 }

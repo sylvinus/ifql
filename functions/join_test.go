@@ -68,13 +68,13 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"host"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 								Body: &semantic.BinaryExpression{
 									Operator: ast.AdditionOperator,
 									Left: &semantic.MemberExpression{
 										Object: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "t",
 											},
 											Property: "a",
@@ -83,7 +83,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 									},
 									Right: &semantic.MemberExpression{
 										Object: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "t",
 											},
 											Property: "b",
@@ -162,7 +162,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 						Spec: &functions.JoinOpSpec{
 							On:         []string{"t1"},
 							TableNames: map[query.OperationID]string{"range1": "a", "range3": "b"},
-							Fn: &semantic.ArrowFunctionExpression{
+							Fn: &semantic.FunctionExpression{
 								Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 								Body: &semantic.BinaryExpression{
 									Operator: ast.DivisionOperator,
@@ -170,7 +170,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 										Operator: ast.SubtractionOperator,
 										Left: &semantic.MemberExpression{
 											Object: &semantic.MemberExpression{
-												Object: &semantic.Identifier{
+												Object: &semantic.IdentifierExpression{
 													Name: "t",
 												},
 												Property: "a",
@@ -179,7 +179,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 										},
 										Right: &semantic.MemberExpression{
 											Object: &semantic.MemberExpression{
-												Object: &semantic.Identifier{
+												Object: &semantic.IdentifierExpression{
 													Name: "t",
 												},
 												Property: "b",
@@ -189,7 +189,7 @@ join(tables:{a:a,b:b}, on:["host"], fn: (t) => t.a["_value"] + t.b["_value"])`,
 									},
 									Right: &semantic.MemberExpression{
 										Object: &semantic.MemberExpression{
-											Object: &semantic.Identifier{
+											Object: &semantic.IdentifierExpression{
 												Name: "t",
 											},
 											Property: "b",
@@ -234,7 +234,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 					"left": {
 						"type": "MemberExpression",
 						"object": {
-							"type":"Identifier",
+							"type":"IdentifierExpression",
 							"name":"a"
 						},
 						"property": "_value"
@@ -242,7 +242,7 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 					"right":{
 						"type": "MemberExpression",
 						"object": {
-							"type":"Identifier",
+							"type":"IdentifierExpression",
 							"name":"b"
 						},
 						"property": "_value"
@@ -256,18 +256,18 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 		Spec: &functions.JoinOpSpec{
 			On:         []string{"t1", "t2"},
 			TableNames: map[query.OperationID]string{"sum1": "a", "count3": "b"},
-			Fn: &semantic.ArrowFunctionExpression{
+			Fn: &semantic.FunctionExpression{
 				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 				Body: &semantic.BinaryExpression{
 					Operator: ast.AdditionOperator,
 					Left: &semantic.MemberExpression{
-						Object: &semantic.Identifier{
+						Object: &semantic.IdentifierExpression{
 							Name: "a",
 						},
 						Property: "_value",
 					},
 					Right: &semantic.MemberExpression{
-						Object: &semantic.Identifier{
+						Object: &semantic.IdentifierExpression{
 							Name: "b",
 						},
 						Property: "_value",
@@ -280,13 +280,13 @@ func TestJoinOperation_Marshaling(t *testing.T) {
 }
 
 func TestMergeJoin_Process(t *testing.T) {
-	addFunction := &semantic.ArrowFunctionExpression{
+	addFunction := &semantic.FunctionExpression{
 		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 		Body: &semantic.BinaryExpression{
 			Operator: ast.AdditionOperator,
 			Left: &semantic.MemberExpression{
 				Object: &semantic.MemberExpression{
-					Object: &semantic.Identifier{
+					Object: &semantic.IdentifierExpression{
 						Name: "t",
 					},
 					Property: "a",
@@ -295,7 +295,7 @@ func TestMergeJoin_Process(t *testing.T) {
 			},
 			Right: &semantic.MemberExpression{
 				Object: &semantic.MemberExpression{
-					Object: &semantic.Identifier{
+					Object: &semantic.IdentifierExpression{
 						Name: "t",
 					},
 					Property: "b",
@@ -304,7 +304,7 @@ func TestMergeJoin_Process(t *testing.T) {
 			},
 		},
 	}
-	passThroughFunc := &semantic.ArrowFunctionExpression{
+	passThroughFunc := &semantic.FunctionExpression{
 		Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "t"}}},
 		Body: &semantic.ObjectExpression{
 			Properties: []*semantic.Property{
@@ -312,7 +312,7 @@ func TestMergeJoin_Process(t *testing.T) {
 					Key: &semantic.Identifier{Name: "a"},
 					Value: &semantic.MemberExpression{
 						Object: &semantic.MemberExpression{
-							Object: &semantic.Identifier{
+							Object: &semantic.IdentifierExpression{
 								Name: "t",
 							},
 							Property: "a",
@@ -324,7 +324,7 @@ func TestMergeJoin_Process(t *testing.T) {
 					Key: &semantic.Identifier{Name: "b"},
 					Value: &semantic.MemberExpression{
 						Object: &semantic.MemberExpression{
-							Object: &semantic.Identifier{
+							Object: &semantic.IdentifierExpression{
 								Name: "t",
 							},
 							Property: "b",

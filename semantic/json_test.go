@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/ifql/ast"
-	"github.com/influxdata/ifql/ast/asttest"
 	"github.com/influxdata/ifql/semantic"
+	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
 func TestJSONMarshal(t *testing.T) {
@@ -58,42 +58,30 @@ func TestJSONMarshal(t *testing.T) {
 		{
 			name: "variable declaration",
 			node: &semantic.VariableDeclaration{
-				Declarations: []*semantic.VariableDeclarator{
-					{
-						ID:   &semantic.Identifier{Name: "a"},
-						Init: &semantic.StringLiteral{Value: "hello"},
-					},
-				},
-			},
-			want: `{"type":"VariableDeclaration","declarations":[{"type":"VariableDeclarator","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}]}`,
-		},
-		{
-			name: "variable declarator",
-			node: &semantic.VariableDeclarator{
 				ID:   &semantic.Identifier{Name: "a"},
 				Init: &semantic.StringLiteral{Value: "hello"},
 			},
-			want: `{"type":"VariableDeclarator","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
+			want: `{"type":"VariableDeclaration","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
 		},
 		{
 			name: "call expression",
 			node: &semantic.CallExpression{
-				Callee:    &semantic.Identifier{Name: "a"},
+				Callee:    &semantic.IdentifierExpression{Name: "a"},
 				Arguments: &semantic.ObjectExpression{Properties: []*semantic.Property{{Key: &semantic.Identifier{Name: "s"}, Value: &semantic.StringLiteral{Value: "hello"}}}},
 			},
-			want: `{"type":"CallExpression","callee":{"type":"Identifier","name":"a"},"arguments":{"type":"ObjectExpression","properties":[{"type":"Property","key":{"type":"Identifier","name":"s"},"value":{"type":"StringLiteral","value":"hello"}}]}}`,
+			want: `{"type":"CallExpression","callee":{"type":"IdentifierExpression","name":"a"},"arguments":{"type":"ObjectExpression","properties":[{"type":"Property","key":{"type":"Identifier","name":"s"},"value":{"type":"StringLiteral","value":"hello"}}]}}`,
 		},
 		{
 			name: "member expression",
 			node: &semantic.MemberExpression{
-				Object:   &semantic.Identifier{Name: "a"},
+				Object:   &semantic.IdentifierExpression{Name: "a"},
 				Property: "hello",
 			},
-			want: `{"type":"MemberExpression","object":{"type":"Identifier","name":"a"},"property":"hello"}`,
+			want: `{"type":"MemberExpression","object":{"type":"IdentifierExpression","name":"a"},"property":"hello"}`,
 		},
 		{
 			name: "arrow function expression",
-			node: &semantic.ArrowFunctionExpression{
+			node: &semantic.FunctionExpression{
 				Params: []*semantic.FunctionParam{{Key: &semantic.Identifier{Name: "a"}}},
 				Body:   &semantic.StringLiteral{Value: "hello"},
 			},
@@ -237,8 +225,8 @@ func TestJSONMarshal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !cmp.Equal(tc.node, node, asttest.CompareOptions...) {
-				t.Errorf("unexpected node after unmarshalling: -want/+got:\n%s", cmp.Diff(tc.node, node, asttest.CompareOptions...))
+			if !cmp.Equal(tc.node, node, semantictest.CmpOptions...) {
+				t.Errorf("unexpected node after unmarshalling: -want/+got:\n%s", cmp.Diff(tc.node, node, semantictest.CmpOptions...))
 			}
 		})
 	}
