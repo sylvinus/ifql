@@ -368,6 +368,126 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 	PhysicalPlanTestHelper(t, lp, want)
 }
 
+func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
+	lp := &plan.LogicalPlanSpec{
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
+				Spec: &functions.FromProcedureSpec{
+					Database: "mydb",
+				},
+				Parents:  nil,
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+			},
+			plan.ProcedureIDFromOperationID("range"): {
+				ID: plan.ProcedureIDFromOperationID("range"),
+				Spec: &functions.RangeProcedureSpec{
+					Bounds: plan.BoundsSpec{
+						Start: query.Time{
+							IsRelative: true,
+							Relative:   -1 * time.Hour,
+						},
+					},
+				},
+				Parents: []plan.ProcedureID{
+					(plan.ProcedureIDFromOperationID("from")),
+				},
+				Children: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("sum"),
+					plan.ProcedureIDFromOperationID("mean"),
+				},
+			},
+			plan.ProcedureIDFromOperationID("sum"): {
+				ID:       plan.ProcedureIDFromOperationID("sum"),
+				Spec:     &functions.SumProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+				Children: nil,
+			},
+			plan.ProcedureIDFromOperationID("mean"): {
+				ID:       plan.ProcedureIDFromOperationID("mean"),
+				Spec:     &functions.MeanProcedureSpec{},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+				Children: nil,
+			},
+		},
+		Order: []plan.ProcedureID{
+			plan.ProcedureIDFromOperationID("from"),
+			plan.ProcedureIDFromOperationID("range"),
+			plan.ProcedureIDFromOperationID("sum"),
+			plan.ProcedureIDFromOperationID("mean"), // Mean can't be pushed down, but sum can
+		},
+	}
+
+	fromID := plan.ProcedureIDFromOperationID("from")
+	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
+	meanID := plan.ProcedureIDFromOperationID("mean")
+	meanIDDup := plan.ProcedureIDForDuplicate(meanID)
+	want := &plan.PlanSpec{
+		Bounds: plan.BoundsSpec{
+			Start: query.Time{
+				IsRelative: true,
+				Relative:   -1 * time.Hour,
+			},
+		},
+		Resources: query.ResourceManagement{
+			ConcurrencyQuota: 3,
+			MemoryBytesQuota: math.MaxInt64,
+		},
+		Procedures: map[plan.ProcedureID]*plan.Procedure{
+			fromID: {
+				ID: fromID,
+				Spec: &functions.FromProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.Time{
+							IsRelative: true,
+							Relative:   -1 * time.Hour,
+						},
+					},
+					AggregateSet:  true,
+					AggregateType: "sum",
+				},
+				Children: []plan.ProcedureID{},
+			},
+			fromIDDup: {
+				ID: fromIDDup,
+				Spec: &functions.FromProcedureSpec{
+					Database:  "mydb",
+					BoundsSet: true,
+					Bounds: plan.BoundsSpec{
+						Start: query.Time{
+							IsRelative: true,
+							Relative:   -1 * time.Hour,
+						},
+					},
+				},
+				Parents: []plan.ProcedureID{},
+				Children: []plan.ProcedureID{
+					meanIDDup,
+				},
+			},
+			meanIDDup: {
+				ID:       meanIDDup,
+				Spec:     &functions.MeanProcedureSpec{},
+				Parents:  []plan.ProcedureID{fromIDDup},
+				Children: []plan.ProcedureID{},
+			},
+		},
+		Results: []plan.ProcedureID{
+			fromID,
+			meanIDDup,
+		},
+		Order: []plan.ProcedureID{
+			fromID,
+			fromIDDup,
+			meanIDDup,
+		},
+	}
+
+	PhysicalPlanTestHelper(t, lp, want)
+}
+
 func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.PlanSpec) {
 	t.Helper()
 	// Setup expected now time
