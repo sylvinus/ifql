@@ -8,6 +8,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const DerivativeKind = "derivative"
@@ -17,14 +18,23 @@ type DerivativeOpSpec struct {
 	NonNegative bool           `json:"non_negative"`
 }
 
+var derivativeSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(DerivativeKind, createDerivativeOpSpec)
+	derivativeSignature.Params["unit"] = semantic.Duration
+	derivativeSignature.Params["nonNegative"] = semantic.Bool
+
+	query.RegisterFunction(DerivativeKind, createDerivativeOpSpec, derivativeSignature)
 	query.RegisterOpSpec(DerivativeKind, newDerivativeOp)
 	plan.RegisterProcedureSpec(DerivativeKind, newDerivativeProcedure, DerivativeKind)
 	execute.RegisterTransformation(DerivativeKind, createDerivativeTransformation)
 }
 
 func createDerivativeOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(DerivativeOpSpec)
 
 	if unit, ok, err := args.GetDuration("unit"); err != nil {

@@ -15,7 +15,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "simple covariance",
-			Raw:  `from(db:"mydb").covariance()`,
+			Raw:  `from(db:"mydb") |> covariance()`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
@@ -36,7 +36,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 		},
 		{
 			Name: "pearsonr",
-			Raw:  `from(db:"mydb").covariance(pearsonr:true)`,
+			Raw:  `from(db:"mydb")|>covariance(pearsonr:true)`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{
@@ -59,7 +59,7 @@ func TestCovariance_NewQuery(t *testing.T) {
 		},
 		{
 			Name: "global covariance",
-			Raw:  `covariance(x: from(db:"mydb"), y:from(db:"mydb"), on:["host"], pearsonr:true)`,
+			Raw:  `cov(x: from(db:"mydb"), y:from(db:"mydb"), on:["host"], pearsonr:true)`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{

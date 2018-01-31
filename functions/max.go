@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const MaxKind = "max"
@@ -15,14 +16,23 @@ type MaxOpSpec struct {
 	UseRowTime bool   `json:"useRowtime"`
 }
 
+var maxSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(MaxKind, createMaxOpSpec)
+	maxSignature.Params["column"] = semantic.String
+	maxSignature.Params["useRowTime"] = semantic.Bool
+
+	query.RegisterFunction(MaxKind, createMaxOpSpec, maxSignature)
 	query.RegisterOpSpec(MaxKind, newMaxOp)
 	plan.RegisterProcedureSpec(MaxKind, newMaxProcedure, MaxKind)
 	execute.RegisterTransformation(MaxKind, createMaxTransformation)
 }
 
 func createMaxOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(MaxOpSpec)
 	if c, ok, err := args.GetString("column"); err != nil {
 		return nil, err

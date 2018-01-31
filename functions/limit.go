@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const LimitKind = "limit"
@@ -17,8 +18,12 @@ type LimitOpSpec struct {
 	//Offset int64 `json:"offset"`
 }
 
+var limitSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(LimitKind, createLimitOpSpec)
+	integralSignature.Params["n"] = semantic.Int
+
+	query.RegisterFunction(LimitKind, createLimitOpSpec, limitSignature)
 	query.RegisterOpSpec(LimitKind, newLimitOp)
 	plan.RegisterProcedureSpec(LimitKind, newLimitProcedure, LimitKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
@@ -26,6 +31,10 @@ func init() {
 }
 
 func createLimitOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(LimitOpSpec)
 
 	n, err := args.GetRequiredInt("n")

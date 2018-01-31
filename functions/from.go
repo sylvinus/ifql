@@ -16,8 +16,15 @@ type FromOpSpec struct {
 	Hosts    []string `json:"hosts"`
 }
 
+var fromSignature = semantic.FunctionSignature{
+	Params: map[string]semantic.Type{
+		"db": semantic.String,
+	},
+	ReturnType: query.TableObjectType,
+}
+
 func init() {
-	query.RegisterFunction(FromKind, createFromOpSpec)
+	query.RegisterFunction(FromKind, createFromOpSpec, fromSignature)
 	query.RegisterOpSpec(FromKind, newFromOp)
 	plan.RegisterProcedureSpec(FromKind, newFromProcedure, FromKind)
 	execute.RegisterSource(FromKind, createFromSource)

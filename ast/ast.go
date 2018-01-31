@@ -46,6 +46,7 @@ func (*CallExpression) node()          {}
 func (*ConditionalExpression) node()   {}
 func (*LogicalExpression) node()       {}
 func (*MemberExpression) node()        {}
+func (*PipeExpression) node()          {}
 func (*ObjectExpression) node()        {}
 func (*UnaryExpression) node()         {}
 
@@ -55,8 +56,9 @@ func (*Identifier) node() {}
 func (*BooleanLiteral) node()         {}
 func (*DateTimeLiteral) node()        {}
 func (*DurationLiteral) node()        {}
-func (*IntegerLiteral) node()         {}
 func (*FloatLiteral) node()           {}
+func (*IntegerLiteral) node()         {}
+func (*PipeLiteral) node()            {}
 func (*RegexpLiteral) node()          {}
 func (*StringLiteral) node()          {}
 func (*UnsignedIntegerLiteral) node() {}
@@ -218,24 +220,26 @@ type Expression interface {
 	expression()
 }
 
-func (*CallExpression) expression()          {}
-func (*MemberExpression) expression()        {}
-func (*BinaryExpression) expression()        {}
-func (*UnaryExpression) expression()         {}
-func (*LogicalExpression) expression()       {}
-func (*ObjectExpression) expression()        {}
-func (*ConditionalExpression) expression()   {}
 func (*ArrayExpression) expression()         {}
-func (*Identifier) expression()              {}
-func (*StringLiteral) expression()           {}
-func (*BooleanLiteral) expression()          {}
-func (*FloatLiteral) expression()            {}
-func (*IntegerLiteral) expression()          {}
-func (*UnsignedIntegerLiteral) expression()  {}
-func (*RegexpLiteral) expression()           {}
-func (*DurationLiteral) expression()         {}
-func (*DateTimeLiteral) expression()         {}
 func (*ArrowFunctionExpression) expression() {}
+func (*BinaryExpression) expression()        {}
+func (*BooleanLiteral) expression()          {}
+func (*CallExpression) expression()          {}
+func (*ConditionalExpression) expression()   {}
+func (*DateTimeLiteral) expression()         {}
+func (*DurationLiteral) expression()         {}
+func (*FloatLiteral) expression()            {}
+func (*Identifier) expression()              {}
+func (*IntegerLiteral) expression()          {}
+func (*LogicalExpression) expression()       {}
+func (*MemberExpression) expression()        {}
+func (*ObjectExpression) expression()        {}
+func (*PipeExpression) expression()          {}
+func (*PipeLiteral) expression()             {}
+func (*RegexpLiteral) expression()           {}
+func (*StringLiteral) expression()           {}
+func (*UnaryExpression) expression()         {}
+func (*UnsignedIntegerLiteral) expression()  {}
 
 // CallExpression represents a function all whose callee may be an Identifier or MemberExpression
 type CallExpression struct {
@@ -262,6 +266,28 @@ func (e *CallExpression) Copy() Node {
 			ne.Arguments[i] = arg.Copy().(Expression)
 		}
 	}
+
+	return ne
+}
+
+type PipeExpression struct {
+	*BaseNode
+	Argument Expression      `json:"argument"`
+	Call     *CallExpression `json:"call"`
+}
+
+// Type is the abstract type
+func (*PipeExpression) Type() string { return "PipeExpression" }
+
+func (e *PipeExpression) Copy() Node {
+	if e == nil {
+		return e
+	}
+	ne := new(PipeExpression)
+	*ne = *e
+
+	ne.Argument = e.Argument.Copy().(Expression)
+	ne.Call = e.Call.Copy().(*CallExpression)
 
 	return ne
 }
@@ -605,14 +631,32 @@ type Literal interface {
 	literal()
 }
 
-func (*StringLiteral) literal()          {}
 func (*BooleanLiteral) literal()         {}
+func (*DateTimeLiteral) literal()        {}
+func (*DurationLiteral) literal()        {}
 func (*FloatLiteral) literal()           {}
 func (*IntegerLiteral) literal()         {}
-func (*UnsignedIntegerLiteral) literal() {}
+func (*PipeLiteral) literal()            {}
 func (*RegexpLiteral) literal()          {}
-func (*DurationLiteral) literal()        {}
-func (*DateTimeLiteral) literal()        {}
+func (*StringLiteral) literal()          {}
+func (*UnsignedIntegerLiteral) literal() {}
+
+// PipeLiteral represents an specialized literal value, indicating the left hand value of a pipe expression.
+type PipeLiteral struct {
+	*BaseNode
+}
+
+// Type is the abstract type
+func (*PipeLiteral) Type() string { return "PipeLiteral" }
+
+func (i *PipeLiteral) Copy() Node {
+	if i == nil {
+		return i
+	}
+	ni := new(PipeLiteral)
+	*ni = *i
+	return ni
+}
 
 // StringLiteral expressions begin and end with double quote marks.
 type StringLiteral struct {

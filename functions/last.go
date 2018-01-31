@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const LastKind = "last"
@@ -15,14 +16,23 @@ type LastOpSpec struct {
 	UseRowTime bool   `json:"useRowtime"`
 }
 
+var lastSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(LastKind, createLastOpSpec)
+	lastSignature.Params["column"] = semantic.String
+	lastSignature.Params["useRowTime"] = semantic.Bool
+
+	query.RegisterFunction(LastKind, createLastOpSpec, lastSignature)
 	query.RegisterOpSpec(LastKind, newLastOp)
 	plan.RegisterProcedureSpec(LastKind, newLastProcedure, LastKind)
 	execute.RegisterTransformation(LastKind, createLastTransformation)
 }
 
 func createLastOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(LastOpSpec)
 	if c, ok, err := args.GetString("column"); err != nil {
 		return nil, err

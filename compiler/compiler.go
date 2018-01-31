@@ -8,12 +8,9 @@ import (
 )
 
 func Compile(f *semantic.FunctionExpression, inTypes map[string]semantic.Type) (Func, error) {
-	declarations := make(map[string]*semantic.VariableDeclaration, len(inTypes))
+	declarations := make(map[string]semantic.VariableDeclaration, len(inTypes))
 	for k, t := range inTypes {
-		declarations[k] = &semantic.VariableDeclaration{
-			ID:   &semantic.Identifier{Name: k},
-			Init: semantic.ZeroExpression(t),
-		}
+		declarations[k] = semantic.NewExternalVariableDeclaration(k, t)
 	}
 	f = f.Copy().(*semantic.FunctionExpression)
 	semantic.ApplyNewDeclarations(f, declarations)
@@ -57,14 +54,14 @@ func compile(n semantic.Node) (Evaluator, error) {
 		return returnEvaluator{
 			Evaluator: node,
 		}, nil
-	case *semantic.VariableDeclaration:
+	case *semantic.NativeVariableDeclaration:
 		node, err := compile(n.Init)
 		if err != nil {
 			return nil, err
 		}
 		return &declarationEvaluator{
 			t:    n.Init.Type(),
-			id:   n.ID.Name,
+			id:   n.Identifier.Name,
 			init: node,
 		}, nil
 	case *semantic.ObjectExpression:

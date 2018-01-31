@@ -57,11 +57,11 @@ func TestJSONMarshal(t *testing.T) {
 		},
 		{
 			name: "variable declaration",
-			node: &semantic.VariableDeclaration{
-				ID:   &semantic.Identifier{Name: "a"},
-				Init: &semantic.StringLiteral{Value: "hello"},
+			node: &semantic.NativeVariableDeclaration{
+				Identifier: &semantic.Identifier{Name: "a"},
+				Init:       &semantic.StringLiteral{Value: "hello"},
 			},
-			want: `{"type":"VariableDeclaration","id":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
+			want: `{"type":"NativeVariableDeclaration","identifier":{"type":"Identifier","name":"a"},"init":{"type":"StringLiteral","value":"hello"}}`,
 		},
 		{
 			name: "call expression",

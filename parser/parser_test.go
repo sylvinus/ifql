@@ -168,11 +168,96 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "pipe expression",
+			raw:  `from() |> count()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "from"},
+								Arguments: nil,
+							},
+							Call: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "count"},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "literal pipe expression",
+			raw:  `5 |> pow2()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.IntegerLiteral{Value: 5},
+							Call: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "pow2"},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "member expression pipe expression",
+			raw:  `foo.bar |> baz()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.MemberExpression{
+								Object:   &ast.Identifier{Name: "foo"},
+								Property: &ast.Identifier{Name: "bar"},
+							},
+							Call: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "baz"},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple pipe expressions",
+			raw:  `from() |> range() |> filter() |> count()`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.PipeExpression{
+								Argument: &ast.PipeExpression{
+									Argument: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "from"},
+									},
+									Call: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "range"},
+									},
+								},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "filter"},
+								},
+							},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "count"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "two variables for two froms",
 			raw: `howdy = from()
 			doody = from()
-			howdy.count()
-			doody.sum()`,
+			howdy|>count()
+			doody|>sum()`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -199,26 +284,21 @@ func TestParse(t *testing.T) {
 							},
 						}},
 					},
-
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.Identifier{
-									Name: "howdy",
-								},
-								Property: &ast.Identifier{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.Identifier{Name: "howdy"},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{
 									Name: "count",
 								},
 							},
 						},
 					},
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.Identifier{
-									Name: "doody",
-								},
-								Property: &ast.Identifier{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.Identifier{Name: "doody"},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{
 									Name: "sum",
 								},
 							},
@@ -869,40 +949,40 @@ a = 5.0
 		},
 		{
 			name: "from with range",
-			raw:  `from(db:"telegraf").range(start:-1h, end:10m)`,
+			raw:  `from(db:"telegraf")|>range(start:-1h, end:10m)`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.CallExpression{
-									Callee: &ast.Identifier{Name: "from"},
-									Arguments: []ast.Expression{
-										&ast.ObjectExpression{
-											Properties: []*ast.Property{
-												{
-													Key:   &ast.Identifier{Name: "db"},
-													Value: &ast.StringLiteral{Value: "telegraf"},
-												},
+						Expression: &ast.PipeExpression{
+							Argument: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "from"},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "db"},
+												Value: &ast.StringLiteral{Value: "telegraf"},
 											},
 										},
 									},
 								},
-								Property: &ast.Identifier{Name: "range"},
 							},
-							Arguments: []ast.Expression{
-								&ast.ObjectExpression{
-									Properties: []*ast.Property{
-										{
-											Key: &ast.Identifier{Name: "start"},
-											Value: &ast.UnaryExpression{
-												Operator: ast.SubtractionOperator,
-												Argument: &ast.DurationLiteral{Value: time.Hour},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "range"},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key: &ast.Identifier{Name: "start"},
+												Value: &ast.UnaryExpression{
+													Operator: ast.SubtractionOperator,
+													Argument: &ast.DurationLiteral{Value: time.Hour},
+												},
 											},
-										},
-										{
-											Key:   &ast.Identifier{Name: "end"},
-											Value: &ast.DurationLiteral{Value: 10 * time.Minute},
+											{
+												Key:   &ast.Identifier{Name: "end"},
+												Value: &ast.DurationLiteral{Value: 10 * time.Minute},
+											},
 										},
 									},
 								},
@@ -914,37 +994,37 @@ a = 5.0
 		},
 		{
 			name: "from with limit",
-			raw:  `from(db:"telegraf").limit(limit:100, offset:10)`,
+			raw:  `from(db:"telegraf")|>limit(limit:100, offset:10)`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.CallExpression{
-									Callee: &ast.Identifier{Name: "from"},
-									Arguments: []ast.Expression{
-										&ast.ObjectExpression{
-											Properties: []*ast.Property{
-												{
-													Key:   &ast.Identifier{Name: "db"},
-													Value: &ast.StringLiteral{Value: "telegraf"},
-												},
+						Expression: &ast.PipeExpression{
+							Argument: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "from"},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "db"},
+												Value: &ast.StringLiteral{Value: "telegraf"},
 											},
 										},
 									},
 								},
-								Property: &ast.Identifier{Name: "limit"},
 							},
-							Arguments: []ast.Expression{
-								&ast.ObjectExpression{
-									Properties: []*ast.Property{
-										{
-											Key:   &ast.Identifier{Name: "limit"},
-											Value: &ast.IntegerLiteral{Value: 100},
-										},
-										{
-											Key:   &ast.Identifier{Name: "offset"},
-											Value: &ast.IntegerLiteral{Value: 10},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "limit"},
+								Arguments: []ast.Expression{
+									&ast.ObjectExpression{
+										Properties: []*ast.Property{
+											{
+												Key:   &ast.Identifier{Name: "limit"},
+												Value: &ast.IntegerLiteral{Value: 100},
+											},
+											{
+												Key:   &ast.Identifier{Name: "offset"},
+												Value: &ast.IntegerLiteral{Value: 10},
+											},
 										},
 									},
 								},
@@ -957,30 +1037,28 @@ a = 5.0
 		{
 			name: "from with range and count",
 			raw: `from(db:"mydb")
-						.range(start:-4h, stop:-2h)
-						.count()`,
+						|> range(start:-4h, stop:-2h)
+						|> count()`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.CallExpression{
-									Callee: &ast.MemberExpression{
-										Object: &ast.CallExpression{
-											Callee: &ast.Identifier{Name: "from"},
-											Arguments: []ast.Expression{
-												&ast.ObjectExpression{
-													Properties: []*ast.Property{
-														{
-															Key:   &ast.Identifier{Name: "db"},
-															Value: &ast.StringLiteral{Value: "mydb"},
-														},
-													},
+						Expression: &ast.PipeExpression{
+							Argument: &ast.PipeExpression{
+								Argument: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "from"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key:   &ast.Identifier{Name: "db"},
+													Value: &ast.StringLiteral{Value: "mydb"},
 												},
 											},
 										},
-										Property: &ast.Identifier{Name: "range"},
 									},
+								},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "range"},
 									Arguments: []ast.Expression{
 										&ast.ObjectExpression{
 											Properties: []*ast.Property{
@@ -1002,9 +1080,10 @@ a = 5.0
 										},
 									},
 								},
-								Property: &ast.Identifier{Name: "count"},
 							},
-							Arguments: nil,
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "count"},
+							},
 						},
 					},
 				},
@@ -1013,152 +1092,67 @@ a = 5.0
 		{
 			name: "from with range, limit and count",
 			raw: `from(db:"mydb")
-						.range(start:-4h, stop:-2h)
-						.limit(limit:10)
-						.count()`,
+						|> range(start:-4h, stop:-2h)
+						|> limit(n:10)
+						|> count()`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.CallExpression{
-									Callee: &ast.MemberExpression{
-										Object: &ast.CallExpression{
-											Callee: &ast.MemberExpression{
-												Object: &ast.CallExpression{
-													Callee: &ast.Identifier{Name: "from"},
-													Arguments: []ast.Expression{
-														&ast.ObjectExpression{
-															Properties: []*ast.Property{
-																{
-																	Key:   &ast.Identifier{Name: "db"},
-																	Value: &ast.StringLiteral{Value: "mydb"},
-																},
-															},
-														},
-													},
-												},
-												Property: &ast.Identifier{Name: "range"},
-											},
-											Arguments: []ast.Expression{
-												&ast.ObjectExpression{
-													Properties: []*ast.Property{
-														{
-															Key: &ast.Identifier{Name: "start"},
-															Value: &ast.UnaryExpression{
-																Operator: ast.SubtractionOperator,
-																Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
-															},
-														},
-														{
-															Key: &ast.Identifier{Name: "stop"},
-															Value: &ast.UnaryExpression{
-																Operator: ast.SubtractionOperator,
-																Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
-															},
-														},
+						Expression: &ast.PipeExpression{
+							Argument: &ast.PipeExpression{
+								Argument: &ast.PipeExpression{
+									Argument: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "from"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key:   &ast.Identifier{Name: "db"},
+														Value: &ast.StringLiteral{Value: "mydb"},
 													},
 												},
 											},
 										},
-										Property: &ast.Identifier{Name: "limit"},
 									},
-									Arguments: []ast.Expression{
-										&ast.ObjectExpression{
-											Properties: []*ast.Property{
-												{
-													Key:   &ast.Identifier{Name: "limit"},
-													Value: &ast.IntegerLiteral{Value: 10},
-												},
-											},
-										},
-									},
-								},
-								Property: &ast.Identifier{Name: "count"},
-							},
-							Arguments: nil,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "from with filter, range and count",
-			raw: `from(db:"mydb")
-                        .filter(fn: (r) => r["_field"] == 10.1)
-                        .range(start:-4h, stop:-2h)
-                        .count()`,
-			want: &ast.Program{
-				Body: []ast.Statement{
-					&ast.ExpressionStatement{
-						Expression: &ast.CallExpression{
-							Callee: &ast.MemberExpression{
-								Object: &ast.CallExpression{
-									Callee: &ast.MemberExpression{
-										Object: &ast.CallExpression{
-											Callee: &ast.MemberExpression{
-												Object: &ast.CallExpression{
-													Callee: &ast.Identifier{Name: "from"},
-													Arguments: []ast.Expression{
-														&ast.ObjectExpression{
-															Properties: []*ast.Property{
-																{
-																	Key:   &ast.Identifier{Name: "db"},
-																	Value: &ast.StringLiteral{Value: "mydb"},
-																},
-															},
+									Call: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "range"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key: &ast.Identifier{Name: "start"},
+														Value: &ast.UnaryExpression{
+															Operator: ast.SubtractionOperator,
+															Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
 														},
 													},
-												},
-												Property: &ast.Identifier{Name: "filter"},
-											},
-											Arguments: []ast.Expression{
-												&ast.ObjectExpression{
-													Properties: []*ast.Property{
-														{
-															Key: &ast.Identifier{Name: "fn"},
-															Value: &ast.ArrowFunctionExpression{
-																Params: []*ast.Property{{Key: &ast.Identifier{Name: "r"}}},
-																Body: &ast.BinaryExpression{
-																	Operator: ast.EqualOperator,
-																	Left: &ast.MemberExpression{
-																		Object:   &ast.Identifier{Name: "r"},
-																		Property: &ast.StringLiteral{Value: "_field"},
-																	},
-																	Right: &ast.FloatLiteral{Value: 10.1},
-																},
-															},
+													{
+														Key: &ast.Identifier{Name: "stop"},
+														Value: &ast.UnaryExpression{
+															Operator: ast.SubtractionOperator,
+															Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
 														},
-													},
-												},
-											},
-										},
-										Property: &ast.Identifier{Name: "range"},
-									},
-									Arguments: []ast.Expression{
-										&ast.ObjectExpression{
-											Properties: []*ast.Property{
-												{
-													Key: &ast.Identifier{Name: "start"},
-													Value: &ast.UnaryExpression{
-														Operator: ast.SubtractionOperator,
-														Argument: &ast.DurationLiteral{Value: 4 * time.Hour},
-													},
-												},
-												{
-													Key: &ast.Identifier{Name: "stop"},
-													Value: &ast.UnaryExpression{
-														Operator: ast.SubtractionOperator,
-														Argument: &ast.DurationLiteral{Value: 2 * time.Hour},
 													},
 												},
 											},
 										},
 									},
 								},
-								Property: &ast.Identifier{Name: "count"},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "limit"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{{
+												Key:   &ast.Identifier{Name: "n"},
+												Value: &ast.IntegerLiteral{Value: 10},
+											}},
+										},
+									},
+								},
 							},
-							Arguments: nil,
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "count"},
+							},
 						},
 					},
 				},
@@ -1167,8 +1161,8 @@ a = 5.0
 		{
 			name: "from with join",
 			raw: `
-a = from(db:"dbA").range(start:-1h)
-b = from(db:"dbB").range(start:-1h)
+a = from(db:"dbA") |> range(start:-1h)
+b = from(db:"dbB") |> range(start:-1h)
 join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 			want: &ast.Program{
 				Body: []ast.Statement{
@@ -1177,31 +1171,31 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 							ID: &ast.Identifier{
 								Name: "a",
 							},
-							Init: &ast.CallExpression{
-								Callee: &ast.MemberExpression{
-									Object: &ast.CallExpression{
-										Callee: &ast.Identifier{Name: "from"},
-										Arguments: []ast.Expression{
-											&ast.ObjectExpression{
-												Properties: []*ast.Property{
-													{
-														Key:   &ast.Identifier{Name: "db"},
-														Value: &ast.StringLiteral{Value: "dbA"},
-													},
+							Init: &ast.PipeExpression{
+								Argument: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "from"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key:   &ast.Identifier{Name: "db"},
+													Value: &ast.StringLiteral{Value: "dbA"},
 												},
 											},
 										},
 									},
-									Property: &ast.Identifier{Name: "range"},
 								},
-								Arguments: []ast.Expression{
-									&ast.ObjectExpression{
-										Properties: []*ast.Property{
-											{
-												Key: &ast.Identifier{Name: "start"},
-												Value: &ast.UnaryExpression{
-													Operator: ast.SubtractionOperator,
-													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "range"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+													},
 												},
 											},
 										},
@@ -1215,38 +1209,38 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 							ID: &ast.Identifier{
 								Name: "b",
 							},
-							Init: &ast.CallExpression{
-								Callee: &ast.MemberExpression{
-									Object: &ast.CallExpression{
-										Callee: &ast.Identifier{Name: "from"},
-										Arguments: []ast.Expression{
-											&ast.ObjectExpression{
-												Properties: []*ast.Property{
-													{
-														Key:   &ast.Identifier{Name: "db"},
-														Value: &ast.StringLiteral{Value: "dbB"},
+							Init: &ast.PipeExpression{
+								Argument: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "from"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key:   &ast.Identifier{Name: "db"},
+													Value: &ast.StringLiteral{Value: "dbB"},
+												},
+											},
+										},
+									},
+								},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "range"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
 													},
 												},
 											},
 										},
 									},
-									Property: &ast.Identifier{Name: "range"},
 								},
-								Arguments: []ast.Expression{
-									&ast.ObjectExpression{
-										Properties: []*ast.Property{
-											{
-												Key: &ast.Identifier{Name: "start"},
-												Value: &ast.UnaryExpression{
-													Operator: ast.SubtractionOperator,
-													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
-												},
-											},
-										},
-									},
-								},
-							}},
-						},
+							},
+						}},
 					},
 					&ast.ExpressionStatement{
 						Expression: &ast.CallExpression{
@@ -1299,9 +1293,17 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 		},
 		{
 			name: "from with join with complex expression",
-			raw: `a = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "a").range(start:-1h)
-			b = from(db:"ifql").filter(fn: (r) => r["_measurement"] == "b").range(start:-1h)
-			join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_field"])`,
+			raw: `
+a = from(db:"ifql")
+	|> filter(fn: (r) => r["_measurement"] == "a")
+	|> range(start:-1h)
+
+b = from(db:"ifql")
+	|> filter(fn: (r) => r["_measurement"] == "b")
+	|> range(start:-1h)
+
+join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_field"])
+`,
 			want: &ast.Program{
 				Body: []ast.Statement{
 					&ast.VariableDeclaration{
@@ -1309,25 +1311,23 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 							ID: &ast.Identifier{
 								Name: "a",
 							},
-							Init: &ast.CallExpression{
-								Callee: &ast.MemberExpression{
-									Object: &ast.CallExpression{
-										Callee: &ast.MemberExpression{
-											Object: &ast.CallExpression{
-												Callee: &ast.Identifier{Name: "from"},
-												Arguments: []ast.Expression{
-													&ast.ObjectExpression{
-														Properties: []*ast.Property{
-															{
-																Key:   &ast.Identifier{Name: "db"},
-																Value: &ast.StringLiteral{Value: "ifql"},
-															},
-														},
+							Init: &ast.PipeExpression{
+								Argument: &ast.PipeExpression{
+									Argument: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "from"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key:   &ast.Identifier{Name: "db"},
+														Value: &ast.StringLiteral{Value: "ifql"},
 													},
 												},
 											},
-											Property: &ast.Identifier{Name: "filter"},
 										},
+									},
+									Call: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "filter"},
 										Arguments: []ast.Expression{
 											&ast.ObjectExpression{
 												Properties: []*ast.Property{
@@ -1349,16 +1349,18 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 											},
 										},
 									},
-									Property: &ast.Identifier{Name: "range"},
 								},
-								Arguments: []ast.Expression{
-									&ast.ObjectExpression{
-										Properties: []*ast.Property{
-											{
-												Key: &ast.Identifier{Name: "start"},
-												Value: &ast.UnaryExpression{
-													Operator: ast.SubtractionOperator,
-													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "range"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+													},
 												},
 											},
 										},
@@ -1372,25 +1374,23 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 							ID: &ast.Identifier{
 								Name: "b",
 							},
-							Init: &ast.CallExpression{
-								Callee: &ast.MemberExpression{
-									Object: &ast.CallExpression{
-										Callee: &ast.MemberExpression{
-											Object: &ast.CallExpression{
-												Callee: &ast.Identifier{Name: "from"},
-												Arguments: []ast.Expression{
-													&ast.ObjectExpression{
-														Properties: []*ast.Property{
-															{
-																Key:   &ast.Identifier{Name: "db"},
-																Value: &ast.StringLiteral{Value: "ifql"},
-															},
-														},
+							Init: &ast.PipeExpression{
+								Argument: &ast.PipeExpression{
+									Argument: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "from"},
+										Arguments: []ast.Expression{
+											&ast.ObjectExpression{
+												Properties: []*ast.Property{
+													{
+														Key:   &ast.Identifier{Name: "db"},
+														Value: &ast.StringLiteral{Value: "ifql"},
 													},
 												},
 											},
-											Property: &ast.Identifier{Name: "filter"},
 										},
+									},
+									Call: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "filter"},
 										Arguments: []ast.Expression{
 											&ast.ObjectExpression{
 												Properties: []*ast.Property{
@@ -1412,16 +1412,18 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 											},
 										},
 									},
-									Property: &ast.Identifier{Name: "range"},
 								},
-								Arguments: []ast.Expression{
-									&ast.ObjectExpression{
-										Properties: []*ast.Property{
-											{
-												Key: &ast.Identifier{Name: "start"},
-												Value: &ast.UnaryExpression{
-													Operator: ast.SubtractionOperator,
-													Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "range"},
+									Arguments: []ast.Expression{
+										&ast.ObjectExpression{
+											Properties: []*ast.Property{
+												{
+													Key: &ast.Identifier{Name: "start"},
+													Value: &ast.UnaryExpression{
+														Operator: ast.SubtractionOperator,
+														Argument: &ast.DurationLiteral{Value: 1 * time.Hour},
+													},
 												},
 											},
 										},

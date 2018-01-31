@@ -11,14 +11,20 @@ const SumKind = "sum"
 type SumOpSpec struct {
 }
 
+var sumSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(SumKind, createSumOpSpec)
+	query.RegisterFunction(SumKind, createSumOpSpec, sumSignature)
 	query.RegisterOpSpec(SumKind, newSumOp)
 	plan.RegisterProcedureSpec(SumKind, newSumProcedure, SumKind)
 	execute.RegisterTransformation(SumKind, createSumTransformation)
 }
 
 func createSumOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	return new(SumOpSpec), nil
 }
 

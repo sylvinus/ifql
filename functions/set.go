@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const SetKind = "set"
@@ -15,14 +16,23 @@ type SetOpSpec struct {
 	Value string `json:"value"`
 }
 
+var setSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(SetKind, createSetOpSpec)
+	setSignature.Params["key"] = semantic.String
+	setSignature.Params["value"] = semantic.String
+
+	query.RegisterFunction(SetKind, createSetOpSpec, setSignature)
 	query.RegisterOpSpec(SetKind, newSetOp)
 	plan.RegisterProcedureSpec(SetKind, newSetProcedure, SetKind)
 	execute.RegisterTransformation(SetKind, createSetTransformation)
 }
 
 func createSetOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(SetOpSpec)
 	key, err := args.GetRequiredString("key")
 	if err != nil {

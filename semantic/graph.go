@@ -20,10 +20,11 @@ type Node interface {
 
 func (*Program) node() {}
 
-func (*BlockStatement) node()      {}
-func (*ExpressionStatement) node() {}
-func (*ReturnStatement) node()     {}
-func (*VariableDeclaration) node() {}
+func (*BlockStatement) node()              {}
+func (*ExpressionStatement) node()         {}
+func (*ReturnStatement) node()             {}
+func (*NativeVariableDeclaration) node()   {}
+func (*ExternalVariableDeclaration) node() {}
 
 func (*ArrayExpression) node()       {}
 func (*FunctionExpression) node()    {}
@@ -54,10 +55,11 @@ type Statement interface {
 	stmt()
 }
 
-func (*BlockStatement) stmt()      {}
-func (*ExpressionStatement) stmt() {}
-func (*ReturnStatement) stmt()     {}
-func (*VariableDeclaration) stmt() {}
+func (*BlockStatement) stmt()              {}
+func (*ExpressionStatement) stmt()         {}
+func (*ReturnStatement) stmt()             {}
+func (*NativeVariableDeclaration) stmt()   {}
+func (*ExternalVariableDeclaration) stmt() {}
 
 type Expression interface {
 	Node
@@ -66,7 +68,6 @@ type Expression interface {
 }
 
 func (*ArrayExpression) expression()        {}
-func (*FunctionExpression) expression()     {}
 func (*BinaryExpression) expression()       {}
 func (*BooleanLiteral) expression()         {}
 func (*CallExpression) expression()         {}
@@ -74,6 +75,7 @@ func (*ConditionalExpression) expression()  {}
 func (*DateTimeLiteral) expression()        {}
 func (*DurationLiteral) expression()        {}
 func (*FloatLiteral) expression()           {}
+func (*FunctionExpression) expression()     {}
 func (*IdentifierExpression) expression()   {}
 func (*IntegerLiteral) expression()         {}
 func (*LogicalExpression) expression()      {}
@@ -184,23 +186,71 @@ func (s *ReturnStatement) Copy() Node {
 	return ns
 }
 
-type VariableDeclaration struct {
-	ID   *Identifier `json:"id"`
-	Init Expression  `json:"init"`
+type VariableDeclaration interface {
+	Node
+	ID() *Identifier
+	InitType() Type
 }
 
-func (*VariableDeclaration) NodeType() string { return "VariableDeclaration" }
+type NativeVariableDeclaration struct {
+	Identifier *Identifier `json:"identifier"`
+	Init       Expression  `json:"init"`
+}
 
-func (s *VariableDeclaration) Copy() Node {
+func (d *NativeVariableDeclaration) ID() *Identifier {
+	return d.Identifier
+}
+func (d *NativeVariableDeclaration) InitType() Type {
+	return d.Init.Type()
+}
+
+func (*NativeVariableDeclaration) NodeType() string { return "NativeVariableDeclaration" }
+
+func (s *NativeVariableDeclaration) Copy() Node {
 	if s == nil {
 		return s
 	}
-	ns := new(VariableDeclaration)
+	ns := new(NativeVariableDeclaration)
 	*ns = *s
+
+	ns.Identifier = s.Identifier.Copy().(*Identifier)
 
 	if s.Init != nil {
 		ns.Init = s.Init.Copy().(Expression)
 	}
+
+	return ns
+}
+
+type ExternalVariableDeclaration struct {
+	Identifier *Identifier `json:"identifier"`
+	Type       Type        `json:"type"`
+}
+
+func NewExternalVariableDeclaration(name string, typ Type) *ExternalVariableDeclaration {
+	return &ExternalVariableDeclaration{
+		Identifier: &Identifier{Name: name},
+		Type:       typ,
+	}
+}
+
+func (d *ExternalVariableDeclaration) ID() *Identifier {
+	return d.Identifier
+}
+func (d *ExternalVariableDeclaration) InitType() Type {
+	return d.Type
+}
+
+func (*ExternalVariableDeclaration) NodeType() string { return "ExternalVariableDeclaration" }
+
+func (s *ExternalVariableDeclaration) Copy() Node {
+	if s == nil {
+		return s
+	}
+	ns := new(ExternalVariableDeclaration)
+	*ns = *s
+
+	ns.Identifier = s.Identifier.Copy().(*Identifier)
 
 	return ns
 }
@@ -271,7 +321,8 @@ func (e *FunctionExpression) Copy() Node {
 type FunctionParam struct {
 	Key         *Identifier `json:"key"`
 	Default     Literal     `json:"default"`
-	declaration *VariableDeclaration
+	Piped       bool        `json:"piped,omitempty"`
+	declaration VariableDeclaration
 }
 
 func (*FunctionParam) NodeType() string { return "FunctionParam" }
@@ -279,15 +330,15 @@ func (*FunctionParam) NodeType() string { return "FunctionParam" }
 func (f *FunctionParam) Type() Type {
 	if f.declaration == nil {
 		if f.Default != nil {
-			f.declaration = &VariableDeclaration{
-				ID:   f.Key,
-				Init: f.Default,
+			f.declaration = &NativeVariableDeclaration{
+				Identifier: f.Key,
+				Init:       f.Default,
 			}
 		} else {
 			return Invalid
 		}
 	}
-	return f.declaration.Init.Type()
+	return f.declaration.InitType()
 }
 
 func (p *FunctionParam) Copy() Node {
@@ -501,7 +552,7 @@ func (p *Property) Copy() Node {
 type IdentifierExpression struct {
 	Name string `json:"name"`
 	// declaration is the node that declares this identifier
-	declaration *VariableDeclaration
+	declaration VariableDeclaration
 }
 
 func (*IdentifierExpression) NodeType() string { return "IdentifierExpression" }
@@ -510,7 +561,7 @@ func (e *IdentifierExpression) Type() Type {
 	if e.declaration == nil {
 		return Invalid
 	}
-	return e.declaration.Init.Type()
+	return e.declaration.InitType()
 }
 
 func (e *IdentifierExpression) Copy() Node {
@@ -520,7 +571,9 @@ func (e *IdentifierExpression) Copy() Node {
 	ne := new(IdentifierExpression)
 	*ne = *e
 
-	ne.declaration = e.declaration.Copy().(*VariableDeclaration)
+	if ne.declaration != nil {
+		ne.declaration = e.declaration.Copy().(VariableDeclaration)
+	}
 
 	return ne
 }
@@ -679,11 +732,12 @@ func (l *UnsignedIntegerLiteral) Copy() Node {
 	return nl
 }
 
-func New(prog *ast.Program) (*Program, error) {
-	return analyzeProgram(prog)
+// New creates a semantic graph from the provided AST and builtin declarations
+func New(prog *ast.Program, declarations map[string]VariableDeclaration) (*Program, error) {
+	return analyzeProgram(prog, declarationScope(declarations).Copy())
 }
 
-type declarationScope map[string]*VariableDeclaration
+type declarationScope map[string]VariableDeclaration
 
 func (s declarationScope) Copy() declarationScope {
 	cpy := make(declarationScope, len(s))
@@ -693,8 +747,7 @@ func (s declarationScope) Copy() declarationScope {
 	return cpy
 }
 
-func analyzeProgram(prog *ast.Program) (*Program, error) {
-	declarations := make(declarationScope)
+func analyzeProgram(prog *ast.Program, declarations declarationScope) (*Program, error) {
 	p := &Program{
 		Body: make([]Statement, len(prog.Body)),
 	}
@@ -777,7 +830,7 @@ func analyzeReturnStatement(ret *ast.ReturnStatement, declarations declarationSc
 	}, nil
 }
 
-func analyzeVariableDeclaration(decl *ast.VariableDeclarator, declarations declarationScope) (*VariableDeclaration, error) {
+func analyzeVariableDeclaration(decl *ast.VariableDeclarator, declarations declarationScope) (*NativeVariableDeclaration, error) {
 	id, err := analyzeIdentifier(decl.ID, declarations)
 	if err != nil {
 		return nil, err
@@ -786,11 +839,11 @@ func analyzeVariableDeclaration(decl *ast.VariableDeclarator, declarations decla
 	if err != nil {
 		return nil, err
 	}
-	vd := &VariableDeclaration{
-		ID:   id,
-		Init: init,
+	vd := &NativeVariableDeclaration{
+		Identifier: id,
+		Init:       init,
 	}
-	declarations[vd.ID.Name] = vd
+	declarations[vd.Identifier.Name] = vd
 	return vd, nil
 }
 
@@ -802,6 +855,8 @@ func analyzeExpression(expr ast.Expression, declarations declarationScope) (Expr
 		return analyzeCallExpression(expr, declarations)
 	case *ast.MemberExpression:
 		return analyzeMemberExpression(expr, declarations)
+	case *ast.PipeExpression:
+		return analyzePipeExpression(expr, declarations)
 	case *ast.BinaryExpression:
 		return analyzeBinaryExpression(expr, declarations)
 	case *ast.UnaryExpression:
@@ -839,6 +894,8 @@ func analyzeLiteral(lit ast.Literal, declarations declarationScope) (Literal, er
 		return analyzeDurationLiteral(lit, declarations)
 	case *ast.DateTimeLiteral:
 		return analyzeDateTimeLiteral(lit, declarations)
+	case *ast.PipeLiteral:
+		return nil, errors.New("a pipe literal may only be used as a default value for an argument in a function definition")
 	default:
 		return nil, fmt.Errorf("unsupported literal %T", lit)
 	}
@@ -854,27 +911,42 @@ func analyzeArrowFunctionExpression(arrow *ast.ArrowFunctionExpression, declarat
 		Params: make([]*FunctionParam, len(arrow.Params)),
 		Body:   b,
 	}
+	pipedCount := 0
 	for i, p := range arrow.Params {
 		key, err := analyzeIdentifier(p.Key, declarations)
 		if err != nil {
 			return nil, err
 		}
-		var def Literal
+
+		var (
+			def   Literal
+			piped bool
+		)
 		if p.Value != nil {
 			lit, ok := p.Value.(ast.Literal)
 			if !ok {
 				return nil, fmt.Errorf("function parameter %q default value is not a literal", p.Key.Name)
 			}
-			var err error
-			def, err = analyzeLiteral(lit, declarations)
-			if err != nil {
-				return nil, err
+			if _, ok := lit.(*ast.PipeLiteral); ok {
+				// Special case the PipeLiteral
+				piped = true
+				pipedCount++
+				if pipedCount > 1 {
+					return nil, errors.New("only a single argument may be piped")
+				}
+			} else {
+				d, err := analyzeLiteral(lit, declarations)
+				if err != nil {
+					return nil, err
+				}
+				def = d
 			}
 		}
 
 		f.Params[i] = &FunctionParam{
 			Key:     key,
 			Default: def,
+			Piped:   piped,
 		}
 	}
 	return f, nil
@@ -909,9 +981,9 @@ func analyzeCallExpression(call *ast.CallExpression, declarations declarationSco
 
 	declarations = declarations.Copy()
 	for _, arg := range args.Properties {
-		declarations[arg.Key.Name] = &VariableDeclaration{
-			ID:   arg.Key,
-			Init: arg.Value,
+		declarations[arg.Key.Name] = &NativeVariableDeclaration{
+			Identifier: arg.Key,
+			Init:       arg.Value,
 		}
 	}
 
@@ -919,7 +991,7 @@ func analyzeCallExpression(call *ast.CallExpression, declarations declarationSco
 	return expr, nil
 }
 
-func ApplyNewDeclarations(n Node, declarations map[string]*VariableDeclaration) {
+func ApplyNewDeclarations(n Node, declarations map[string]VariableDeclaration) {
 	v := &applyDeclarationsVisitor{
 		declarations: declarations,
 	}
@@ -972,6 +1044,70 @@ func analyzeMemberExpression(member *ast.MemberExpression, declarations declarat
 		Object:   obj,
 		Property: propertyName,
 	}, nil
+}
+
+func analyzePipeExpression(pipe *ast.PipeExpression, declarations declarationScope) (*CallExpression, error) {
+	call, err := analyzeCallExpression(pipe.Call, declarations)
+	if err != nil {
+		return nil, err
+	}
+
+	decl, err := resolveDeclaration(call.Callee)
+	if err != nil {
+		return nil, err
+	}
+	fnTyp := decl.InitType()
+	if fnTyp.Kind() != Function {
+		return nil, fmt.Errorf("cannot pipe into non function %q", fnTyp.Kind())
+	}
+	key := fnTyp.PipeArgument()
+	if key == "" {
+		return nil, fmt.Errorf("function %q does not have a pipe argument", decl.ID().Name)
+	}
+
+	value, err := analyzeExpression(pipe.Argument, declarations)
+	if err != nil {
+		return nil, err
+	}
+	property := &Property{
+		Key:   &Identifier{Name: key},
+		Value: value,
+	}
+
+	found := false
+	for i, p := range call.Arguments.Properties {
+		if key == p.Key.Name {
+			found = true
+			call.Arguments.Properties[i] = property
+			break
+		}
+	}
+	if !found {
+		call.Arguments.Properties = append(call.Arguments.Properties, property)
+	}
+	return call, nil
+}
+
+// resolveDeclaration traverse the expression until a variable declaration is found for the expression.
+func resolveDeclaration(n Node) (VariableDeclaration, error) {
+	switch n := n.(type) {
+	case *IdentifierExpression:
+		if n.declaration == nil {
+			return nil, fmt.Errorf("identifier expression %q has no declaration", n.Name)
+		}
+		return resolveDeclaration(n.declaration)
+	case *ExternalVariableDeclaration:
+		return n, nil
+	case *NativeVariableDeclaration:
+		if n.Init == nil {
+			return nil, fmt.Errorf("variable declaration %v has no init", n.Identifier)
+		}
+		if i, ok := n.Init.(*IdentifierExpression); ok {
+			return resolveDeclaration(i)
+		}
+		return n, nil
+	}
+	return nil, errors.New("no declaration found")
 }
 
 func analyzeBinaryExpression(binary *ast.BinaryExpression, declarations declarationScope) (*BinaryExpression, error) {

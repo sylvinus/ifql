@@ -6,19 +6,24 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 // SpreadKind is the registration name for ifql, query, plan, and execution.
 const SpreadKind = "spread"
 
 func init() {
-	query.RegisterMethod(SpreadKind, createSpreadOpSpec)
+	query.RegisterFunction(SpreadKind, createSpreadOpSpec, semantic.FunctionSignature{})
 	query.RegisterOpSpec(SpreadKind, newSpreadOp)
 	plan.RegisterProcedureSpec(SpreadKind, newSpreadProcedure, SpreadKind)
 	execute.RegisterTransformation(SpreadKind, createSpreadTransformation)
 }
 
 func createSpreadOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	return new(SpreadOpSpec), nil
 }
 

@@ -38,9 +38,10 @@ ifqld --verbose --host localhost:8082
 ```sh
 curl -XPOST --data-urlencode \
 'q=from(db:"telegraf")
-.filter(fn: (r) => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
-.range(start:-170h).sum()' \
-localhost:8093/query
+    |> filter(fn: (r) => r["_measurement"] == "cpu" AND r["_field"] == "usage_user")
+    |> range(start:-170h)
+    |> sum()' \
+http://localhost:8093/query
 ```
 
 #### docker compose
@@ -72,27 +73,70 @@ ifqld --host influxdb1:8082 --host influxdb2:8082
 The results from multiple InfluxDB are merged together as if there was
 one server.
 
+### Basic Syntax
+
+IFQL constructs a query by starting with a table of data and passing the table through transformations steps to describe the desired query operations.
+Transformations are represented as functions which take a table of data as an input argument and return a new table that has been transformed.
+There is a special function `from` which is a source function, meaning it does not accept a table as input, but rather produces a table.
+All other transformation functions accept at least one table and return a table as a result.
+
+For example to get the last point for each series in a database you start by creating a table using `from` and then pass that table into the `limit` function.
+
+```
+// Select the last point per series in the telegraf database.
+limit(table:from(db:"telegraf"), n:1)
+```
+
+Since it is common to chain long lists of transformations together the pipe forward operator `|>` can be used to make reading the code easier.
+These two expressions are equivalent:
+
+```
+// Select the last point per series in the telegraf database.
+limit(table:from(db:"telegraf"), n:1)
+
+
+// Same as above, but uses the pipe forward operator to indicate the flow of data.
+from(db:"telegraf") |> limit(n:1)
+```
+
+
+Long list of functions can thus be chained together:
+
+```
+// Get the first point per host from the last minute of data.
+from(db:"telegraf") |> range(start:-1m) |> group(by:["host"]) |> first()
+```
+
+
 
 ### Supported Functions
 
-Example: `from(db: "telegraf")`
+Below is a list of supported functions.
+
+#### from
+
+Starting point for all queires. Get data from the specified database.
+
+Example: `from(db:"telegraf")`
 
 ##### options
 * `db` string
-    `from(db: "telegraf")`
+    `from(db:"telegraf")`
 
 * `hosts` array of strings
-    `from(db: "telegraf", hosts:["host1", "host2"])`
+    `from(db:"telegraf", hosts:["host1", "host2"])`
 
 #### count
+
 Counts the number of results
 
-Example: `from(db:"telegraf").count()`
+Example: `from(db:"telegraf") |> count()`
 
 #### first
+
 Returns the first result of the query
 
-Example: `from(db: "telegraf").first()`
+Example: `from(db:"telegraf") |> first()`
 
 #### group
 Groups results by a user-specified set of tags
@@ -103,28 +147,29 @@ Groups results by a user-specified set of tags
 Group by these specific tag names
 Cannot be used with `except` option
 
-Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"])`
+Example: `from(db: "telegraf") |> range(start: -30m) |> group(by: ["tag_a", "tag_b"])`
 
 *  `keep` array of strings
 Keep specific tag keys that were not in `by` in the results
 
-Example: `from(db: "telegraf").range(start: -30m).group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
+Example: `from(db: "telegraf") |> range(start: -30m) |> group(by: ["tag_a", "tag_b"], keep:["tag_c"])`
 *  `except` array of strings
 Group by all but these tag keys
 Cannot be used with `by` option
 
-Example: `from(db: "telegraf").range(start: -30m).group(except: ["tag_a"], keep:["tag_b", "tag_c"])`
+Example: `from(db: "telegraf") |> range(start: -30m) |> group(except: ["tag_a"], keep:["tag_b", "tag_c"])`
 
 #### join
+
 Join two time series together on time and the list of `on` keys.
 
 Example:
 
 ```
-cpu = from(db: "telegraf").filter(fn: (r) => r["_measurement"] == "cpu" and r["_field"] == "usage_user").range(start: -30m)
-mem = from(db: "telegraf").filter(fn: (r) => r["_measurement"] == "mem" and r["_field"] == "used_percent"}).range(start: -30m)
+cpu = from(db: "telegraf") |> filter(fn: (r) => r["_measurement"] == "cpu" and r["_field"] == "usage_user") |> range(start: -30m)
+mem = from(db: "telegraf") |> filter(fn: (r) => r["_measurement"] == "mem" and r["_field"] == "used_percent"}) |> range(start: -30m)
 join(tables:{cpu:cpu, mem:mem}, on:["host"], fn: (tables) => tables.cpu["_value"] + tables.mem["_value"])
-````
+```
 
 ##### options
 
@@ -144,12 +189,12 @@ The function is called for each joined set of records from the tables.
 #### last
 Returns the last result of the query
 
-Example: `from(db: "telegraf").last()`
+Example: `from(db: "telegraf") |> last()`
 
 #### limit
 Restricts the number of rows returned in the results.
 
-Example: `from(db: "telegraf").limit(n: 10)`
+Example: `from(db: "telegraf") |> limit(n: 10)`
 
 #### max
 
@@ -158,12 +203,12 @@ Returns the max value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r["_measurement"]=="cpu" AND
+    |> filter(fn: (r) => r["_measurement"]=="cpu" AND
                 r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
-    .range(start:-12h)
-    .window(every:10m)
-    .max()
+    |> range(start:-12h)
+    |> window(every:10m)
+    |> max()
 ```
 
 #### mean
@@ -172,11 +217,11 @@ Returns the mean of the values within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r["_measurement"] == "mem" AND
-                r["_field"] == "used_percent")
-    .range(start:-12h)
-    .window(every:10m)
-    .mean()
+    |> filter(fn: (r) => r["_measurement"] == "mem" AND
+            r["_field"] == "used_percent")
+    |> range(start:-12h)
+    |> window(every:10m)
+    |> mean()
 ```
 
 #### min
@@ -185,11 +230,11 @@ Returns the min value within the results
 Example:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r[ "_measurement"] == "cpu" AND
-                r["_field" ]== "usage_system")
-    .range(start:-12h)
-    .window(every:10m, period: 5m)
-    .min()
+    |> filter(fn: (r) => r[ "_measurement"] == "cpu" AND
+               r["_field" ]== "usage_system")
+    |> range(start:-12h)
+    |> window(every:10m, period: 5m)
+    |> min()
 ```
 
 
@@ -199,9 +244,9 @@ Filters the results by time boundaries
 Example:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r["_measurement"] == "cpu" AND
-                r["_field"] == "usage_system")
-    .range(start:-12h, stop: -15m)
+    |> filter(fn: (r) => r["_measurement"] == "cpu" AND
+               r["_field"] == "usage_system")
+    |> range(start:-12h, stop: -15m)
 ```
 
 ##### options
@@ -217,10 +262,10 @@ Defaults to "now"
 Example to sample every fifth point starting from the second element:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r["_measurement"] == "cpu" AND
-                r["_field"] == "usage_system")
-    .range(start:-1d)
-    .sample(n: 5, pos: 1)
+    |> filter(fn: (r) => r["_measurement"] == "cpu" AND
+               r["_field"] == "usage_system")
+    |> range(start:-1d)
+    |> sample(n: 5, pos: 1)
 ```
 
 ##### options
@@ -234,7 +279,7 @@ Default is -1 (random offset)
 
 #### set
 Add tag of key and value to set
-Example: `from(db: "telegraf").set(key: "mykey", value: "myvalue")`
+Example: `from(db: "telegraf") |> set(key: "mykey", value: "myvalue")`
 ##### options
 * `key` string
 * `value` string
@@ -242,7 +287,7 @@ Example: `from(db: "telegraf").set(key: "mykey", value: "myvalue")`
 #### skew
 Skew of the results
 
-Example: `from(db: "telegraf").range(start: -30m, stop: -15m).skew()`
+Example: `from(db: "telegraf") |> range(start: -30m, stop: -15m) |> skew()`
 
 #### sort
 Sorts the results by the specified columns
@@ -251,10 +296,10 @@ Default sort is ascending
 Example:
 ```
 from(db:"telegraf")
-    .filter(fn: (r) => r["_measurement"] == "system" AND
-                r["_field"] == "uptime")
-    .range(start:-12h)
-    .sort(cols:["region", "host", "value"])
+    |> filter(fn: (r) => r["_measurement"] == "system" AND
+               r["_field"] == "uptime")
+    |> range(start:-12h)
+    |> sort(cols:["region", "host", "value"])
 ```
 
 ##### options
@@ -267,10 +312,10 @@ running instances.
 
 ```
 from(db:"telegraf")
-    .filter(fn: (r) => r["_measurement"] == "system" AND
-                r["_field"] == "uptime")
-    .range(start:-12h)
-    .sort(desc: true)
+    |> filter(fn: (r) => r["_measurement"] == "system" AND
+               r["_field"] == "uptime")
+    |> range(start:-12h)
+    |> sort(desc: true)
 ```
 
 * `desc` bool
@@ -279,17 +324,17 @@ Sort results descending
 #### spread
 Difference between min and max values
 
-Example: `from(db: "telegraf").range(start: -30m).spread()`
+Example: `from(db: "telegraf") |> range(start: -30m) |> spread()`
 
 #### stddev
 Standard Deviation of the results
 
-Example: `from(db: "telegraf").range(start: -30m, stop: -15m).stddev()`
+Example: `from(db: "telegraf") |> range(start: -30m, stop: -15m) |> stddev()`
 
 #### sum
 Sum of the results
 
-Example: `from(db: "telegraf").range(start: -30m, stop: -15m).sum()`
+Example: `from(db: "telegraf") |> range(start: -30m, stop: -15m) |> sum()`
 
 #### filter
 Filters the results using an expression
@@ -297,11 +342,11 @@ Filters the results using an expression
 Example:
 ```
 from(db:"foo")
-    .filter(fn: (r) => r["_measurement"]=="cpu" AND
+    |> filter(fn: (r) => r["_measurement"]=="cpu" AND
                 r["_field"] == "usage_system" AND
                 r["service"] == "app-server")
-    .range(start:-12h)
-    .max()
+    |> range(start:-12h)
+    |> max()
 ```
 
 ##### options
@@ -322,18 +367,18 @@ Duration of time between windows
 Defaults to `period`'s value
 ```
 from(db:"foo")
-    .range(start:-12h)
-    .window(every:10m)
-    .max()
+    |> range(start:-12h)
+    |> window(every:10m)
+    |> max()
 ```
 
 * `period` duration
 Duration of the windowed parition
 ```
 from(db:"foo")
-    .range(start:-12h)
-    .window(every:10m)
-    .max()
+    |> range(start:-12h)
+    |> window(every:10m)
+    |> max()
 ```
 
 Default to `every`'s value
@@ -346,9 +391,9 @@ Rounds a window's bounds to the nearest duration
 Example:
 ```
 from(db:"foo")
-    .range(start:-12h)
-    .window(every:10m)
-    .max()
+    |> range(start:-12h)
+    |> window(every:10m)
+    |> max()
 ```
 
 ### Custom Functions
@@ -374,14 +419,14 @@ add = (a,b) => a + b
 // By default the database is expected to be named "telegraf".
 telegrafM = (measurement, db="telegraf") =>
     from(db:db)
-        .filter(fn: (r) => r._measurement == measurement)
+         |> filter(fn: (r) => r._measurement == measurement)
 
 // Define a helper function for a common join operation
 // Use block syntax since we have more than a single expression
 abJoin = (measurementA, measurementB, on) => {
     a = telegrafM(measurement:measurementA)
     b = telegrafM(measurement:measurementB)
-    join(
+    return join(
         tables:{a:a, b:b},
         on:on,
         // Return a map from the join fn,
@@ -394,3 +439,28 @@ abJoin = (measurementA, measurementB, on) => {
     )
 }
 ```
+
+#### Pipe Arguments
+
+Functions may also declare that an argument can be piped into from an pipe forward operator by specifing a special default value:
+
+```
+// Define add function which accepts `a` as the piped argument.
+add = (a=<-, b) => a + b
+
+// Call add using the pipe forward syntax.
+1 |> add(b:3) // 4
+
+// Define measurement function which accepts table as the piped argument.
+measurement = (m, table=<-) => table |> filter(fn: (r) => r._measurement == m)
+
+// Define field function which accepts table as the piped argument
+field = (field, table=<-) => table |> filter(fn: (r) => r._field == field)
+
+// Query usage_idle from the cpu measurement and the telegraf database.
+// Using the measurement and field functions.
+from(db:"telegraf")
+    |> measurement(m:"cpu")
+    |> field(field:"usage_idle")
+```
+

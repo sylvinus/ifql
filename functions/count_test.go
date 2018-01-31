@@ -16,7 +16,7 @@ func TestCount_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with range and count",
-			Raw:  `from(db:"mydb").range(start:-4h, stop:-2h).count()`,
+			Raw:  `from(db:"mydb") |> range(start:-4h, stop:-2h) |> count()`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{

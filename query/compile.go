@@ -10,9 +10,15 @@ import (
 	"github.com/influxdata/ifql/parser"
 	"github.com/influxdata/ifql/semantic"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 )
 
-// Compile parses IFQL into an AST; validates and checks the AST; and produces a query Spec.
+const (
+	TableParameter = "table"
+	tableIDKey     = "id"
+)
+
+// Compile evaluates an IFQL script producing a query Spec.
 func Compile(ctx context.Context, q string) (*Spec, error) {
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
 	astProg, err := parser.NewAST(q)
@@ -24,7 +30,7 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	defer s.Finish()
 
 	// Convert AST program to a semantic program
-	semProg, err := semantic.New(astProg)
+	semProg, err := semantic.New(astProg, builtinDeclarations)
 	if err != nil {
 		return nil, err
 	}
@@ -48,55 +54,97 @@ type CreateOperationSpec func(args Arguments, a *Administration) (OperationSpec,
 var functionsMap = make(map[string]function)
 
 // RegisterFunction adds a new builtin top level function.
-func RegisterFunction(name string, c CreateOperationSpec) {
-	registerFunction(name, c, false)
-}
-
-// RegisterMethod adds a new builtin method of the TTable type.
-func RegisterMethod(name string, c CreateOperationSpec) {
-	registerFunction(name, c, true)
-}
-
-func registerFunction(name string, c CreateOperationSpec, chainable bool) {
+func RegisterFunction(name string, c CreateOperationSpec, sig semantic.FunctionSignature) {
+	if finalized {
+		panic(errors.New("already finalized, cannot register function"))
+	}
 	if _, ok := functionsMap[name]; ok {
 		panic(fmt.Errorf("duplicate registration for function %q", name))
 	}
 	f := function{
 		name:         name,
 		createOpSpec: c,
-		chainable:    chainable,
 	}
 	functionsMap[name] = f
-	if !chainable {
-		builtinScope.Set(name, f)
+	builtinScope.Set(name, f)
+	builtinDeclarations[name] = semantic.NewExternalVariableDeclaration(
+		name,
+		semantic.NewFunctionType(sig),
+	)
+}
+
+var TableObjectType = semantic.NewObjectType(map[string]semantic.Type{tableIDKey: semantic.String})
+
+// DefaultFunctionSignature returns a FunctionSignature for standard functions which accept a table piped argument.
+// It is safe to modify the returned signature.
+func DefaultFunctionSignature() semantic.FunctionSignature {
+	return semantic.FunctionSignature{
+		Params: map[string]semantic.Type{
+			TableParameter: TableObjectType,
+		},
+		ReturnType:   TableObjectType,
+		PipeArgument: TableParameter,
 	}
 }
 
 var builtinScope = interpreter.NewScope()
+var builtinDeclarations = make(map[string]semantic.VariableDeclaration)
+
+// list of builtin scripts
+var builtins []string
+var finalized bool
 
 // RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
 func RegisterBuiltIn(script string) {
-	astProg, err := parser.NewAST(script)
-	if err != nil {
-		panic(err)
+	if finalized {
+		panic(errors.New("already finalized, cannot register builtin"))
 	}
-	semProg, err := semantic.New(astProg)
-	if err != nil {
-		panic(err)
-	}
+	builtins = append(builtins, script)
+}
 
-	// Create new query domain
-	d := new(queryDomain)
+// FinalizeRegistration must be called to complete registration.
+// Future calls to RegisterFunction or RegisterBuiltIn will panic.
+func FinalizeRegistration() {
+	finalized = true
+	for _, script := range builtins {
+		astProg, err := parser.NewAST(script)
+		if err != nil {
+			panic(err)
+		}
+		semProg, err := semantic.New(astProg, builtinDeclarations)
+		if err != nil {
+			panic(err)
+		}
 
-	if err := interpreter.Eval(semProg, builtinScope, d); err != nil {
-		panic(err)
+		// Create new query domain
+		d := new(queryDomain)
+
+		if err := interpreter.Eval(semProg, builtinScope, d); err != nil {
+			panic(err)
+		}
 	}
+	// free builtins list
+	builtins = nil
 }
 
 type Administration struct {
 	id      OperationID
 	parents []OperationID
 	d       *queryDomain
+}
+
+// AddParentFromArgs reads the args for the `table` argument and adds the value as a parent.
+func (a *Administration) AddParentFromArgs(args Arguments) error {
+	parent, err := args.GetRequiredObject(TableParameter)
+	if err != nil {
+		return err
+	}
+	a.AddParent(GetIDFromObject(parent))
+	return nil
+}
+
+func GetIDFromObject(obj interpreter.Object) OperationID {
+	return OperationID(obj.Properties[tableIDKey].Value().(string))
 }
 
 // AddParent instructs the evaluation Context that a new edge should be created from the parent to the current operation.
@@ -159,40 +207,13 @@ func (d *queryDomain) ToSpec() *Spec {
 	}
 }
 
-//var TTable = semantic.RegisterKind("table")
-var TTable = semantic.Kind(42)
-
-// Table represents a table created via a function call.
-type Table struct {
-	ID OperationID
-}
-
-func (t Table) Type() semantic.Kind {
-	return TTable
-}
-
-func (t Table) Value() interface{} {
-	return t
-}
-
-func (t Table) Property(name string) (interpreter.Value, error) {
-	// All chainable methods are properties of all tables
-	f, ok := functionsMap[name]
-	if !ok || !f.chainable {
-		return nil, fmt.Errorf("unknown property %s", name)
-	}
-	f.parentID = t.ID
-	return f, nil
-}
-
 type function struct {
 	name         string
 	createOpSpec CreateOperationSpec
-	chainable    bool
-	parentID     OperationID
 }
 
-func (f function) Type() semantic.Kind {
+func (f function) Type() semantic.Type {
+	//TODO(nathanielc): Return a complete function type
 	return semantic.Function
 }
 
@@ -211,9 +232,6 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 		id: o.ID,
 		d:  qd,
 	}
-	if f.chainable {
-		a.parents = append(a.parents, f.parentID)
-	}
 
 	spec, err := f.createOpSpec(Arguments{Arguments: args}, a)
 	if err != nil {
@@ -223,8 +241,10 @@ func (f function) Call(args interpreter.Arguments, d interpreter.Domain) (interp
 
 	a.finalize()
 
-	return Table{
-		ID: o.ID,
+	return interpreter.Object{
+		Properties: map[string]interpreter.Value{
+			tableIDKey: interpreter.NewStringValue(string(o.ID)),
+		},
 	}, nil
 }
 
@@ -274,24 +294,6 @@ func (a Arguments) GetRequiredDuration(name string) (Duration, error) {
 	}
 	if !ok {
 		return 0, fmt.Errorf("missing required keyword argument %q", name)
-	}
-	return d, nil
-}
-func (a Arguments) GetTable(name string) (Table, bool, error) {
-	v, ok := a.Get(name)
-	if !ok {
-		return Table{}, false, nil
-	}
-	return v.Value().(Table), ok, nil
-}
-
-func (a Arguments) GetRequiredTable(name string) (Table, error) {
-	d, ok, err := a.GetTable(name)
-	if err != nil {
-		return Table{}, err
-	}
-	if !ok {
-		return Table{}, fmt.Errorf("missing required keyword argument %q", name)
 	}
 	return d, nil
 }

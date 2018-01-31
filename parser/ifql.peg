@@ -25,7 +25,7 @@ SourceElement
 
 Statement
   = VariableStatement
-  / ReturnStatement 
+  / ReturnStatement
   / ExpressionStatement
   / BlockStatement
 
@@ -93,6 +93,26 @@ CallExpression
       return callexprs(head, tail, c.text, c.pos)
     }
 
+PipeExpression
+  = head:PipeExpressionHead __ tail:(__ PipeExpressionPipe __)+ {
+      return pipeExprs(head, tail, c.text, c.pos)
+    }
+
+PipeExpressionHead
+  = CallExpression // TODO(nathanielc): Allow for more expressions as pipe heads. Cannot use Expr because it causes infinite left recursion.
+  / Literal
+  / Array
+  / MemberExpressions
+  / Identifier
+  / ObjectExpression
+  / ArrowFunctionExpression
+  / Parens
+
+PipeExpressionPipe
+  = "|>" __ call:CallExpression {
+      return incompletePipeExpr(call, c.text, c.pos)
+    }
+
 Arguments
   = "(" __ args:(ObjectProperties)? __ ")" {
       return args, nil
@@ -114,12 +134,13 @@ ArrowFunctionParamsRest
     }
 
 ArrowFunctionParam
-  = key:Identifier __ "=" __ value:Primary __ {
+  = key:Identifier __ "=" __ value:Primary  __ {
       return property(key, value, c.text, c.pos)
     }
   / key:Identifier __  {
       return property(key, nil, c.text, c.pos)
     }
+
 
 ArrowFunctionBody
   = body:Expr {
@@ -229,20 +250,25 @@ UnaryExpression
   / Primary
 
 Primary
-  = Array
-  / StringLiteral
-  / BooleanLiteral
-  / RegularExpressionLiteral
-  / Duration
-  / DateTime
-  / Number
-  / Integer
+  = PipeExpression
+  / Array
+  / Literal
   / CallExpression
   / MemberExpressions
   / Identifier
   / ObjectExpression
   / ArrowFunctionExpression
   / Parens
+
+Literal
+  = StringLiteral
+  / BooleanLiteral
+  / RegularExpressionLiteral
+  / PipeLiteral
+  / DurationLiteral
+  / DateTimeLiteral
+  / NumberLiteral
+  / IntegerLiteral
 
 Parens
   = "(" __ expr:Expr __ ")" {
@@ -307,7 +333,7 @@ FullDate
 FullTime
   = PartialTime TimeOffset
 
-DateTime
+DateTimeLiteral
   = FullDate "T" FullTime {
       return datetime(c.text, c.pos)
     }
@@ -343,7 +369,7 @@ DurationUnits
 SingleDuration
   = Integer DurationUnits
 
-Duration
+DurationLiteral
   = SingleDuration+ {
       return durationLiteral(c.text, c.pos)
     }
@@ -374,21 +400,18 @@ BooleanLiteral
       return booleanLiteral(false, c.text, c.pos)
     }
 
-Identifier
-  // Allow any unicode letter possibly followed by any number of unicode letters, underscores and numbers.
-  = [_\pL][_0-9\pL]* {
-      return identifier(c.text, c.pos)
-    }
-
-Number
+NumberLiteral
   = Integer "." Digit+ {
       return numberLiteral(c.text, c.pos)
    }
 
 Integer
-  = ("0" / NonZeroDigit Digit*) {
+  = ("0" / NonZeroDigit Digit*)
+
+IntegerLiteral
+  = Integer {
       return integerLiteral(c.text, c.pos)
-   }
+    }
 
 NonZeroDigit
   = [1-9]
@@ -396,32 +419,44 @@ NonZeroDigit
 Digit
   = [0-9]
 
-RegularExpressionLiteral "regular expression"
+PipeLiteral
+  = "<-" {
+        return pipeLiteral(c.text, c.pos), nil
+      }
+
+RegularExpressionLiteral
   = "/" pattern:RegularExpressionBody "/" {
-         return pattern, nil
-    }
+        return pattern, nil
+      }
 
 RegularExpressionBody
   = chars:RegularExpressionChar+ {
       return regexLiteral(chars, c.text, c.pos)
-  }
+    }
 
 RegularExpressionChar
   = ![\\/] re:RegularExpressionNonTerminator {
       return re, nil
-  }
+    }
   / RegularExpressionBackslashSequence
 
 RegularExpressionBackslashSequence
   = "\\/" {
       return "/", nil
-  }
+    }
   / "\\" RegularExpressionNonTerminator
 
 RegularExpressionNonTerminator
   = !LineTerminator SourceChar {
       return string(c.text), nil
-  }
+    }
+
+Identifier
+  // Allow any unicode letter possibly followed by any number of unicode letters, underscores and numbers.
+  = [_\pL][_0-9\pL]* {
+      return identifier(c.text, c.pos)
+    }
+
 
 SourceChar
   = .

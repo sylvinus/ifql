@@ -83,6 +83,17 @@ func TestJSONMarshal(t *testing.T) {
 			want: `{"type":"CallExpression","callee":{"type":"Identifier","name":"a"},"arguments":[{"type":"StringLiteral","value":"hello"}]}`,
 		},
 		{
+			name: "pipe expression",
+			node: &ast.PipeExpression{
+				Argument: &ast.Identifier{Name: "a"},
+				Call: &ast.CallExpression{
+					Callee:    &ast.Identifier{Name: "a"},
+					Arguments: []ast.Expression{&ast.StringLiteral{Value: "hello"}},
+				},
+			},
+			want: `{"type":"PipeExpression","argument":{"type":"Identifier","name":"a"},"call":{"type":"CallExpression","callee":{"type":"Identifier","name":"a"},"arguments":[{"type":"StringLiteral","value":"hello"}]}}`,
+		},
+		{
 			name: "member expression",
 			node: &ast.MemberExpression{
 				Object:   &ast.Identifier{Name: "a"},

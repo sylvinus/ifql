@@ -5,6 +5,7 @@ import (
 
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const RangeKind = "range"
@@ -14,8 +15,13 @@ type RangeOpSpec struct {
 	Stop  query.Time `json:"stop"`
 }
 
+var rangeSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(RangeKind, createRangeOpSpec)
+	rangeSignature.Params["start"] = semantic.Time
+	rangeSignature.Params["stop"] = semantic.Time
+
+	query.RegisterFunction(RangeKind, createRangeOpSpec, rangeSignature)
 	query.RegisterOpSpec(RangeKind, newRangeOp)
 	plan.RegisterProcedureSpec(RangeKind, newRangeProcedure, RangeKind)
 	// TODO register a range transformation. Currently range is only supported if it is pushed down into a select procedure.
@@ -23,6 +29,9 @@ func init() {
 }
 
 func createRangeOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
 	start, err := args.GetRequiredTime("start")
 	if err != nil {
 		return nil, err

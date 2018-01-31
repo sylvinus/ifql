@@ -7,6 +7,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const IntegralKind = "integral"
@@ -15,14 +16,22 @@ type IntegralOpSpec struct {
 	Unit query.Duration `json:"unit"`
 }
 
+var integralSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(IntegralKind, createIntegralOpSpec)
+	integralSignature.Params["unit"] = semantic.Duration
+
+	query.RegisterFunction(IntegralKind, createIntegralOpSpec, integralSignature)
 	query.RegisterOpSpec(IntegralKind, newIntegralOp)
 	plan.RegisterProcedureSpec(IntegralKind, newIntegralProcedure, IntegralKind)
 	execute.RegisterTransformation(IntegralKind, createIntegralTransformation)
 }
 
 func createIntegralOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(IntegralOpSpec)
 
 	if unit, ok, err := args.GetDuration("unit"); err != nil {

@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -138,8 +139,8 @@ func (s *ReturnStatement) UnmarshalJSON(data []byte) error {
 	s.Argument = e
 	return nil
 }
-func (d *VariableDeclaration) MarshalJSON() ([]byte, error) {
-	type Alias VariableDeclaration
+func (d *NativeVariableDeclaration) MarshalJSON() ([]byte, error) {
+	type Alias NativeVariableDeclaration
 	raw := struct {
 		Type string `json:"type"`
 		*Alias
@@ -149,8 +150,8 @@ func (d *VariableDeclaration) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(raw)
 }
-func (d *VariableDeclaration) UnmarshalJSON(data []byte) error {
-	type Alias VariableDeclaration
+func (d *NativeVariableDeclaration) UnmarshalJSON(data []byte) error {
+	type Alias NativeVariableDeclaration
 	raw := struct {
 		*Alias
 		Init json.RawMessage `json:"init"`
@@ -159,7 +160,7 @@ func (d *VariableDeclaration) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if raw.Alias != nil {
-		*d = *(*VariableDeclaration)(raw.Alias)
+		*d = *(*NativeVariableDeclaration)(raw.Alias)
 	}
 
 	e, err := unmarshalExpression(raw.Init)
@@ -168,6 +169,9 @@ func (d *VariableDeclaration) UnmarshalJSON(data []byte) error {
 	}
 	d.Init = e
 	return nil
+}
+func (d *ExternalVariableDeclaration) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("cannot marshal ExternalVariableDeclaration")
 }
 func (e *CallExpression) MarshalJSON() ([]byte, error) {
 	type Alias CallExpression
@@ -806,8 +810,8 @@ func unmarshalNode(msg json.RawMessage) (Node, error) {
 		node = new(ExpressionStatement)
 	case "ReturnStatement":
 		node = new(ReturnStatement)
-	case "VariableDeclaration":
-		node = new(VariableDeclaration)
+	case "NativeVariableDeclaration":
+		node = new(NativeVariableDeclaration)
 	case "CallExpression":
 		node = new(CallExpression)
 	case "MemberExpression":

@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/execute"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/semantic"
 )
 
 const ShiftKind = "shift"
@@ -14,14 +15,22 @@ type ShiftOpSpec struct {
 	Shift query.Duration `json:"shift"`
 }
 
+var shiftSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(ShiftKind, createShiftOpSpec)
+	shiftSignature.Params["shift"] = semantic.Duration
+
+	query.RegisterFunction(ShiftKind, createShiftOpSpec, shiftSignature)
 	query.RegisterOpSpec(ShiftKind, newShiftOp)
 	plan.RegisterProcedureSpec(ShiftKind, newShiftProcedure, ShiftKind)
 	execute.RegisterTransformation(ShiftKind, createShiftTransformation)
 }
 
-func createShiftOpSpec(args query.Arguments, _ *query.Administration) (query.OperationSpec, error) {
+func createShiftOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	spec := new(ShiftOpSpec)
 
 	if shift, err := args.GetRequiredDuration("shift"); err != nil {

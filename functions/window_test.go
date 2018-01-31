@@ -18,7 +18,7 @@ func TestWindow_NewQuery(t *testing.T) {
 	tests := []querytest.NewQueryTestCase{
 		{
 			Name: "from with window",
-			Raw:  `from(db:"mydb").window(start:-4h, every:1h)`,
+			Raw:  `from(db:"mydb") |> window(start:-4h, every:1h)`,
 			Want: &query.Spec{
 				Operations: []*query.Operation{
 					{

@@ -13,13 +13,19 @@ const StddevKind = "stddev"
 type StddevOpSpec struct {
 }
 
+var stddevSignature = query.DefaultFunctionSignature()
+
 func init() {
-	query.RegisterMethod(StddevKind, createStddevOpSpec)
+	query.RegisterFunction(StddevKind, createStddevOpSpec, stddevSignature)
 	query.RegisterOpSpec(StddevKind, newStddevOp)
 	plan.RegisterProcedureSpec(StddevKind, newStddevProcedure, StddevKind)
 	execute.RegisterTransformation(StddevKind, createStddevTransformation)
 }
 func createStddevOpSpec(args query.Arguments, a *query.Administration) (query.OperationSpec, error) {
+	if err := a.AddParentFromArgs(args); err != nil {
+		return nil, err
+	}
+
 	return new(StddevOpSpec), nil
 }
 
