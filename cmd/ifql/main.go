@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 
 	"github.com/influxdata/ifql"
 	"github.com/influxdata/ifql/query/execute"
@@ -126,8 +127,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for _, r := range results {
+	names := make([]string, 0, len(results))
+	for name := range results {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		r := results[name]
 		blocks := r.Blocks()
+		fmt.Println("Result:", name)
 		err := blocks.Do(func(b execute.Block) error {
 			execute.NewFormatter(b, nil).WriteTo(os.Stdout)
 			return nil

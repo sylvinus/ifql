@@ -2,6 +2,8 @@ package execute
 
 import (
 	"sync"
+
+	"github.com/influxdata/ifql/query/plan"
 )
 
 type Result interface {
@@ -24,7 +26,7 @@ type resultMessage struct {
 	err   error
 }
 
-func newResultSink() *resultSink {
+func newResultSink(plan.YieldSpec) *resultSink {
 	return &resultSink{
 		// TODO(nathanielc): Currently this buffer needs to be big enough hold all result blocks :(
 		blocks:   make(chan resultMessage, 1000),

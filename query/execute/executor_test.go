@@ -23,7 +23,7 @@ func TestExecutor_Execute(t *testing.T) {
 		name string
 		src  []execute.Block
 		plan *plan.PlanSpec
-		exp  [][]*executetest.Block
+		exp  map[string][]*executetest.Block
 	}{
 		{
 			name: "simple aggregate",
@@ -76,33 +76,36 @@ func TestExecutor_Execute(t *testing.T) {
 					},
 					plan.ProcedureIDFromOperationID("sum"): {
 						ID:   plan.ProcedureIDFromOperationID("sum"),
-						Spec: &functions.SumProcedureSpec{}, Parents: []plan.ProcedureID{
+						Spec: &functions.SumProcedureSpec{},
+						Parents: []plan.ProcedureID{
 							plan.ProcedureIDFromOperationID("from"),
 						},
 						Children: nil,
 					},
 				},
-				Results: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("sum"),
+				Results: map[string]plan.YieldSpec{
+					plan.DefaultYieldName: {ID: plan.ProcedureIDFromOperationID("sum")},
 				},
 			},
-			exp: [][]*executetest.Block{[]*executetest.Block{{
-				Bnds: execute.Bounds{
-					Start: 1,
-					Stop:  5,
-				},
-				ColMeta: []execute.ColMeta{
-					execute.TimeCol,
-					execute.ColMeta{
-						Label: execute.DefaultValueColLabel,
-						Type:  execute.TFloat,
-						Kind:  execute.ValueColKind,
+			exp: map[string][]*executetest.Block{
+				plan.DefaultYieldName: []*executetest.Block{{
+					Bnds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
 					},
-				},
-				Data: [][]interface{}{
-					{execute.Time(5), 15.0},
-				},
-			}}},
+					ColMeta: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ColMeta{
+							Label: execute.DefaultValueColLabel,
+							Type:  execute.TFloat,
+							Kind:  execute.ValueColKind,
+						},
+					},
+					Data: [][]interface{}{
+						{execute.Time(5), 15.0},
+					},
+				}},
+			},
 		},
 		{
 			name: "simple join",
@@ -208,11 +211,33 @@ func TestExecutor_Execute(t *testing.T) {
 						Children: nil,
 					},
 				},
-				Results: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("join"),
+				Results: map[string]plan.YieldSpec{
+					plan.DefaultYieldName: {ID: plan.ProcedureIDFromOperationID("join")},
 				},
 			},
-			exp: [][]*executetest.Block{[]*executetest.Block{{
+			exp: map[string][]*executetest.Block{
+				plan.DefaultYieldName: []*executetest.Block{{
+					Bnds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
+					},
+					ColMeta: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ColMeta{
+							Label: execute.DefaultValueColLabel,
+							Type:  execute.TInt,
+							Kind:  execute.ValueColKind,
+						},
+					},
+					Data: [][]interface{}{
+						{execute.Time(5), int64(3)},
+					},
+				}},
+			},
+		},
+		{
+			name: "multiple aggregates",
+			src: []execute.Block{&executetest.Block{
 				Bnds: execute.Bounds{
 					Start: 1,
 					Stop:  5,
@@ -221,14 +246,105 @@ func TestExecutor_Execute(t *testing.T) {
 					execute.TimeCol,
 					execute.ColMeta{
 						Label: execute.DefaultValueColLabel,
-						Type:  execute.TInt,
+						Type:  execute.TFloat,
 						Kind:  execute.ValueColKind,
 					},
 				},
 				Data: [][]interface{}{
-					{execute.Time(5), int64(3)},
+					{execute.Time(0), 1.0},
+					{execute.Time(1), 2.0},
+					{execute.Time(2), 3.0},
+					{execute.Time(3), 4.0},
+					{execute.Time(4), 5.0},
 				},
-			}}},
+			}},
+			plan: &plan.PlanSpec{
+				Now: epoch.Add(5),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: math.MaxInt64,
+				},
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{Absolute: time.Unix(0, 1)},
+					Stop:  query.Time{Absolute: time.Unix(0, 5)},
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database:  "mydb",
+							BoundsSet: true,
+							Bounds: plan.BoundsSpec{
+								Start: query.Time{
+									Relative:   -5,
+									IsRelative: true,
+								},
+							},
+						},
+						Parents: nil,
+						Children: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("sum"),
+							plan.ProcedureIDFromOperationID("mean"),
+						},
+					},
+					plan.ProcedureIDFromOperationID("sum"): {
+						ID:   plan.ProcedureIDFromOperationID("sum"),
+						Spec: &functions.SumProcedureSpec{},
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("from"),
+						},
+						Children: nil,
+					},
+					plan.ProcedureIDFromOperationID("mean"): {
+						ID:   plan.ProcedureIDFromOperationID("mean"),
+						Spec: &functions.MeanProcedureSpec{},
+						Parents: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("from"),
+						},
+						Children: nil,
+					},
+				},
+				Results: map[string]plan.YieldSpec{
+					"sum":  {ID: plan.ProcedureIDFromOperationID("sum")},
+					"mean": {ID: plan.ProcedureIDFromOperationID("mean")},
+				},
+			},
+			exp: map[string][]*executetest.Block{
+				"sum": []*executetest.Block{{
+					Bnds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
+					},
+					ColMeta: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ColMeta{
+							Label: execute.DefaultValueColLabel,
+							Type:  execute.TFloat,
+							Kind:  execute.ValueColKind,
+						},
+					},
+					Data: [][]interface{}{
+						{execute.Time(5), 15.0},
+					},
+				}},
+				"mean": []*executetest.Block{{
+					Bnds: execute.Bounds{
+						Start: 1,
+						Stop:  5,
+					},
+					ColMeta: []execute.ColMeta{
+						execute.TimeCol,
+						execute.ColMeta{
+							Label: execute.DefaultValueColLabel,
+							Type:  execute.TFloat,
+							Kind:  execute.ValueColKind,
+						},
+					},
+					Data: [][]interface{}{
+						{execute.Time(5), 3.0},
+					},
+				}},
+			},
 		},
 	}
 
@@ -243,10 +359,10 @@ func TestExecutor_Execute(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := make([][]*executetest.Block, len(results))
-			for i, r := range results {
+			got := make(map[string][]*executetest.Block, len(results))
+			for name, r := range results {
 				if err := r.Blocks().Do(func(b execute.Block) error {
-					got[i] = append(got[i], executetest.ConvertBlock(b))
+					got[name] = append(got[name], executetest.ConvertBlock(b))
 					return nil
 				}); err != nil {
 					t.Fatal(err)

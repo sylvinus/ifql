@@ -81,7 +81,7 @@ func (c *Controller) Query(ctx context.Context, qSpec *query.Spec) (*Query, erro
 func (c *Controller) createQuery(ctx context.Context) *Query {
 	id := c.nextID()
 	cctx, cancel := context.WithCancel(ctx)
-	ready := make(chan []execute.Result, 1)
+	ready := make(chan map[string]execute.Result, 1)
 	return &Query{
 		id:        id,
 		state:     Created,
@@ -167,14 +167,14 @@ func (c *Controller) run() {
 				// Plan query to determine needed resources
 				lp, err := c.lplanner.Plan(&q.Spec)
 				if err != nil {
-					q.setErr(errors.Wrap(err, "failed to create logical plan"))
+					go q.setErr(errors.Wrap(err, "failed to create logical plan"))
 					continue
 				}
 				//log.Println("logical plan", plan.Formatted(lp))
 
 				p, err := c.pplanner.Plan(lp, nil, q.now)
 				if err != nil {
-					q.setErr(errors.Wrap(err, "failed to create physical plan"))
+					go q.setErr(errors.Wrap(err, "failed to create physical plan"))
 					continue
 				}
 				q.plan = p
@@ -237,11 +237,11 @@ type Query struct {
 
 	err error
 
-	ready chan<- []execute.Result
+	ready chan<- map[string]execute.Result
 	// Ready is a channel that will deliver the query results.
 	// The channel may be closed before any results arrive, in which case the query should be
 	// inspected for an error using Err().
-	Ready <-chan []execute.Result
+	Ready <-chan map[string]execute.Result
 
 	mu     sync.Mutex
 	state  State
@@ -310,7 +310,8 @@ func (q *Query) Done() {
 
 		q.state = Finished
 	case Errored:
-		// nothing to do, simply finish
+		// The query has already been finished in the call to setErr.
+		return
 	case Canceled:
 		// The query has already been finished in the call to Cancel.
 		return
@@ -324,12 +325,18 @@ func (q *Query) recordMetrics() {
 	if q.compilingSpan != nil {
 		compilingHist.Observe(q.compilingSpan.Duration.Seconds())
 	}
-	queueingHist.Observe(q.queueSpan.Duration.Seconds())
+	if q.queueSpan != nil {
+		queueingHist.Observe(q.queueSpan.Duration.Seconds())
+	}
 	if q.requeueSpan != nil {
 		requeueingHist.Observe(q.requeueSpan.Duration.Seconds())
 	}
-	planningHist.Observe(q.planSpan.Duration.Seconds())
-	executingHist.Observe(q.executeSpan.Duration.Seconds())
+	if q.planSpan != nil {
+		planningHist.Observe(q.planSpan.Duration.Seconds())
+	}
+	if q.executeSpan != nil {
+		executingHist.Observe(q.executeSpan.Duration.Seconds())
+	}
 }
 
 // State reports the current state of the query.
@@ -356,12 +363,17 @@ func (q *Query) Err() error {
 }
 func (q *Query) setErr(err error) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.err = err
 	q.state = Errored
-	q.mu.Unlock()
+
+	// Finish the query immediately.
+	// This allows for receiving from the Ready channel in the same goroutine
+	// that has called defer q.Done()
+	q.finish()
 }
 
-func (q *Query) setResults(r []execute.Result) {
+func (q *Query) setResults(r map[string]execute.Result) {
 	q.mu.Lock()
 	if q.state == Executing {
 		q.ready <- r

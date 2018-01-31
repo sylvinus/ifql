@@ -94,8 +94,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Children: []plan.ProcedureID{},
 					},
 				},
-				Results: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("from"),
+				Results: map[string]plan.YieldSpec{
+					plan.DefaultYieldName: {ID: plan.ProcedureIDFromOperationID("from")},
 				},
 				Order: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("from"),
@@ -157,8 +157,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Children: []plan.ProcedureID{},
 					},
 				},
-				Results: []plan.ProcedureID{
-					plan.ProcedureIDFromOperationID("from"),
+				Results: map[string]plan.YieldSpec{
+					plan.DefaultYieldName: {ID: plan.ProcedureIDFromOperationID("from")},
 				},
 				Order: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("from"),
@@ -257,12 +257,133 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 						Children: nil,
 					},
 				},
-				Results: []plan.ProcedureID{
-					(plan.ProcedureIDFromOperationID("mean")),
+				Results: map[string]plan.YieldSpec{
+					plan.DefaultYieldName: {ID: plan.ProcedureIDFromOperationID("mean")},
 				},
 				Order: []plan.ProcedureID{
 					plan.ProcedureIDFromOperationID("from"),
 					plan.ProcedureIDFromOperationID("mean"),
+				},
+			},
+		},
+		{
+			name: "multiple yield",
+			lp: &plan.LogicalPlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database: "mydb",
+						},
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+					},
+					plan.ProcedureIDFromOperationID("range"): {
+						ID: plan.ProcedureIDFromOperationID("range"),
+						Spec: &functions.RangeProcedureSpec{
+							Bounds: plan.BoundsSpec{
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
+							},
+						},
+						Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+						Children: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("stddev"),
+							plan.ProcedureIDFromOperationID("skew"),
+						},
+					},
+					plan.ProcedureIDFromOperationID("stddev"): {
+						ID:       plan.ProcedureIDFromOperationID("stddev"),
+						Spec:     &functions.StddevProcedureSpec{},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldStddev")},
+					},
+					plan.ProcedureIDFromOperationID("yieldStddev"): {
+						ID:       plan.ProcedureIDFromOperationID("yieldStddev"),
+						Spec:     &functions.YieldProcedureSpec{Name: "stddev"},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("stddev")},
+						Children: nil,
+					},
+					plan.ProcedureIDFromOperationID("skew"): {
+						ID:       plan.ProcedureIDFromOperationID("skew"),
+						Spec:     &functions.SkewProcedureSpec{},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldSkew")},
+					},
+					plan.ProcedureIDFromOperationID("yieldSkew"): {
+						ID:       plan.ProcedureIDFromOperationID("yieldSkew"),
+						Spec:     &functions.YieldProcedureSpec{Name: "skew"},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("skew")},
+						Children: nil,
+					},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+					plan.ProcedureIDFromOperationID("range"),
+					plan.ProcedureIDFromOperationID("stddev"),
+					plan.ProcedureIDFromOperationID("yieldStddev"),
+					plan.ProcedureIDFromOperationID("skew"),
+					plan.ProcedureIDFromOperationID("yieldSkew"),
+				},
+			},
+			pp: &plan.PlanSpec{
+				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{
+						IsRelative: true,
+						Relative:   -1 * time.Hour,
+					},
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database:  "mydb",
+							BoundsSet: true,
+							Bounds: plan.BoundsSpec{
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
+							},
+						},
+						Parents: nil,
+						Children: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("stddev"),
+							plan.ProcedureIDFromOperationID("skew"),
+						},
+					},
+					plan.ProcedureIDFromOperationID("stddev"): {
+						ID:       plan.ProcedureIDFromOperationID("stddev"),
+						Spec:     &functions.StddevProcedureSpec{},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+						Children: []plan.ProcedureID{},
+					},
+					plan.ProcedureIDFromOperationID("skew"): {
+						ID:       plan.ProcedureIDFromOperationID("skew"),
+						Spec:     &functions.SkewProcedureSpec{},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+						Children: []plan.ProcedureID{},
+					},
+				},
+				Results: map[string]plan.YieldSpec{
+					"stddev": {ID: plan.ProcedureIDFromOperationID("stddev")},
+					"skew":   {ID: plan.ProcedureIDFromOperationID("skew")},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+					plan.ProcedureIDFromOperationID("stddev"),
+					plan.ProcedureIDFromOperationID("skew"),
 				},
 			},
 		},
@@ -293,19 +414,33 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 				ID:       plan.ProcedureIDFromOperationID("first"),
 				Spec:     &functions.FirstProcedureSpec{},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldFirst")},
+			},
+			plan.ProcedureIDFromOperationID("yieldFirst"): {
+				ID:       plan.ProcedureIDFromOperationID("yieldFirst"),
+				Spec:     &functions.YieldProcedureSpec{Name: "first"},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("first")},
 				Children: nil,
 			},
 			plan.ProcedureIDFromOperationID("last"): {
 				ID:       plan.ProcedureIDFromOperationID("last"),
 				Spec:     &functions.LastProcedureSpec{},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldLast")},
+			},
+			plan.ProcedureIDFromOperationID("yieldLast"): {
+				ID:       plan.ProcedureIDFromOperationID("yieldLast"),
+				Spec:     &functions.YieldProcedureSpec{Name: "last"},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("last")},
 				Children: nil,
 			},
 		},
 		Order: []plan.ProcedureID{
 			plan.ProcedureIDFromOperationID("from"),
 			plan.ProcedureIDFromOperationID("first"),
+			plan.ProcedureIDFromOperationID("yieldFirst"),
 			plan.ProcedureIDFromOperationID("last"), // last is last so it will be duplicated
+			plan.ProcedureIDFromOperationID("yieldLast"),
 		},
 	}
 
@@ -333,7 +468,7 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 					LimitSet:      true,
 					PointsLimit:   1,
 					DescendingSet: true,
-					Descending:    false, // first
+					Descending:    true, // last
 				},
 				Children: []plan.ProcedureID{},
 			},
@@ -349,15 +484,15 @@ func TestPhysicalPlanner_Plan_PushDown_Branch(t *testing.T) {
 					LimitSet:      true,
 					PointsLimit:   1,
 					DescendingSet: true,
-					Descending:    true, // last
+					Descending:    false, // first
 				},
 				Parents:  []plan.ProcedureID{},
 				Children: []plan.ProcedureID{},
 			},
 		},
-		Results: []plan.ProcedureID{
-			fromID,
-			fromIDDup,
+		Results: map[string]plan.YieldSpec{
+			"first": {ID: fromIDDup},
+			"last":  {ID: fromID},
 		},
 		Order: []plan.ProcedureID{
 			fromID,
@@ -401,12 +536,24 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 				ID:       plan.ProcedureIDFromOperationID("sum"),
 				Spec:     &functions.SumProcedureSpec{},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldSum")},
+			},
+			plan.ProcedureIDFromOperationID("yieldSum"): {
+				ID:       plan.ProcedureIDFromOperationID("yieldSum"),
+				Spec:     &functions.YieldProcedureSpec{Name: "sum"},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("sum")},
 				Children: nil,
 			},
 			plan.ProcedureIDFromOperationID("mean"): {
 				ID:       plan.ProcedureIDFromOperationID("mean"),
 				Spec:     &functions.MeanProcedureSpec{},
 				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("yieldMean")},
+			},
+			plan.ProcedureIDFromOperationID("yieldMean"): {
+				ID:       plan.ProcedureIDFromOperationID("yieldMean"),
+				Spec:     &functions.YieldProcedureSpec{Name: "mean"},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
 				Children: nil,
 			},
 		},
@@ -414,14 +561,14 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 			plan.ProcedureIDFromOperationID("from"),
 			plan.ProcedureIDFromOperationID("range"),
 			plan.ProcedureIDFromOperationID("sum"),
+			plan.ProcedureIDFromOperationID("yieldSum"),
 			plan.ProcedureIDFromOperationID("mean"), // Mean can't be pushed down, but sum can
+			plan.ProcedureIDFromOperationID("yieldMean"),
 		},
 	}
 
 	fromID := plan.ProcedureIDFromOperationID("from")
 	fromIDDup := plan.ProcedureIDForDuplicate(fromID)
-	meanID := plan.ProcedureIDFromOperationID("mean")
-	meanIDDup := plan.ProcedureIDForDuplicate(meanID)
 	want := &plan.PlanSpec{
 		Bounds: plan.BoundsSpec{
 			Start: query.Time{
@@ -434,8 +581,8 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 			MemoryBytesQuota: math.MaxInt64,
 		},
 		Procedures: map[plan.ProcedureID]*plan.Procedure{
-			fromID: {
-				ID: fromID,
+			fromIDDup: {
+				ID: fromIDDup,
 				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
@@ -448,10 +595,11 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 					AggregateSet:  true,
 					AggregateType: "sum",
 				},
+				Parents:  []plan.ProcedureID{},
 				Children: []plan.ProcedureID{},
 			},
-			fromIDDup: {
-				ID: fromIDDup,
+			plan.ProcedureIDFromOperationID("from"): {
+				ID: plan.ProcedureIDFromOperationID("from"),
 				Spec: &functions.FromProcedureSpec{
 					Database:  "mydb",
 					BoundsSet: true,
@@ -462,26 +610,23 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 						},
 					},
 				},
-				Parents: []plan.ProcedureID{},
-				Children: []plan.ProcedureID{
-					meanIDDup,
-				},
+				Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("mean")},
 			},
-			meanIDDup: {
-				ID:       meanIDDup,
+			plan.ProcedureIDFromOperationID("mean"): {
+				ID:       plan.ProcedureIDFromOperationID("mean"),
 				Spec:     &functions.MeanProcedureSpec{},
-				Parents:  []plan.ProcedureID{fromIDDup},
+				Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
 				Children: []plan.ProcedureID{},
 			},
 		},
-		Results: []plan.ProcedureID{
-			fromID,
-			meanIDDup,
+		Results: map[string]plan.YieldSpec{
+			"sum":  {ID: fromIDDup},
+			"mean": {ID: plan.ProcedureIDFromOperationID("mean")},
 		},
 		Order: []plan.ProcedureID{
 			fromID,
 			fromIDDup,
-			meanIDDup,
+			plan.ProcedureIDFromOperationID("mean"),
 		},
 	}
 
@@ -501,7 +646,9 @@ func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.P
 	}
 
 	if !cmp.Equal(got, want) {
-		t.Log(plan.Formatted(got))
+		t.Log("Logical:", plan.Formatted(lp))
+		t.Log("Want Physical:", plan.Formatted(want))
+		t.Log("Got  Physical:", plan.Formatted(got))
 		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got))
 	}
 }
