@@ -74,6 +74,10 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		copy(order, p.plan.Order)
 		for _, id := range order {
 			pr := p.plan.Procedures[id]
+			if pr == nil {
+				// Procedure was removed
+				continue
+			}
 			if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
 				rules := pd.PushDownRules()
 				for _, rule := range rules {
@@ -130,7 +134,20 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 		pk := pp.Spec.Kind()
 		if pk == rule.Root {
 			if rule.Match == nil || rule.Match(pp.Spec) {
-				do(pp, func() *Procedure { return p.duplicate(pp, false) })
+				// Check for siblings
+				if len(pp.Children) > 1 {
+					p.duplicate(pp, true, pr.ID)
+					// Remove old children
+					for _, child := range pp.Children {
+						if child != pr.ID {
+							p.removeProcedure(p.plan.Procedures[child])
+						}
+					}
+					pp.Children = []ProcedureID{pr.ID}
+				}
+				do(pp, func() *Procedure {
+					return p.duplicate(pp, false)
+				})
 				matched = true
 			}
 		} else if hasKind(pk, rule.Through) {
@@ -173,7 +190,7 @@ func ProcedureIDForDuplicate(id ProcedureID) ProcedureID {
 	return ProcedureID(uuid.NewV5(RootUUID, id.String()))
 }
 
-func (p *planner) duplicate(pr *Procedure, skipParents bool) *Procedure {
+func (p *planner) duplicate(pr *Procedure, skipParents bool, skipChildren ...ProcedureID) *Procedure {
 	p.modified = true
 	np := pr.Copy()
 	np.ID = ProcedureIDForDuplicate(pr.ID)
@@ -187,14 +204,17 @@ func (p *planner) duplicate(pr *Procedure, skipParents bool) *Procedure {
 		}
 	}
 
-	newChildren := make([]ProcedureID, len(np.Children))
-	for i, id := range np.Children {
+	newChildren := make([]ProcedureID, 0, len(np.Children))
+	for _, id := range np.Children {
+		if hasID(skipChildren, id) {
+			continue
+		}
 		child := p.plan.Procedures[id]
 		newChild := p.duplicate(child, true)
 		newChild.Parents = removeID(newChild.Parents, pr.ID)
 		newChild.Parents = append(newChild.Parents, np.ID)
 
-		newChildren[i] = newChild.ID
+		newChildren = append(newChildren, newChild.ID)
 
 		if pa, ok := newChild.Spec.(ParentAwareProcedureSpec); ok {
 			pa.ParentChanged(pr.ID, np.ID)
@@ -204,6 +224,14 @@ func (p *planner) duplicate(pr *Procedure, skipParents bool) *Procedure {
 	return np
 }
 
+func hasID(ids []ProcedureID, id ProcedureID) bool {
+	for _, i := range ids {
+		if i == id {
+			return true
+		}
+	}
+	return false
+}
 func removeID(ids []ProcedureID, remove ProcedureID) []ProcedureID {
 	filtered := ids[0:0]
 	for i, id := range ids {

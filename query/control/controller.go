@@ -170,6 +170,7 @@ func (c *Controller) run() {
 					q.setErr(errors.Wrap(err, "failed to create logical plan"))
 					continue
 				}
+				//log.Println("logical plan", plan.Formatted(lp))
 
 				p, err := c.pplanner.Plan(lp, nil, q.now)
 				if err != nil {
