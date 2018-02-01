@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -96,7 +95,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Running query:\n", queryStr)
+	fmt.Println("Running query:")
+	fmt.Println(queryStr)
 	if len(hosts) == 0 {
 		hosts = defaultStorageHosts
 	}
@@ -104,6 +104,7 @@ func main() {
 		Hosts:            hosts,
 		ConcurrencyQuota: runtime.NumCPU() * 2,
 		MemoryBytesQuota: math.MaxInt64,
+		Verbose:          *verbose,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -113,13 +114,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer q.Done()
-
-	if *verbose {
-		octets, err := json.MarshalIndent(q.Spec, "", "    ")
-		if err != nil {
-			fmt.Println(string(octets))
-		}
-	}
 
 	results, ok := <-q.Ready
 	if !ok {

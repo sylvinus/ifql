@@ -1,5 +1,9 @@
 package execute
 
+import (
+	"fmt"
+)
+
 type selectorTransformation struct {
 	d          Dataset
 	cache      BlockBuilderCache
@@ -126,6 +130,9 @@ func (t *indexSelectorTransformation) Process(id DatasetID, b Block) error {
 
 func (t *rowSelectorTransformation) Process(id DatasetID, b Block) error {
 	builder, valueIdx := t.setupBuilder(b)
+	if valueIdx < 0 {
+		return fmt.Errorf("no column %q exists", t.colLabel)
+	}
 	valueCol := builder.Cols()[valueIdx]
 
 	values := b.Col(valueIdx)
@@ -284,10 +291,16 @@ func ReadRow(i int, rr RowReader) (row Row) {
 	row.Values = make([]interface{}, len(cols))
 	for j, c := range cols {
 		switch c.Type {
-		case TString:
-			row.Values[j] = rr.AtString(i, j)
+		case TBool:
+			row.Values[j] = rr.AtBool(i, j)
+		case TInt:
+			row.Values[j] = rr.AtInt(i, j)
+		case TUInt:
+			row.Values[j] = rr.AtUInt(i, j)
 		case TFloat:
 			row.Values[j] = rr.AtFloat(i, j)
+		case TString:
+			row.Values[j] = rr.AtString(i, j)
 		case TTime:
 			row.Values[j] = rr.AtTime(i, j)
 		}

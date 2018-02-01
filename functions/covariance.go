@@ -22,7 +22,7 @@ var covarianceSignature = query.DefaultFunctionSignature()
 func init() {
 	covarianceSignature.Params["pearsonr"] = semantic.Bool
 
-	query.RegisterBuiltIn(covarianceBuiltIn)
+	query.RegisterBuiltIn("covariance", covarianceBuiltIn)
 	query.RegisterFunction(CovarianceKind, createCovarianceOpSpec, covarianceSignature)
 	query.RegisterOpSpec(CovarianceKind, newCovarianceOp)
 	plan.RegisterProcedureSpec(CovarianceKind, newCovarianceProcedure, CovarianceKind)
@@ -30,7 +30,6 @@ func init() {
 }
 
 // covarianceBuiltIn defines a `cov` function with an automatic join.
-//TODO(nathanielc): Add support for default values to IFQL arrow functions (i.e. pearsonr=false).
 var covarianceBuiltIn = `
 cov = (x,y,on,pearsonr=false) =>
     join(

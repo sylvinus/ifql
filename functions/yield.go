@@ -19,7 +19,7 @@ var yieldSignature = semantic.FunctionSignature{
 		query.TableParameter: query.TableObjectType,
 		"name":               semantic.String,
 	},
-	ReturnType:   semantic.Nil,
+	ReturnType:   query.TableObjectType,
 	PipeArgument: query.TableParameter,
 }
 

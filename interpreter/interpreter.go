@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/influxdata/ifql/ast"
@@ -96,7 +97,7 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 		v, err := itrp.doCall(e, scope)
 		if err != nil {
 			// Determine function name
-			return nil, errors.Wrapf(err, "error calling funcion %q", functionName(e))
+			return nil, errors.Wrapf(err, "error calling function %q", functionName(e))
 		}
 		return v, nil
 	case *semantic.MemberExpression:
@@ -203,26 +204,24 @@ func (itrp interpreter) doExpression(expr semantic.Expression, scope *Scope) (Va
 
 func (itrp interpreter) doArray(a *semantic.ArrayExpression, scope *Scope) (Value, error) {
 	array := Array{
-		Type:     semantic.Invalid,
 		Elements: make([]Value, len(a.Elements)),
 	}
+	elementType := semantic.EmptyArrayType.ElementType()
 	for i, el := range a.Elements {
 		v, err := itrp.doExpression(el, scope)
 		if err != nil {
 			return nil, err
 		}
-		if array.Type == semantic.Invalid {
-			array.Type = v.Type()
+		if i == 0 {
+			elementType = v.Type()
 		}
-		if array.Type != v.Type() {
-			return nil, fmt.Errorf("cannot mix types in an array, found both %v and %v", array.Type, v.Type())
+		if elementType != v.Type() {
+			return nil, fmt.Errorf("cannot mix types in an array, found both %v and %v", elementType, v.Type())
 		}
 		array.Elements[i] = v
 	}
-	return value{
-		t: semantic.Array,
-		v: array,
-	}, nil
+	array.typ = semantic.NewArrayType(elementType)
+	return array, nil
 }
 
 func (itrp interpreter) doObject(m *semantic.ObjectExpression, scope *Scope) (Value, error) {
@@ -487,7 +486,7 @@ func (f arrowFunc) Call(args Arguments, d Domain) (Value, error) {
 			if !ok {
 				// Use default value
 				var err error
-				v, err = f.itrp.doLiteral(p.Default)
+				v, err = f.itrp.doExpression(p.Default, f.scope)
 				if err != nil {
 					return nil, err
 				}
@@ -715,12 +714,31 @@ func resolveValue(v Value) (semantic.Node, error) {
 // Array represents an sequence of elements
 // All elements must be the same type
 type Array struct {
-	Type     semantic.Type
 	Elements []Value
+	typ      semantic.Type
+}
+
+func (a Array) Type() semantic.Type {
+	return a.typ
+}
+
+func (a Array) Value() interface{} {
+	return a
+}
+
+func (a Array) Property(name string) (Value, error) {
+	i, err := strconv.Atoi(name)
+	if err != nil {
+		return nil, err
+	}
+	if i < 0 || i >= len(a.Elements) {
+		return nil, fmt.Errorf("out of bounds index %d, length: %d", i, len(a.Elements))
+	}
+	return a.Elements[i], nil
 }
 
 func (a Array) AsStrings() []string {
-	if a.Type != semantic.String {
+	if a.typ.ElementType() != semantic.String {
 		return nil
 	}
 	strs := make([]string, len(a.Elements))
@@ -872,7 +890,7 @@ func (a *arguments) GetArray(name string, t semantic.Kind) (Array, bool, error) 
 		return Array{}, ok, err
 	}
 	arr := v.Value().(Array)
-	if arr.Type != t {
+	if arr.Type().ElementType() != t {
 		return Array{}, true, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
 	}
 	return v.Value().(Array), ok, nil
@@ -883,7 +901,7 @@ func (a *arguments) GetRequiredArray(name string, t semantic.Kind) (Array, error
 		return Array{}, err
 	}
 	arr := v.Value().(Array)
-	if arr.Type != t {
+	if arr.Type().ElementType() != t {
 		return Array{}, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
 	}
 	return arr, nil

@@ -263,11 +263,16 @@ func (t *groupTransformation) processFanIn(b execute.Block, tags execute.Tags) e
 	blockCols := b.Cols()
 	colMap := make([]int, len(builderCols))
 	for j, c := range builderCols {
+		found := false
 		for nj, nc := range blockCols {
 			if c.Label == nc.Label {
 				colMap[j] = nj
+				found = true
 				break
 			}
+		}
+		if !found {
+			return fmt.Errorf("block does not have the column %q", c.Label)
 		}
 	}
 
