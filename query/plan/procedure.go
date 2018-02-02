@@ -60,6 +60,10 @@ type BoundedProcedureSpec interface {
 	TimeBounds() BoundsSpec
 }
 
+type YieldProcedureSpec interface {
+	YieldName() string
+}
+
 type ParentAwareProcedureSpec interface {
 	ParentChanged(old, new ProcedureID)
 }

@@ -279,6 +279,7 @@ func iterateResults(r execute.Result, f func(measurement, fieldName string, tags
 }
 
 type header struct {
+	Result   string            `json:"result"`
 	SeriesID int64             `json:"seriesID"`
 	Tags     map[string]string `json:"tags"`
 }
@@ -293,16 +294,16 @@ type point struct {
 	Context map[string]string `json:"context,omitempty"`
 }
 
-func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
+func writeJSONChunks(results map[string]execute.Result, w http.ResponseWriter) {
 	seriesID := int64(0)
-	for _, r := range results {
+	for name, r := range results {
 		blocks := r.Blocks()
 
 		err := blocks.Do(func(b execute.Block) error {
 			seriesID++
 
 			// output header
-			h := header{SeriesID: seriesID, Tags: b.Tags()}
+			h := header{Result: name, SeriesID: seriesID, Tags: b.Tags()}
 			bb, err := json.Marshal(h)
 			if err != nil {
 				return err
@@ -373,7 +374,7 @@ func writeJSONChunks(results []execute.Result, w http.ResponseWriter) {
 	}
 }
 
-func writeLineResults(results []execute.Result, w http.ResponseWriter) {
+func writeLineResults(results map[string]execute.Result, w http.ResponseWriter) {
 	for _, r := range results {
 		iterateResults(r, func(m, f string, tags map[string]string, val interface{}, t time.Time) {
 			p, err := models.NewPoint(m, models.NewTags(tags), map[string]interface{}{f: val}, t)

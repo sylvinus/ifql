@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -8,6 +9,9 @@ import (
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 )
+
+// DefaultYieldName is the yield name to use in cases where no explicit yield name was specified.
+const DefaultYieldName = "_result"
 
 type PlanSpec struct {
 	// Now represents the relative currentl time of the plan.
@@ -17,9 +21,14 @@ type PlanSpec struct {
 	Procedures map[ProcedureID]*Procedure
 	Order      []ProcedureID
 	// Results is a list of datasets that are the result of the plan
-	Results []ProcedureID
+	Results map[string]YieldSpec
 
 	Resources query.ResourceManagement
+}
+
+// YieldSpec defines how data should be yielded.
+type YieldSpec struct {
+	ID ProcedureID
 }
 
 func (p *PlanSpec) Do(f func(pr *Procedure)) {
@@ -52,6 +61,7 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		Procedures: make(map[ProcedureID]*Procedure, len(lp.Procedures)),
 		Order:      make([]ProcedureID, 0, len(lp.Order)),
 		Resources:  lp.Resources,
+		Results:    make(map[string]YieldSpec),
 	}
 
 	// Find the datasets that are results and populate mappings
@@ -81,7 +91,9 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 			if pd, ok := pr.Spec.(PushDownProcedureSpec); ok {
 				rules := pd.PushDownRules()
 				for _, rule := range rules {
-					if p.pushDownAndSearch(pr, rule, pd.PushDown) {
+					if remove, err := p.pushDownAndSearch(pr, rule, pd.PushDown); err != nil {
+						return nil, err
+					} else if remove {
 						if err := p.removeProcedure(pr); err != nil {
 							return nil, errors.Wrap(err, "failed to remove procedure")
 						}
@@ -92,15 +104,44 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 	}
 
 	// Now that plan is complete find results and time bounds
-	p.plan.Do(func(pr *Procedure) {
+	var leaves []ProcedureID
+	var yields []*Procedure
+	for _, id := range p.plan.Order {
+		pr := p.plan.Procedures[id]
 		if bounded, ok := pr.Spec.(BoundedProcedureSpec); ok {
 			bounds := bounded.TimeBounds()
 			p.plan.Bounds = p.plan.Bounds.Union(bounds, now)
 		}
-		if len(pr.Children) == 0 {
-			p.plan.Results = append(p.plan.Results, pr.ID)
+		if yield, ok := pr.Spec.(YieldProcedureSpec); ok {
+			if len(pr.Parents) != 1 {
+				return nil, errors.New("yield procedures must have exactly one parent")
+			}
+			parent := pr.Parents[0]
+			name := yield.YieldName()
+			_, ok := p.plan.Results[name]
+			if ok {
+				return nil, fmt.Errorf("found duplicate yield name %q", name)
+			}
+			p.plan.Results[name] = YieldSpec{ID: parent}
+			yields = append(yields, pr)
+		} else if len(pr.Children) == 0 {
+			// Capture non yield leaves
+			leaves = append(leaves, pr.ID)
 		}
-	})
+	}
+
+	for _, pr := range yields {
+		// remove yield procedure
+		p.removeProcedure(pr)
+	}
+
+	if len(p.plan.Results) == 0 {
+		if len(leaves) == 1 {
+			p.plan.Results[DefaultYieldName] = YieldSpec{ID: leaves[0]}
+		} else {
+			return nil, errors.New("query must specify explicit yields when there is more than one result.")
+		}
+	}
 
 	if p.plan.Bounds.Start.IsZero() && p.plan.Bounds.Stop.IsZero() {
 		return nil, errors.New("unbounded queries are not supported. Add a '.range' call to bound the query.")
@@ -127,7 +168,7 @@ func hasKind(kind ProcedureKind, kinds []ProcedureKind) bool {
 	return false
 }
 
-func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(parent *Procedure, dup func() *Procedure)) bool {
+func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(parent *Procedure, dup func() *Procedure)) (bool, error) {
 	matched := false
 	for _, parent := range pr.Parents {
 		pp := p.plan.Procedures[parent]
@@ -136,25 +177,25 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 			if rule.Match == nil || rule.Match(pp.Spec) {
 				// Check for siblings
 				if len(pp.Children) > 1 {
-					p.duplicate(pp, true, pr.ID)
-					// Remove old children
-					for _, child := range pp.Children {
-						if child != pr.ID {
-							p.removeProcedure(p.plan.Procedures[child])
-						}
+					// Duplicate just this child branch
+					p.duplicateChildBranch(pp, pr.ID)
+					// Remove this entire branch since it has been duplicated.
+					if err := p.removeBranch(pr); err != nil {
+						return false, err
 					}
-					pp.Children = []ProcedureID{pr.ID}
+					// Wait to do push down function when the duplicate is found
+					return false, nil
 				}
-				do(pp, func() *Procedure {
-					return p.duplicate(pp, false)
-				})
+				do(pp, func() *Procedure { return p.duplicate(pp, false) })
 				matched = true
 			}
 		} else if hasKind(pk, rule.Through) {
-			p.pushDownAndSearch(pp, rule, do)
+			if _, err := p.pushDownAndSearch(pp, rule, do); err != nil {
+				return false, err
+			}
 		}
 	}
-	return matched
+	return matched, nil
 }
 
 func (p *planner) removeProcedure(pr *Procedure) error {
@@ -186,11 +227,40 @@ func (p *planner) removeProcedure(pr *Procedure) error {
 	return nil
 }
 
+func (p *planner) removeBranch(pr *Procedure) error {
+	// It only makes sense to remove a procedure that has a single parent.
+	if len(pr.Parents) > 1 {
+		return errors.New("cannot remove a branch that has more than one parent")
+	}
+	p.modified = true
+	delete(p.plan.Procedures, pr.ID)
+	p.plan.Order = removeID(p.plan.Order, pr.ID)
+
+	for _, id := range pr.Parents {
+		parent := p.plan.Procedures[id]
+		// Check that parent hasn't already been removed
+		if parent != nil {
+			parent.Children = removeID(parent.Children, pr.ID)
+		}
+	}
+
+	for _, id := range pr.Children {
+		child := p.plan.Procedures[id]
+		if err := p.removeBranch(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ProcedureIDForDuplicate(id ProcedureID) ProcedureID {
 	return ProcedureID(uuid.NewV5(RootUUID, id.String()))
 }
 
-func (p *planner) duplicate(pr *Procedure, skipParents bool, skipChildren ...ProcedureID) *Procedure {
+func (p *planner) duplicateChildBranch(pr *Procedure, child ProcedureID) *Procedure {
+	return p.duplicate(pr, true, child)
+}
+func (p *planner) duplicate(pr *Procedure, skipParents bool, onlyChildren ...ProcedureID) *Procedure {
 	p.modified = true
 	np := pr.Copy()
 	np.ID = ProcedureIDForDuplicate(pr.ID)
@@ -206,7 +276,7 @@ func (p *planner) duplicate(pr *Procedure, skipParents bool, skipChildren ...Pro
 
 	newChildren := make([]ProcedureID, 0, len(np.Children))
 	for _, id := range np.Children {
-		if hasID(skipChildren, id) {
+		if len(onlyChildren) > 0 && !hasID(onlyChildren, id) {
 			continue
 		}
 		child := p.plan.Procedures[id]

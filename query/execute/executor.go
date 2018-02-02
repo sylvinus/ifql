@@ -11,7 +11,7 @@ import (
 )
 
 type Executor interface {
-	Execute(context.Context, *plan.PlanSpec) ([]Result, error)
+	Execute(context.Context, *plan.PlanSpec) (map[string]Result, error)
 }
 
 type executor struct {
@@ -39,7 +39,7 @@ type executionState struct {
 
 	bounds Bounds
 
-	results []Result
+	results map[string]Result
 	sources []Source
 
 	transports []Transport
@@ -47,7 +47,7 @@ type executionState struct {
 	dispatcher *poolDispatcher
 }
 
-func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) ([]Result, error) {
+func (e *executor) Execute(ctx context.Context, p *plan.PlanSpec) (map[string]Result, error) {
 	es, err := e.createExecutionState(ctx, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize execute state")
@@ -74,7 +74,7 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 			Limit: p.Resources.MemoryBytesQuota,
 		},
 		resources: p.Resources,
-		results:   make([]Result, len(p.Results)),
+		results:   make(map[string]Result, len(p.Results)),
 		// TODO(nathanielc): Have the planner specify the dispatcher throughput
 		dispatcher: newPoolDispatcher(10),
 		bounds: Bounds{
@@ -82,14 +82,14 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 			Stop:  Time(p.Bounds.Stop.Time(p.Now).UnixNano()),
 		},
 	}
-	for i, id := range p.Results {
-		ds, err := es.createNode(ctx, p.Procedures[id])
+	for name, yield := range p.Results {
+		ds, err := es.createNode(ctx, p.Procedures[yield.ID])
 		if err != nil {
 			return nil, err
 		}
-		rs := newResultSink()
+		rs := newResultSink(yield)
 		ds.AddTransformation(rs)
-		es.results[i] = rs
+		es.results[name] = rs
 	}
 	return es, nil
 }
