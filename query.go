@@ -26,6 +26,8 @@ type Config struct {
 
 	ConcurrencyQuota int
 	MemoryBytesQuota int
+
+	Verbose bool
 }
 
 // Use type aliases to expose simple API for entire project
@@ -48,6 +50,7 @@ func NewController(conf Config) (*Controller, error) {
 		ExecutorConfig: execute.Config{
 			StorageReader: s,
 		},
+		Verbose: conf.Verbose,
 	}
 	return control.New(c), nil
 }

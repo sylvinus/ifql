@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -23,10 +24,13 @@ type Controller struct {
 	queryDone     chan *Query
 	cancelRequest chan QueryID
 
+	verbose bool
+
 	lplanner plan.LogicalPlanner
 	pplanner plan.Planner
 	executor execute.Executor
 
+	maxConcurrency       int
 	availableConcurrency int
 	availableMemory      int64
 }
@@ -35,6 +39,7 @@ type Config struct {
 	ConcurrencyQuota int
 	MemoryBytesQuota int64
 	ExecutorConfig   execute.Config
+	Verbose          bool
 }
 
 type QueryID uint64
@@ -45,11 +50,13 @@ func New(c Config) *Controller {
 		queries:              make(map[QueryID]*Query),
 		queryDone:            make(chan *Query),
 		cancelRequest:        make(chan QueryID),
+		maxConcurrency:       c.ConcurrencyQuota,
 		availableConcurrency: c.ConcurrencyQuota,
 		availableMemory:      c.MemoryBytesQuota,
 		lplanner:             plan.NewLogicalPlanner(),
 		pplanner:             plan.NewPlanner(),
 		executor:             execute.NewExecutor(c.ExecutorConfig),
+		verbose:              c.Verbose,
 	}
 	go ctrl.run()
 	return ctrl
@@ -96,7 +103,7 @@ func (c *Controller) createQuery(ctx context.Context) *Query {
 
 func (c *Controller) compileQuery(q *Query, queryStr string) error {
 	q.compile()
-	spec, err := query.Compile(q.compilingCtx, queryStr)
+	spec, err := query.Compile(q.compilingCtx, queryStr, query.Verbose(c.verbose))
 	if err != nil {
 		return errors.Wrap(err, "failed to compile query")
 	}
@@ -163,49 +170,61 @@ func (c *Controller) run() {
 		// Peek at head of priority queue
 		q := pq.Peek()
 		if q != nil {
-			if q.tryPlan() {
-				// Plan query to determine needed resources
-				lp, err := c.lplanner.Plan(&q.Spec)
-				if err != nil {
-					go q.setErr(errors.Wrap(err, "failed to create logical plan"))
-					continue
-				}
-				//log.Println("logical plan", plan.Formatted(lp))
-
-				p, err := c.pplanner.Plan(lp, nil, q.now)
-				if err != nil {
-					go q.setErr(errors.Wrap(err, "failed to create physical plan"))
-					continue
-				}
-				q.plan = p
-				q.concurrency = p.Resources.ConcurrencyQuota
-				q.memory = p.Resources.MemoryBytesQuota
-				//log.Println("plan", plan.Formatted(q.plan))
-			}
-
-			// Check if we have enough resources
-			if c.check(q) {
-				// Update resource gauges
-				c.consume(q)
-
-				// Remove the query from the queue
-				pq.Pop()
-
-				// Execute query
-				if q.tryExec() {
-					r, err := c.executor.Execute(q.executeCtx, q.plan)
-					if err != nil {
-						q.setErr(errors.Wrap(err, "failed to execute query"))
-						continue
-					}
-					q.setResults(r)
-				}
-			} else {
-				// update state to queueing
-				q.tryRequeue()
+			err := c.processQuery(pq, q)
+			if err != nil {
+				go q.setErr(err)
 			}
 		}
 	}
+}
+
+func (c *Controller) processQuery(pq *PriorityQueue, q *Query) error {
+	if q.tryPlan() {
+		// Plan query to determine needed resources
+		lp, err := c.lplanner.Plan(&q.Spec)
+		if err != nil {
+			return errors.Wrap(err, "failed to create logical plan")
+		}
+		if c.verbose {
+			log.Println("logical plan", plan.Formatted(lp))
+		}
+
+		p, err := c.pplanner.Plan(lp, nil, q.now)
+		if err != nil {
+			return errors.Wrap(err, "failed to create physical plan")
+		}
+		q.plan = p
+		q.concurrency = p.Resources.ConcurrencyQuota
+		if q.concurrency > c.maxConcurrency {
+			q.concurrency = c.maxConcurrency
+		}
+		q.memory = p.Resources.MemoryBytesQuota
+		if c.verbose {
+			log.Println("physical plan", plan.Formatted(q.plan))
+		}
+	}
+
+	// Check if we have enough resources
+	if c.check(q) {
+		// Update resource gauges
+		c.consume(q)
+
+		// Remove the query from the queue
+		pq.Pop()
+
+		// Execute query
+		if q.tryExec() {
+			r, err := c.executor.Execute(q.executeCtx, q.plan)
+			if err != nil {
+				return errors.Wrap(err, "failed to execute query")
+			}
+			q.setResults(r)
+		}
+	} else {
+		// update state to queueing
+		q.tryRequeue()
+	}
+	return nil
 }
 
 func (c *Controller) check(q *Query) bool {

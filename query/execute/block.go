@@ -328,6 +328,21 @@ const (
 	ValueColKind
 )
 
+func (k ColKind) String() string {
+	switch k {
+	case InvalidColKind:
+		return "invalid"
+	case TimeColKind:
+		return "time"
+	case TagColKind:
+		return "tag"
+	case ValueColKind:
+		return "value"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	TimeCol = ColMeta{
 		Label: TimeColLabel,

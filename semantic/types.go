@@ -149,13 +149,14 @@ var arrayTypeCache struct {
 
 // arrayTypeOf returns the Type for the given ArrayExpression.
 func arrayTypeOf(e *ArrayExpression) Type {
-	var et Type = Nil
-	if len(e.Elements) > 0 {
-		et = e.Elements[0].Type()
+	if len(e.Elements) == 0 {
+		return EmptyArrayType
 	}
-
+	et := e.Elements[0].Type()
 	return NewArrayType(et)
 }
+
+var EmptyArrayType = NewArrayType(Nil)
 
 func NewArrayType(elementType Type) Type {
 	// Lookup arrayType in cache by elementType

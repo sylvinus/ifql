@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -18,8 +19,24 @@ const (
 	tableIDKey     = "id"
 )
 
+type Option func(*options)
+
+func Verbose(v bool) Option {
+	return func(o *options) {
+		o.verbose = v
+	}
+}
+
+type options struct {
+	verbose bool
+}
+
 // Compile evaluates an IFQL script producing a query Spec.
-func Compile(ctx context.Context, q string) (*Spec, error) {
+func Compile(ctx context.Context, q string, opts ...Option) (*Spec, error) {
+	o := new(options)
+	for _, opt := range opts {
+		opt(o)
+	}
 	s, _ := opentracing.StartSpanFromContext(ctx, "parse")
 	astProg, err := parser.NewAST(q)
 	if err != nil {
@@ -30,7 +47,7 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 	defer s.Finish()
 
 	// Convert AST program to a semantic program
-	semProg, err := semantic.New(astProg, builtinDeclarations)
+	semProg, err := semantic.New(astProg, builtinDeclarations.Copy())
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +62,10 @@ func Compile(ctx context.Context, q string) (*Spec, error) {
 		return nil, err
 	}
 	spec := d.ToSpec()
-	//log.Println(Formatted(spec, FmtJSON))
+
+	if o.verbose {
+		log.Println("Query Spec: ", Formatted(spec, FmtJSON))
+	}
 	return spec, nil
 }
 
@@ -88,39 +108,39 @@ func DefaultFunctionSignature() semantic.FunctionSignature {
 }
 
 var builtinScope = interpreter.NewScope()
-var builtinDeclarations = make(map[string]semantic.VariableDeclaration)
+var builtinDeclarations = make(semantic.DeclarationScope)
 
 // list of builtin scripts
-var builtins []string
+var builtins = make(map[string]string)
 var finalized bool
 
 // RegisterBuiltIn adds any variable declarations in the script to the builtin scope.
-func RegisterBuiltIn(script string) {
+func RegisterBuiltIn(name, script string) {
 	if finalized {
 		panic(errors.New("already finalized, cannot register builtin"))
 	}
-	builtins = append(builtins, script)
+	builtins[name] = script
 }
 
 // FinalizeRegistration must be called to complete registration.
 // Future calls to RegisterFunction or RegisterBuiltIn will panic.
 func FinalizeRegistration() {
 	finalized = true
-	for _, script := range builtins {
+	for name, script := range builtins {
 		astProg, err := parser.NewAST(script)
 		if err != nil {
-			panic(err)
+			panic(errors.Wrapf(err, "failed to parse builtin %q", name))
 		}
 		semProg, err := semantic.New(astProg, builtinDeclarations)
 		if err != nil {
-			panic(err)
+			panic(errors.Wrapf(err, "failed to create semantic graph for builtin %q", name))
 		}
 
 		// Create new query domain
 		d := new(queryDomain)
 
 		if err := interpreter.Eval(semProg, builtinScope, d); err != nil {
-			panic(err)
+			panic(errors.Wrapf(err, "failed to evaluate builtin %q", name))
 		}
 	}
 	// free builtins list
