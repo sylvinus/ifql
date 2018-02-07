@@ -175,6 +175,29 @@ func AppendRow(i int, rr RowReader, builder BlockBuilder, colMap []int) {
 	}
 }
 
+// AppendRowForCols appends a single row from rr onto builder for the specified cols.
+// The colMap is a map of builder columnm index to rr column index.
+func AppendRowForCols(i int, rr RowReader, builder BlockBuilder, cols []ColMeta, colMap []int) {
+	for j, c := range cols {
+		switch c.Type {
+		case TBool:
+			builder.AppendBool(j, rr.AtBool(i, colMap[j]))
+		case TInt:
+			builder.AppendInt(j, rr.AtInt(i, colMap[j]))
+		case TUInt:
+			builder.AppendUInt(j, rr.AtUInt(i, colMap[j]))
+		case TFloat:
+			builder.AppendFloat(j, rr.AtFloat(i, colMap[j]))
+		case TString:
+			builder.AppendString(j, rr.AtString(i, colMap[j]))
+		case TTime:
+			builder.AppendTime(j, rr.AtTime(i, colMap[j]))
+		default:
+			PanicUnknownType(c.Type)
+		}
+	}
+}
+
 // AddTags add columns to the builder for the given tags.
 // It is assumed that all tags are common to all rows of this block.
 func AddTags(t Tags, b BlockBuilder) {
