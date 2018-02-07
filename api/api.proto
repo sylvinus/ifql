@@ -59,6 +59,44 @@ service API {
 	rpc DeletePackage(DeletePackageRequest) returns (Error) {}
 	rpc GetPackage(GetPackageRequest) returns (Package) {}
 	rpc GetPackagesByOrgID(GetPackagesByOrgIDRequest) returns (GetPackagesResponse) {}
+
+	// Rate limiting API (enterprise)
+
+	// ************
+	// IMPORT/EXPORT functionality
+	// Bulk Write API (should take already compressed tsm files or something like that)
+	// Bulk Read API (should return tsm files or something like that)
+	// Scheduled Replication
+	// periodically connect to remote source, perform bulk read and write locally
+	// preiodically perform bulk read against self, then bulk write to remote
+	// need to have a method for import/export of orgs, users, tokens, and other API data
+
+	// *******************************************
+	// Chonograf API
+	// Dashboards API
+
+	// Config options
+
+	// Annotations
+
+	// Alert Rules
+
+	// Alerts
+
+	// Notification Rules
+
+	// Notifications (just another time series that marks when a notification was sent to where)
+
+	// Input Endpoints (or scrape targets)
+
+	// Output Endpoints (could be notification places or other message/database systems)
+
+	// *******************************************
+	// Telegraf API
+
+	// Input configs (for local proc stuff, otherwise should use Input Endpoints)
+
+	// Output configs (this is similar to Output Endpoints, we need to combine these)
 }
 
 // EmptyAuthRequest is used for any request that takes only authentication and authorizaiton arguments
