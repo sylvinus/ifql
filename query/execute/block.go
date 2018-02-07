@@ -34,9 +34,12 @@ type Block interface {
 	// If no column exists and error is returned
 	Values() (ValueIterator, error)
 
-	// RefCount modifies the reference count on the block by n.
-	// When the RefCount goes to zero, the block is freed.
-	RefCount(n int)
+	// Retain increases the reference count of the Block by 1.
+	Retain()
+
+	// Release decreases the reference count of the Block by 1.
+	// When the reference count goes to zero, the block is freed.
+	Release()
 }
 
 // OneTimeBlock is a Block that permits reading data only once.
@@ -251,15 +254,6 @@ type BlockBuilder interface {
 	// AddCol increases the size of the block by one column.
 	// The index of the column is returned.
 	AddCol(ColMeta) int
-
-	// Set sets the value at the specified coordinates
-	// The rows and columns must exist before calling set, otherwise Set panics.
-	SetBool(i, j int, value bool)
-	SetInt(i, j int, value int64)
-	SetUInt(i, j int, value uint64)
-	SetFloat(i, j int, value float64)
-	SetString(i, j int, value string)
-	SetTime(i, j int, value Time)
 
 	// SetCommonString sets a single value for the entire column.
 	SetCommonString(j int, value string)
@@ -587,10 +581,6 @@ func (b ColListBlockBuilder) AddCol(c ColMeta) int {
 	return len(b.blk.cols) - 1
 }
 
-func (b ColListBlockBuilder) SetBool(i int, j int, value bool) {
-	b.checkColType(j, TBool)
-	b.blk.cols[j].(*boolColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendBool(j int, value bool) {
 	b.checkColType(j, TBool)
 	col := b.blk.cols[j].(*boolColumn)
@@ -604,10 +594,6 @@ func (b ColListBlockBuilder) AppendBools(j int, values []bool) {
 	b.blk.nrows = len(col.data)
 }
 
-func (b ColListBlockBuilder) SetInt(i int, j int, value int64) {
-	b.checkColType(j, TInt)
-	b.blk.cols[j].(*intColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendInt(j int, value int64) {
 	b.checkColType(j, TInt)
 	col := b.blk.cols[j].(*intColumn)
@@ -621,10 +607,6 @@ func (b ColListBlockBuilder) AppendInts(j int, values []int64) {
 	b.blk.nrows = len(col.data)
 }
 
-func (b ColListBlockBuilder) SetUInt(i int, j int, value uint64) {
-	b.checkColType(j, TUInt)
-	b.blk.cols[j].(*uintColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendUInt(j int, value uint64) {
 	b.checkColType(j, TUInt)
 	col := b.blk.cols[j].(*uintColumn)
@@ -638,10 +620,6 @@ func (b ColListBlockBuilder) AppendUInts(j int, values []uint64) {
 	b.blk.nrows = len(col.data)
 }
 
-func (b ColListBlockBuilder) SetFloat(i int, j int, value float64) {
-	b.checkColType(j, TFloat)
-	b.blk.cols[j].(*floatColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendFloat(j int, value float64) {
 	b.checkColType(j, TFloat)
 	col := b.blk.cols[j].(*floatColumn)
@@ -655,10 +633,6 @@ func (b ColListBlockBuilder) AppendFloats(j int, values []float64) {
 	b.blk.nrows = len(col.data)
 }
 
-func (b ColListBlockBuilder) SetString(i int, j int, value string) {
-	b.checkColType(j, TString)
-	b.blk.cols[j].(*stringColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendString(j int, value string) {
 	meta := b.blk.cols[j].Meta()
 	checkColType(meta, TString)
@@ -694,10 +668,6 @@ func (b ColListBlockBuilder) SetCommonString(j int, value string) {
 	}
 }
 
-func (b ColListBlockBuilder) SetTime(i int, j int, value Time) {
-	b.checkColType(j, TTime)
-	b.blk.cols[j].(*timeColumn).data[i] = value
-}
 func (b ColListBlockBuilder) AppendTime(j int, value Time) {
 	b.checkColType(j, TTime)
 	col := b.blk.cols[j].(*timeColumn)
@@ -772,9 +742,12 @@ type ColListBlock struct {
 	refCount int32
 }
 
-func (b *ColListBlock) RefCount(n int) {
-	c := atomic.AddInt32(&b.refCount, int32(n))
-	if c == 0 {
+func (b *ColListBlock) Retain() {
+	atomic.AddInt32(&b.refCount, 1)
+}
+
+func (b *ColListBlock) Release() {
+	if atomic.AddInt32(&b.refCount, -1) == 0 {
 		for _, c := range b.cols {
 			c.Clear()
 		}

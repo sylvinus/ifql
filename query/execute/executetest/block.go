@@ -14,7 +14,8 @@ type Block struct {
 	Data [][]interface{}
 }
 
-func (b *Block) RefCount(n int) {}
+func (b *Block) Retain()  {}
+func (b *Block) Release() {}
 
 func (b *Block) Bounds() execute.Bounds {
 	return b.Bnds

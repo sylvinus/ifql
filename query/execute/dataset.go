@@ -132,7 +132,6 @@ func (d *dataset) triggerBlock(key BlockKey) error {
 	if err != nil {
 		return err
 	}
-	b.RefCount(len(d.ts))
 	switch d.accMode {
 	case DiscardingMode:
 		for _, t := range d.ts {

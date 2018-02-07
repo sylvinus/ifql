@@ -129,3 +129,21 @@ type ErrorState interface {
 
 ```
 
+## Reference Counting
+
+ifql makes limited use of reference counting so that it can track when objects are no longer used. This allows 
+ifql to update resource accounting, such as memory usage as objects are created and released. The `Block` type 
+exposes two methods to deal with this pattern. `Retain` will increase the reference count by 1 and `Release` 
+will reduce the count by 1. Once the reference count of a `Block` is zero, the object will be freed.
+
+### When to call `Retain` / `Release`?
+
+* If you are passed an object and wish to take ownership of it, you must call `Retain`. You must later pair this 
+  with a call to `Release` when you no longer need the object.  "Taking ownership" typically means you
+  wish to access the object outside the scope of the current function call.
+  
+* You own any object you create via functions whose name begins with `New` or `Copy` or when receiving
+  an object over a channel. Therefore you must call `Release` once you no longer need the object.
+  
+* If you send an object over a channel, you must call `Retain` before sending it as the receiver is
+  assumed to own the object and will later call `Release` when it no longer needs the object. 

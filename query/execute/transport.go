@@ -71,6 +71,7 @@ func (t *consecutiveTransport) Process(id DatasetID, b Block) error {
 		return t.err()
 	default:
 	}
+	b.Retain()
 	t.pushMsg(&processMsg{
 		srcMessage: srcMessage(id),
 		block:      b,
@@ -195,7 +196,7 @@ func processMessage(t Transformation, m Message) (finished bool, err error) {
 	case ProcessMsg:
 		b := m.Block()
 		err = t.Process(m.SrcDatasetID(), b)
-		b.RefCount(-1)
+		b.Release()
 	case UpdateWatermarkMsg:
 		err = t.UpdateWatermark(m.SrcDatasetID(), m.WatermarkTime())
 	case UpdateProcessingTimeMsg:

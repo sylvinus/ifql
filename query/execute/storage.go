@@ -394,10 +394,10 @@ func newStorageBlock(bounds Bounds, tags, keptTags Tags, tagKey key, ms *mergedS
 	}
 }
 
-func (b *storageBlock) RefCount(n int) {
-	//TODO(nathanielc): Have the storageBlock consume the Allocator,
-	// once we have zero-copy serialization over the network
-}
+//TODO(nathanielc): Have the storageBlock consume the Allocator,
+// once we have zero-copy serialization over the network
+func (b *storageBlock) Retain()  {}
+func (b *storageBlock) Release() {}
 
 func (b *storageBlock) wait() {
 	<-b.done
