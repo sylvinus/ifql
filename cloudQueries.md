@@ -1,7 +1,8 @@
 # Dashboard: Cluster Stats
 **Purpose:** For a single cluster, show important performance stats so that administrators can quickly identify performance issues.  
 
-**Queries in the dashboard**
+## Queries in the dashboard
+
 
 |Query| Cell Type  | Notes | 
 |---|---|---|
@@ -24,6 +25,7 @@ from(db:"telegraf")
   |> range(start:-2m) 
   |> filter( 
       fn: (r) => r["_measurement"] == "system 
+        AND r["_field"] == "n_cpus"
         AND r["cluster_id"]==CID 
         AND (r["host"] =~ /.*data.*/  OR r["host"] =~ /tot-.*-(3|4)/))
   |> group(by:["host"]) 
