@@ -36,6 +36,6 @@ func BenchmarkSpread(b *testing.B) {
 		b,
 		new(functions.SpreadAgg),
 		NormalData,
-		28.227196,
+		28.227196461851847,
 	)
 }
