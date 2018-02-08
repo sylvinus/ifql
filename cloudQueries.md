@@ -21,15 +21,14 @@ AllOf = (table=<-, functions) => // conjunction of filter functions.
 // helper functions //
 hostFilter = (table=<-) => filter(table:table, fn: (r) => (r["host"] =~ /.*data.*/  OR r["host"] =~ /tot-.*-(3|4)/))
 // could be a built-in but we don't want to get too carried away with compound functions
-fromRange = (forDB, forRange) => from(db:forDB) |> range(forRange)
+fromRangeWithTag = (forDB, forRange, key, value) => from(db:forDB) |> range(forRange) | withTag(key: key, value: value)
 
 
 CID = :Cluster_Id:
 
 AggregateCPUCluster = (CID, agFn) =>
-    fromRange(db:"telegraf", range:start-2m)
+    fromRangeWithTag(db:"telegraf", range:start-2m, key: "cluster_id", value: CID)
       |> select(measurement: "system", field: "n_cpus")
-      |> withTag(key: "cluster_id", value: CID)
       |> hostFilter()
       |> group(by:["host"])
       |> last()
@@ -68,9 +67,8 @@ SELECT last("max") from
      GROUP BY :interval:, host)
 */
 MemPerDataNode = (CID, DASHTIME, INTERVAL) =>
-    fromRange(db:"telegraf", range:DASHTIME)
+    fromRangeWithTag(db:"telegraf", range:DASHTIME, key: "cluster_id", value: CID)
       |> select(measurement: "mem", field: "total")
-      |> withTag(key: "cluster_id", value: CID)
       |> hostfilter()
       |> window(every: INTERVAL)
       |> group(by: ["host"]
@@ -87,9 +85,8 @@ SELECT last("used")/1073741824 AS "used" FROM
     // fill seems to be used to return a default value. Not sure how IFQL behaves
 */
 DiskUsage = (CID, DASHTIME) =>
-    fromRange(db:"telegraf", range:DASHTIME)
+    fromRangeWithTag(db:"telegraf", range:DASHTIME, key: "cluster_id", value: CID)
       |> select(measurement: "disk", field: "used")
-      |> withTag(key: "cluster_id", value: CID)
       |> hostfilter()
       |> last() / 1073741824
 
@@ -119,9 +116,8 @@ SELECT (sum("service_up") / count("service_up"))*100 AS "up_time"
 
 PercentAvailability = (CID, DASHTIME) =>
   serviceUp =
-    fromRange(db:"watcher", range: DASHTIME)
+    fromRangeWithTag(db:"watcher", range: DASHTIME, key: "cluster_id", value: CID)
       |> select(measurement: "ping", field: "service_up")
-      |> withTag(key: "cluster_id", value: CID)
 
   up_time = sum(serviceUp) / count(serviceUp) * 100
   return up_time
@@ -135,12 +131,81 @@ SELECT mean("usage_user") AS "Usage" FROM
   GROUP BY :interval:,host
 */
 
-Usage = (CID, DASHTIME, INTERVAL) =>
-  fromRange(db: "telegraf", range: DASHTIME)
-    |> select(measurement: "cpu", field: "usage_user")
-    |> withTag(key: "cluster_id", value: CID)
+
+
+AggregateMeasureIntervalGroup = (table=<-, aggFn, measurement, field, interval, group) =>
+  table
+    |> select(measurement: measurement, field: field)
     |> window(INTERVAL)
+    |> group(by: group)
+    |> mean()
+
+telegrafDashtime = fromRangeWithTag(db: "telegraf", range: DASHTIME, key: "cluster_id", value: CID)
+
+CPUUsage = (INTERVAL) =>
+    telegrafDashtime
+      |> AggregateMeasureIntervalGroup(aggFn: mean, measurment:"cpu", field: "usage_user", INTERVAL, ["host"])
+
+/* InfluxQL Memory Usage %
+SELECT mean("used_percent") FROM
+  "telegraf"."default"."mem"
+  WHERE "cluster_id" = :Cluster_Id:
+    AND time > :dashboardTime:
+  GROUP BY :interval:, "host"
+*/
+
+MemoryUsage = (INTERVAL) =>
+  telegrafDashtime
+    |> AggregateMeasureIntervalGroup(aggFn: mean, measurment:"mem", field: "used_percent", interval: INTERVAL, group: ["host"])
+
+/* InfluxQL System Load (Load5)
+SELECT max("load5") AS "Current Load", max("n_cpus") AS "CPUs Allocated"
+  FROM "telegraf"."default"."system"
+  WHERE time > :dashboardTime:
+    AND cluster_id = :Cluster_Id:
+  GROUP BY :interval:, "host"
+*/
+
+SystemLoad = (INTERVAL) =>
+  telegrafDashtime
+    |> map(fn: (r)> ({
+          CurrentLoad: AggregateMeasureIntervalGroup(table: r, aggFn: max, measurement: "system", field: "load5", interval: INTERVAL, group: ["host"]),
+          CPUSAllocated: AggregateMeasureIntervalGroup(table: r, aggFn: max, measurement: "system", field: "n_cpus", interval: INTERVAL, group: ["host"])
+       })
+
+
+
+/* InfluxQL Container Memory Utilization
+SELECT mean("usage_percent")
+  FROM "telegraf"."default"."docker_container_mem"
+    WHERE "cluster_id" = :Cluster_Id:
+    AND ("container_name" =~ /influxd.*/ OR "container_name" =~ /kap.*/)
+    AND time > :dashboardTime:
+  GROUP BY :interval:, "host", "container_name" fill(null)
+*/
+
+ContainerMemoryUtilization = (INTERVAL) =>
+  telegrafDashtime
+    |> filter( fn: (r) => (r["container_name"] =~ /influxd.*/  OR r["container_name"] =~ /kap.*/)
+    |> window(interval: INTERVAL, fill: null)
+    |> group(by: ["host", "container_name"])
+
+
+
+/* InfluxQL Queries Executed/Min
+SELECT non_negative_derivative(mean("queriesExecuted"), 60s) AS "Queries Executed" FROM
+  "telegraf"."default"."influxdb_queryExecutor"
+  WHERE "cluster_id" = :Cluster_Id:
+    AND time > :dashboardTime:
+  GROUP BY :interval:, "host" fill(null)
+*/
+
+QueriesExecutedPerMin = (INTERVAL) =>
+  telegrafDashtime
+    |> select(measurement: "influxdb_queryExecutor", field: "queriesExecuted")
+    |> window(interval: INTERVAL, fill: null)
     |> group(by: ["host"])
     |> mean()
+    |> derivative(nonNegative: true)
 
 ```
