@@ -18,7 +18,7 @@ type Transformation interface {
 type Administration interface {
 	ResolveTime(qt query.Time) Time
 	Bounds() Bounds
-	Allocator() *Allocator
+	Allocator() Allocator
 	Parents() []DatasetID
 	ConvertID(plan.ProcedureID) DatasetID
 }

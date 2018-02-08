@@ -43,6 +43,9 @@ func (r *Resource) Release(n, size int) {
 // Max reports the maximum number of units reserved.
 func (r *Resource) Max() int64 { return atomic.LoadInt64(&r.maxReserved) }
 
+// Reserved returns the number of units currently in use.
+func (r *Resource) Reserved() int64 { return r.reserved }
+
 func (r *Resource) count(n, size int) (c int64) {
 	c = atomic.AddInt64(&r.reserved, int64(n*size))
 	for max := atomic.LoadInt64(&r.maxReserved); c > max; max = atomic.LoadInt64(&r.maxReserved) {

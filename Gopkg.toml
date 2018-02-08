@@ -15,3 +15,7 @@ required = ["github.com/mna/pigeon", "github.com/goreleaser/goreleaser"]
 [[constraint]]
   name = "github.com/uber/jaeger-client-go"
   version = "2.10.0"
+
+[[constraint]]
+  branch = "sgc-updates"
+  name = "github.com/influxdata/arrow"

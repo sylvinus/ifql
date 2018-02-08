@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/influxdata/arrow/memory"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
 	"github.com/pkg/errors"
@@ -33,7 +34,7 @@ type executionState struct {
 	p *plan.PlanSpec
 	c *Config
 
-	alloc *Allocator
+	alloc Allocator
 
 	resources query.ResourceManagement
 
@@ -70,7 +71,7 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 	es := &executionState{
 		p:         p,
 		c:         &e.c,
-		alloc:     &Allocator{Resource: &Resource{Limit: p.Resources.MemoryBytesQuota}},
+		alloc:     NewLimitedAllocator(memory.NewGoAllocator(), &Resource{Limit: p.Resources.MemoryBytesQuota}),
 		resources: p.Resources,
 		results:   make(map[string]Result, len(p.Results)),
 		// TODO(nathanielc): Have the planner specify the dispatcher throughput
@@ -213,7 +214,7 @@ func (ec executionContext) Bounds() Bounds {
 	return ec.es.bounds
 }
 
-func (ec executionContext) Allocator() *Allocator {
+func (ec executionContext) Allocator() Allocator {
 	return ec.es.alloc
 }
 

@@ -186,6 +186,18 @@
   version = "v0.35.7"
 
 [[projects]]
+  branch = "sgc-updates"
+  name = "github.com/influxdata/arrow"
+  packages = [
+    ".",
+    "array",
+    "internal/bitutil",
+    "internal/cpu",
+    "memory"
+  ]
+  revision = "67131a5397eb5337be2c429c5d91f2c914f57d08"
+
+[[projects]]
   name = "github.com/influxdata/influxdb"
   packages = [
     "models",

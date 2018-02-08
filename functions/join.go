@@ -347,7 +347,7 @@ type MergeJoinCache interface {
 
 type mergeJoinCache struct {
 	data  map[execute.BlockKey]*joinTables
-	alloc *execute.Allocator
+	alloc execute.Allocator
 
 	leftName, rightName string
 
@@ -356,7 +356,7 @@ type mergeJoinCache struct {
 	joinFn *joinFunc
 }
 
-func NewMergeJoinCache(joinFn *joinFunc, a *execute.Allocator, leftName, rightName string) *mergeJoinCache {
+func NewMergeJoinCache(joinFn *joinFunc, a execute.Allocator, leftName, rightName string) *mergeJoinCache {
 	return &mergeJoinCache{
 		data:      make(map[execute.BlockKey]*joinTables),
 		joinFn:    joinFn,
@@ -406,12 +406,13 @@ func (c *mergeJoinCache) Tables(bm execute.BlockMetadata) *joinTables {
 	key := execute.ToBlockKey(bm)
 	tables := c.data[key]
 	if tables == nil {
+		alloc := execute.NewColListAllocator(c.alloc)
 		tables = &joinTables{
 			tags:      bm.Tags(),
 			bounds:    bm.Bounds(),
-			alloc:     c.alloc,
-			left:      execute.NewColListBlockBuilder(c.alloc),
-			right:     execute.NewColListBlockBuilder(c.alloc),
+			alloc:     alloc,
+			left:      execute.NewColListBlockBuilder(alloc),
+			right:     execute.NewColListBlockBuilder(alloc),
 			leftName:  c.leftName,
 			rightName: c.rightName,
 			trigger:   execute.NewTriggerFromSpec(c.triggerSpec),
@@ -428,7 +429,7 @@ type joinTables struct {
 	tags   execute.Tags
 	bounds execute.Bounds
 
-	alloc *execute.Allocator
+	alloc *execute.ColListAllocator
 
 	left, right         *execute.ColListBlockBuilder
 	leftName, rightName string

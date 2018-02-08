@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Bools",
+    "type": "bool"
+  },
+  {
+    "name": "Ints",
+    "type": "int64"
+  },
+  {
+    "name": "UInts",
+    "type": "uint64"
+  },
+  {
+    "name": "Floats",
+    "type": "float64"
+  },
+  {
+    "name": "Strings",
+    "type": "string"
+  },
+  {
+    "name": "Times",
+    "type": "Time"
+  }
+]

@@ -38,7 +38,7 @@ func init() {
 	for i := range NormalData {
 		NormalData[i] = dist.Rand()
 	}
-	normalBlockBuilder := execute.NewColListBlockBuilder(executetest.UnlimitedAllocator)
+	normalBlockBuilder := execute.NewColListBlockBuilder(executetest.UnlimitedColListAllocator)
 	normalBlockBuilder.SetBounds(execute.Bounds{
 		Start: execute.Time(time.Date(2016, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),
 		Stop:  execute.Time(time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC).UnixNano()),

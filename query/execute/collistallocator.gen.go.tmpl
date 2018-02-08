@@ -1,0 +1,56 @@
+package execute
+
+import (
+	"reflect"
+	"unsafe"
+)
+
+{{range .In}}
+func (a *ColListAllocator) Free{{.name}}(b []{{.type}}) {
+	a.free(a.cast{{.name}}ToBytes(b))
+}
+{{end}}
+
+{{range .In}}
+{{$size := print (.type | lower) "Size"}}
+// {{.name}} makes a slice of {{.type}} values.
+func (a *ColListAllocator) {{.name}}(l, c int) []{{.type}} {
+	return a.castBytesTo{{.name}}(a.alloc.Allocate(c * {{$size}}))
+}
+
+// Append{{.name}} appends vs to the slice
+func (a *ColListAllocator) Append{{.name}}(slice []{{.type}}, vs ...{{.type}}) []{{.type}} {
+	oldLen := len(slice)
+	newLen := oldLen + len(vs)
+	if newLen < cap(slice) {
+		return append(slice, vs...)
+	}
+	slice = a.castBytesTo{{.name}}(a.reallocate(newLen*{{$size}}, a.cast{{.name}}ToBytes(slice)))
+	slice = append(slice[:oldLen], vs...)
+	return slice
+}
+
+func (a *ColListAllocator) castBytesTo{{.name}}(b []byte) []{{.type}} {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+
+	var res []{{.type}}
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = h.Len / {{$size}}
+	s.Cap = h.Cap / {{$size}}
+
+	return res
+}
+
+func (a *ColListAllocator) cast{{.name}}ToBytes(b []{{.type}}) []byte {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+
+	var res []byte
+	s := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	s.Data = h.Data
+	s.Len = h.Len * {{$size}}
+	s.Cap = h.Cap * {{$size}}
+
+	return res
+}
+{{end}}

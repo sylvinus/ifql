@@ -16,7 +16,7 @@ func NewAggregateTransformation(d Dataset, c BlockBuilderCache, bounds Bounds, a
 	}
 }
 
-func NewAggregateTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, agg Aggregate, a *Allocator) (*aggregateTransformation, Dataset) {
+func NewAggregateTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, agg Aggregate, a Allocator) (*aggregateTransformation, Dataset) {
 	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewAggregateTransformation(d, cache, bounds, agg), d

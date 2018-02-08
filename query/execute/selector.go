@@ -22,7 +22,7 @@ type indexSelectorTransformation struct {
 	selector IndexSelector
 }
 
-func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, colLabel string, useRowTime bool, a *Allocator) (*rowSelectorTransformation, Dataset) {
+func NewRowSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector RowSelector, colLabel string, useRowTime bool, a Allocator) (*rowSelectorTransformation, Dataset) {
 	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewRowSelectorTransformation(d, cache, bounds, selector, colLabel, useRowTime), d
@@ -34,7 +34,7 @@ func NewRowSelectorTransformation(d Dataset, c BlockBuilderCache, bounds Bounds,
 	}
 }
 
-func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, colLabel string, useRowTime bool, a *Allocator) (*indexSelectorTransformation, Dataset) {
+func NewIndexSelectorTransformationAndDataset(id DatasetID, mode AccumulationMode, bounds Bounds, selector IndexSelector, colLabel string, useRowTime bool, a Allocator) (*indexSelectorTransformation, Dataset) {
 	cache := NewBlockBuilderCache(a)
 	d := NewDataset(id, mode, cache)
 	return NewIndexSelectorTransformation(d, cache, bounds, selector, colLabel, useRowTime), d
