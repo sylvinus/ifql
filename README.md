@@ -167,7 +167,7 @@ Example:
 
 ```
 cpu = from(db: "telegraf") |> filter(fn: (r) => r["_measurement"] == "cpu" and r["_field"] == "usage_user") |> range(start: -30m)
-mem = from(db: "telegraf") |> filter(fn: (r) => r["_measurement"] == "mem" and r["_field"] == "used_percent"}) |> range(start: -30m)
+mem = from(db: "telegraf") |> filter(fn: (r) => r["_measurement"] == "mem" and r["_field"] == "used_percent") |> range(start: -30m)
 join(tables:{cpu:cpu, mem:mem}, on:["host"], fn: (tables) => tables.cpu["_value"] + tables.mem["_value"])
 ```
 
