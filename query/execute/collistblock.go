@@ -390,8 +390,9 @@ func (itr colListValueIterator) DoString(f func([]string, RowReader)) {
 			strs[i] = value
 		}
 		f(strs, itr)
+	} else {
+		f(itr.cols[itr.col].(*stringColumn).data, itr)
 	}
-	f(itr.cols[itr.col].(*stringColumn).data, itr)
 }
 func (itr colListValueIterator) DoTime(f func([]Time, RowReader)) {
 	checkColType(itr.colMeta[itr.col], TTime)
