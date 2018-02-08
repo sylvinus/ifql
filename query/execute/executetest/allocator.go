@@ -7,5 +7,7 @@ import (
 )
 
 var UnlimitedAllocator = &execute.Allocator{
-	Limit: math.MaxInt64,
+	Resource: &execute.Resource{
+		Limit: math.MaxInt64,
+	},
 }

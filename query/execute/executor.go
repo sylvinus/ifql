@@ -68,11 +68,9 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 		return nil, errors.Wrap(err, "invalid plan")
 	}
 	es := &executionState{
-		p: p,
-		c: &e.c,
-		alloc: &Allocator{
-			Limit: p.Resources.MemoryBytesQuota,
-		},
+		p:         p,
+		c:         &e.c,
+		alloc:     &Allocator{Resource: &Resource{Limit: p.Resources.MemoryBytesQuota}},
 		resources: p.Resources,
 		results:   make(map[string]Result, len(p.Results)),
 		// TODO(nathanielc): Have the planner specify the dispatcher throughput
@@ -96,7 +94,7 @@ func (e *executor) createExecutionState(ctx context.Context, p *plan.PlanSpec) (
 
 // DefaultTriggerSpec defines the triggering that should be used for datasets
 // whose parent transformation is not a windowing transformation.
-var DefaultTriggerSpec = query.AfterWatermarkTriggerSpec{}
+var DefaultTriggerSpec query.TriggerSpec = query.AfterWatermarkTriggerSpec{}
 
 type triggeringSpec interface {
 	TriggerSpec() query.TriggerSpec
@@ -133,7 +131,7 @@ func (es *executionState) createNode(ctx context.Context, pr *plan.Procedure) (N
 	}
 
 	// Setup triggering
-	var ts query.TriggerSpec = DefaultTriggerSpec
+	var ts = DefaultTriggerSpec
 	if t, ok := pr.Spec.(triggeringSpec); ok {
 		ts = t.TriggerSpec()
 	}
