@@ -891,7 +891,7 @@ func (a *arguments) GetArray(name string, t semantic.Kind) (Array, bool, error) 
 	}
 	arr := v.Value().(Array)
 	if arr.Type().ElementType() != t {
-		return Array{}, true, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
+		return Array{}, true, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type())
 	}
 	return v.Value().(Array), ok, nil
 }
@@ -902,7 +902,7 @@ func (a *arguments) GetRequiredArray(name string, t semantic.Kind) (Array, error
 	}
 	arr := v.Value().(Array)
 	if arr.Type().ElementType() != t {
-		return Array{}, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type)
+		return Array{}, fmt.Errorf("keyword argument %q should be of an array of type %v, but got an array of type %v", name, t, arr.Type())
 	}
 	return arr, nil
 }
