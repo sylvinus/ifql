@@ -9,6 +9,10 @@ import (
 	"github.com/influxdata/ifql/semantic/semantictest"
 )
 
+var CmpOptions = []cmp.Option{
+	cmpopts.IgnoreUnexported(plan.Procedure{}),
+}
+
 func PhysicalPlan_PushDown_Match_TestHelper(t *testing.T, spec plan.PushDownProcedureSpec, matchSpec plan.ProcedureSpec, want []bool) {
 	t.Helper()
 
@@ -45,7 +49,8 @@ func PhysicalPlan_PushDown_TestHelper(t *testing.T, spec plan.PushDownProcedureS
 		}
 	}
 
-	opts := append(semantictest.CmpOptions, cmpopts.EquateEmpty())
+	opts := append(CmpOptions, cmpopts.EquateEmpty())
+	opts = append(opts, semantictest.CmpOptions...)
 	if !cmp.Equal(got, want, opts...) {
 		t.Errorf("unexpected PushDown: -want/+got:\n%s", cmp.Diff(want, got, opts...))
 	}

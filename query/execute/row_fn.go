@@ -370,7 +370,7 @@ func toComparisonOperator(o ast.OperatorKind) (storage.Node_Comparison, error) {
 	switch o {
 	case ast.EqualOperator:
 		return storage.ComparisonEqual, nil
-	case ast.NotOperator:
+	case ast.NotEqualOperator:
 		return storage.ComparisonNotEqual, nil
 	case ast.StartsWithOperator:
 		return storage.ComparisonStartsWith, nil

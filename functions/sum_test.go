@@ -58,8 +58,8 @@ func TestSum_PushDown(t *testing.T) {
 	}
 	want := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
-			AggregateSet:  true,
-			AggregateType: functions.SumKind,
+			AggregateSet:    true,
+			AggregateMethod: functions.SumKind,
 		},
 	}
 
@@ -69,8 +69,8 @@ func TestSum_PushDown_Duplicate(t *testing.T) {
 	spec := new(functions.SumProcedureSpec)
 	root := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
-			AggregateSet:  true,
-			AggregateType: functions.SumKind,
+			AggregateSet:    true,
+			AggregateMethod: functions.SumKind,
 		},
 	}
 	want := &plan.Procedure{

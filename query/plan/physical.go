@@ -45,6 +45,12 @@ type Planner interface {
 	Plan(p *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec, error)
 }
 
+type PlanRewriter interface {
+	IsolatePath(parent, child *Procedure) (*Procedure, error)
+	RemoveBranch(pr *Procedure) error
+	AddChild(parent *Procedure, childSpec ProcedureSpec)
+}
+
 type planner struct {
 	plan *PlanSpec
 
@@ -64,11 +70,10 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 		Results:    make(map[string]YieldSpec),
 	}
 
-	// Find the datasets that are results and populate mappings
 	lp.Do(func(pr *Procedure) {
+		pr.plan = p.plan
 		p.plan.Procedures[pr.ID] = pr
 		p.plan.Order = append(p.plan.Order, pr.ID)
-
 	})
 
 	// Find Limit+Where+Range+Select to push down time bounds and predicate
@@ -100,6 +105,24 @@ func (p *planner) Plan(lp *LogicalPlanSpec, s Storage, now time.Time) (*PlanSpec
 					}
 				}
 			}
+		}
+	}
+
+	// Apply all rewrite rules
+	p.modified = true
+	for p.modified {
+		p.modified = false
+		for _, rule := range rewriteRules {
+			kind := rule.Root()
+			p.plan.Do(func(pr *Procedure) {
+				if pr == nil {
+					// Procedure was removed
+					return
+				}
+				if pr.Spec.Kind() == kind {
+					rule.Rewrite(pr, p)
+				}
+			})
 		}
 	}
 
@@ -175,15 +198,12 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 		pk := pp.Spec.Kind()
 		if pk == rule.Root {
 			if rule.Match == nil || rule.Match(pp.Spec) {
-				// Check for siblings
-				if len(pp.Children) > 1 {
-					// Duplicate just this child branch
-					p.duplicateChildBranch(pp, pr.ID)
-					// Remove this entire branch since it has been duplicated.
-					if err := p.removeBranch(pr); err != nil {
-						return false, err
-					}
-					// Wait to do push down function when the duplicate is found
+				isolatedParent, err := p.IsolatePath(pp, pr)
+				if err != nil {
+					return false, err
+				}
+				if pp != isolatedParent {
+					// Wait to call push down function when the duplicate is found
 					return false, nil
 				}
 				do(pp, func() *Procedure { return p.duplicate(pp, false) })
@@ -196,6 +216,34 @@ func (p *planner) pushDownAndSearch(pr *Procedure, rule PushDownRule, do func(pa
 		}
 	}
 	return matched, nil
+}
+
+// IsolatePath ensures that the child is an only child of the parent.
+// The return value is the parent procedure who has an only child.
+func (p *planner) IsolatePath(parent, child *Procedure) (*Procedure, error) {
+	if len(parent.Children) == 1 {
+		return parent, nil
+	}
+	// Duplicate just this child branch
+	dup := p.duplicateChildBranch(parent, child.ID)
+	// Remove this entire branch since it has been duplicated.
+	if err := p.RemoveBranch(child); err != nil {
+		return nil, err
+	}
+	return dup, nil
+}
+
+func (p *planner) AddChild(parent *Procedure, childSpec ProcedureSpec) {
+	child := &Procedure{
+		plan: p.plan,
+		ID:   ProcedureIDFromParentID(parent.ID),
+		Spec: childSpec,
+	}
+	parent.Children = append(parent.Children, child.ID)
+	child.Parents = []ProcedureID{parent.ID}
+
+	p.plan.Procedures[child.ID] = child
+	p.plan.Order = insertAfter(p.plan.Order, parent.ID, child.ID)
 }
 
 func (p *planner) removeProcedure(pr *Procedure) error {
@@ -227,7 +275,7 @@ func (p *planner) removeProcedure(pr *Procedure) error {
 	return nil
 }
 
-func (p *planner) removeBranch(pr *Procedure) error {
+func (p *planner) RemoveBranch(pr *Procedure) error {
 	// It only makes sense to remove a procedure that has a single parent.
 	if len(pr.Parents) > 1 {
 		return errors.New("cannot remove a branch that has more than one parent")
@@ -246,7 +294,7 @@ func (p *planner) removeBranch(pr *Procedure) error {
 
 	for _, id := range pr.Children {
 		child := p.plan.Procedures[id]
-		if err := p.removeBranch(child); err != nil {
+		if err := p.RemoveBranch(child); err != nil {
 			return err
 		}
 	}

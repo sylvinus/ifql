@@ -9,6 +9,7 @@ import (
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 )
 
 func TestLogicalPlanner_Plan(t *testing.T) {
@@ -175,8 +176,8 @@ func TestLogicalPlanner_Plan(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !cmp.Equal(got, tc.ap) {
-				t.Errorf("unexpected logical plan -want/+got %s", cmp.Diff(tc.ap, got))
+			if !cmp.Equal(got, tc.ap, plantest.CmpOptions...) {
+				t.Errorf("unexpected logical plan -want/+got %s", cmp.Diff(tc.ap, got, plantest.CmpOptions...))
 			}
 		})
 	}

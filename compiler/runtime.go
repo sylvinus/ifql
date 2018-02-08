@@ -1690,4 +1690,15 @@ var binaryFuncs = map[binarySignature]struct {
 		},
 		ResultKind: semantic.Bool,
 	},
+	{Operator: ast.NotEqualOperator, Left: semantic.String, Right: semantic.String}: {
+		Func: func(scope Scope, left, right Evaluator) Value {
+			l := left.EvalString(scope)
+			r := right.EvalString(scope)
+			return value{
+				typ:   semantic.Bool,
+				Value: l != r,
+			}
+		},
+		ResultKind: semantic.Bool,
+	},
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/influxdata/ifql/functions"
 	"github.com/influxdata/ifql/query"
 	"github.com/influxdata/ifql/query/plan"
+	"github.com/influxdata/ifql/query/plan/plantest"
 )
 
 func TestPhysicalPlanner_Plan(t *testing.T) {
@@ -87,8 +88,8 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 									Relative:   -1 * time.Hour,
 								},
 							},
-							AggregateSet:  true,
-							AggregateType: "count",
+							AggregateSet:    true,
+							AggregateMethod: "count",
 						},
 						Parents:  nil,
 						Children: []plan.ProcedureID{},
@@ -387,6 +388,107 @@ func TestPhysicalPlanner_Plan(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "group with aggregate",
+			lp: &plan.LogicalPlanSpec{
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database: "mydb",
+						},
+						Parents:  nil,
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+					},
+					plan.ProcedureIDFromOperationID("range"): {
+						ID: plan.ProcedureIDFromOperationID("range"),
+						Spec: &functions.RangeProcedureSpec{
+							Bounds: plan.BoundsSpec{
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
+							},
+						},
+						Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+						Children: []plan.ProcedureID{
+							plan.ProcedureIDFromOperationID("group"),
+						},
+					},
+					plan.ProcedureIDFromOperationID("group"): {
+						ID: plan.ProcedureIDFromOperationID("group"),
+						Spec: &functions.GroupProcedureSpec{
+							By: []string{"host", "region"},
+						},
+						Parents:  []plan.ProcedureID{plan.ProcedureIDFromOperationID("range")},
+						Children: []plan.ProcedureID{plan.ProcedureIDFromOperationID("sum")},
+					},
+					plan.ProcedureIDFromOperationID("sum"): {
+						ID:      plan.ProcedureIDFromOperationID("sum"),
+						Spec:    &functions.SumProcedureSpec{},
+						Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("group")},
+					},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+					plan.ProcedureIDFromOperationID("range"),
+					plan.ProcedureIDFromOperationID("group"),
+					plan.ProcedureIDFromOperationID("sum"),
+				},
+			},
+			pp: &plan.PlanSpec{
+				Now: time.Date(2017, 8, 8, 0, 0, 0, 0, time.UTC),
+				Resources: query.ResourceManagement{
+					ConcurrencyQuota: 1,
+					MemoryBytesQuota: 10000,
+				},
+				Bounds: plan.BoundsSpec{
+					Start: query.Time{
+						IsRelative: true,
+						Relative:   -1 * time.Hour,
+					},
+				},
+				Procedures: map[plan.ProcedureID]*plan.Procedure{
+					plan.ProcedureIDFromOperationID("from"): {
+						ID: plan.ProcedureIDFromOperationID("from"),
+						Spec: &functions.FromProcedureSpec{
+							Database:  "mydb",
+							BoundsSet: true,
+							Bounds: plan.BoundsSpec{
+								Start: query.Time{
+									IsRelative: true,
+									Relative:   -1 * time.Hour,
+								},
+							},
+							GroupingSet:     true,
+							GroupKeys:       []string{"host", "region"},
+							AggregateSet:    true,
+							AggregateMethod: "sum",
+						},
+						Parents: nil,
+						Children: []plan.ProcedureID{
+							plan.ProcedureIDFromParentID(plan.ProcedureIDFromOperationID("from")),
+						},
+					},
+					plan.ProcedureIDFromParentID(plan.ProcedureIDFromOperationID("from")): {
+						ID:      plan.ProcedureIDFromParentID(plan.ProcedureIDFromOperationID("from")),
+						Spec:    &functions.SumProcedureSpec{},
+						Parents: []plan.ProcedureID{plan.ProcedureIDFromOperationID("from")},
+					},
+				},
+				Results: map[string]plan.YieldSpec{
+					"_result": {ID: plan.ProcedureIDFromParentID(plan.ProcedureIDFromOperationID("from"))},
+				},
+				Order: []plan.ProcedureID{
+					plan.ProcedureIDFromOperationID("from"),
+					plan.ProcedureIDFromParentID(plan.ProcedureIDFromOperationID("from")),
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		tc := tc
@@ -592,8 +694,8 @@ func TestPhysicalPlanner_Plan_PushDown_Mixed(t *testing.T) {
 							Relative:   -1 * time.Hour,
 						},
 					},
-					AggregateSet:  true,
-					AggregateType: "sum",
+					AggregateSet:    true,
+					AggregateMethod: "sum",
 				},
 				Parents:  []plan.ProcedureID{},
 				Children: []plan.ProcedureID{},
@@ -645,11 +747,11 @@ func PhysicalPlanTestHelper(t *testing.T, lp *plan.LogicalPlanSpec, want *plan.P
 		t.Fatal(err)
 	}
 
-	if !cmp.Equal(got, want) {
+	if !cmp.Equal(got, want, plantest.CmpOptions...) {
 		t.Log("Logical:", plan.Formatted(lp))
 		t.Log("Want Physical:", plan.Formatted(want))
 		t.Log("Got  Physical:", plan.Formatted(got))
-		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got))
+		t.Errorf("unexpected physical plan -want/+got:\n%s", cmp.Diff(want, got, plantest.CmpOptions...))
 	}
 }
 
