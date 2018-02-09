@@ -83,8 +83,8 @@ type FromProcedureSpec struct {
 	GroupExcept []string
 	GroupKeep   []string
 
-	AggregateSet  bool
-	AggregateType string
+	AggregateSet    bool
+	AggregateMethod string
 }
 
 func newFromProcedure(qs query.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
@@ -134,7 +134,7 @@ func (s *FromProcedureSpec) Copy() plan.ProcedureSpec {
 	ns.Window = s.Window
 
 	ns.AggregateSet = s.AggregateSet
-	ns.AggregateType = s.AggregateType
+	ns.AggregateMethod = s.AggregateMethod
 
 	return ns
 }
@@ -166,19 +166,19 @@ func createFromSource(prSpec plan.ProcedureSpec, id execute.DatasetID, sr execut
 		id,
 		sr,
 		execute.ReadSpec{
-			Database:      spec.Database,
-			Hosts:         spec.Hosts,
-			Predicate:     spec.Filter,
-			PointsLimit:   spec.PointsLimit,
-			SeriesLimit:   spec.SeriesLimit,
-			SeriesOffset:  spec.SeriesOffset,
-			Descending:    spec.Descending,
-			OrderByTime:   spec.OrderByTime,
-			MergeAll:      spec.MergeAll,
-			GroupKeys:     spec.GroupKeys,
-			GroupExcept:   spec.GroupExcept,
-			GroupKeep:     spec.GroupKeep,
-			AggregateType: spec.AggregateType,
+			Database:        spec.Database,
+			Hosts:           spec.Hosts,
+			Predicate:       spec.Filter,
+			PointsLimit:     spec.PointsLimit,
+			SeriesLimit:     spec.SeriesLimit,
+			SeriesOffset:    spec.SeriesOffset,
+			Descending:      spec.Descending,
+			OrderByTime:     spec.OrderByTime,
+			MergeAll:        spec.MergeAll,
+			GroupKeys:       spec.GroupKeys,
+			GroupExcept:     spec.GroupExcept,
+			GroupKeep:       spec.GroupKeep,
+			AggregateMethod: spec.AggregateMethod,
 		},
 		bounds,
 		w,

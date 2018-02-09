@@ -1366,4 +1366,9 @@ var binaryFuncLookup = map[binaryFuncSignature]binaryFunc{
 		r := rv.Value().(float64)
 		return NewBoolValue(l != r)
 	},
+	{operator: ast.NotEqualOperator, left: semantic.String, right: semantic.String}: func(lv, rv Value) Value {
+		l := lv.Value().(string)
+		r := rv.Value().(string)
+		return NewBoolValue(l != r)
+	},
 }

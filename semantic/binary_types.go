@@ -91,13 +91,14 @@ var binaryTypesLookup = map[binarySignature]Kind{
 
 	// NotEqualOperator
 
-	{operator: ast.NotEqualOperator, left: Int, right: Int}:     Bool,
-	{operator: ast.NotEqualOperator, left: Int, right: UInt}:    Bool,
-	{operator: ast.NotEqualOperator, left: Int, right: Float}:   Bool,
-	{operator: ast.NotEqualOperator, left: UInt, right: Int}:    Bool,
-	{operator: ast.NotEqualOperator, left: UInt, right: UInt}:   Bool,
-	{operator: ast.NotEqualOperator, left: UInt, right: Float}:  Bool,
-	{operator: ast.NotEqualOperator, left: Float, right: Int}:   Bool,
-	{operator: ast.NotEqualOperator, left: Float, right: UInt}:  Bool,
-	{operator: ast.NotEqualOperator, left: Float, right: Float}: Bool,
+	{operator: ast.NotEqualOperator, left: Int, right: Int}:       Bool,
+	{operator: ast.NotEqualOperator, left: Int, right: UInt}:      Bool,
+	{operator: ast.NotEqualOperator, left: Int, right: Float}:     Bool,
+	{operator: ast.NotEqualOperator, left: UInt, right: Int}:      Bool,
+	{operator: ast.NotEqualOperator, left: UInt, right: UInt}:     Bool,
+	{operator: ast.NotEqualOperator, left: UInt, right: Float}:    Bool,
+	{operator: ast.NotEqualOperator, left: Float, right: Int}:     Bool,
+	{operator: ast.NotEqualOperator, left: Float, right: UInt}:    Bool,
+	{operator: ast.NotEqualOperator, left: Float, right: Float}:   Bool,
+	{operator: ast.NotEqualOperator, left: String, right: String}: Bool,
 }

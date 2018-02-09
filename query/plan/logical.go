@@ -55,6 +55,9 @@ func (p *logicalPlanner) Plan(q *query.Spec) (*LogicalPlanSpec, error) {
 func ProcedureIDFromOperationID(id query.OperationID) ProcedureID {
 	return ProcedureID(uuid.NewV5(RootUUID, string(id)))
 }
+func ProcedureIDFromParentID(id ProcedureID) ProcedureID {
+	return ProcedureID(uuid.NewV5(RootUUID, id.String()))
+}
 
 func (p *logicalPlanner) walkQuery(o *query.Operation) error {
 	spec, err := p.createSpec(o.Spec.Kind(), o.Spec)

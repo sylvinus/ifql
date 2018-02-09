@@ -17,6 +17,7 @@ func (id ProcedureID) String() string {
 var ZeroProcedureID ProcedureID
 
 type Procedure struct {
+	plan     *PlanSpec
 	ID       ProcedureID
 	Parents  []ProcedureID
 	Children []ProcedureID
@@ -27,6 +28,8 @@ func (p *Procedure) Copy() *Procedure {
 	np := new(Procedure)
 	np.ID = p.ID
 
+	np.plan = p.plan
+
 	np.Parents = make([]ProcedureID, len(p.Parents))
 	copy(np.Parents, p.Parents)
 
@@ -36,6 +39,20 @@ func (p *Procedure) Copy() *Procedure {
 	np.Spec = p.Spec.Copy()
 
 	return np
+}
+
+func (p *Procedure) DoChildren(f func(pr *Procedure)) {
+	for _, id := range p.Children {
+		f(p.plan.Procedures[id])
+	}
+}
+func (p *Procedure) DoParents(f func(pr *Procedure)) {
+	for _, id := range p.Parents {
+		f(p.plan.Procedures[id])
+	}
+}
+func (p *Procedure) Child(i int) *Procedure {
+	return p.plan.Procedures[p.Children[i]]
 }
 
 type Administration interface {
@@ -62,6 +79,12 @@ type BoundedProcedureSpec interface {
 
 type YieldProcedureSpec interface {
 	YieldName() string
+}
+type AggregateProcedureSpec interface {
+	// AggregateMethod specifies which aggregate method to push down to the storage layer.
+	AggregateMethod() string
+	// ReAggregateSpec specifies an aggregate procedure to use when aggregating the individual pushed down results.
+	ReAggregateSpec() ProcedureSpec
 }
 
 type ParentAwareProcedureSpec interface {

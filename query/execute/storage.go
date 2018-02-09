@@ -28,7 +28,7 @@ type ReadSpec struct {
 	SeriesOffset int64
 	Descending   bool
 
-	AggregateType string
+	AggregateMethod string
 
 	// OrderByTime indicates that series reads should produce all
 	// series for a time before producing any series for a larger time.
@@ -130,7 +130,7 @@ func (bi *storageBlockIterator) Do(f func(Block) error) error {
 	req.SeriesOffset = uint64(bi.readSpec.SeriesOffset)
 	req.Trace = bi.trace
 
-	if agg, err := determineAggregateType(bi.readSpec.AggregateType); err != nil {
+	if agg, err := determineAggregateMethod(bi.readSpec.AggregateMethod); err != nil {
 		return err
 	} else if agg != storage.AggregateTypeNone {
 		req.Aggregate = &storage.Aggregate{Type: agg}
@@ -186,7 +186,7 @@ func (bi *storageBlockIterator) Do(f func(Block) error) error {
 	return nil
 }
 
-func determineAggregateType(agg string) (storage.Aggregate_AggregateType, error) {
+func determineAggregateMethod(agg string) (storage.Aggregate_AggregateType, error) {
 	if agg == "" {
 		return storage.AggregateTypeNone, nil
 	}

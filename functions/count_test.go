@@ -106,8 +106,8 @@ func TestCount_PushDown(t *testing.T) {
 	}
 	want := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
-			AggregateSet:  true,
-			AggregateType: functions.CountKind,
+			AggregateSet:    true,
+			AggregateMethod: functions.CountKind,
 		},
 	}
 
@@ -118,8 +118,8 @@ func TestCount_PushDown_Duplicate(t *testing.T) {
 	spec := new(functions.CountProcedureSpec)
 	root := &plan.Procedure{
 		Spec: &functions.FromProcedureSpec{
-			AggregateSet:  true,
-			AggregateType: functions.CountKind,
+			AggregateSet:    true,
+			AggregateMethod: functions.CountKind,
 		},
 	}
 	want := &plan.Procedure{

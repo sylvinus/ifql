@@ -51,6 +51,13 @@ func (s *SumProcedureSpec) Copy() plan.ProcedureSpec {
 	return new(SumProcedureSpec)
 }
 
+func (s *SumProcedureSpec) AggregateMethod() string {
+	return SumKind
+}
+func (s *SumProcedureSpec) ReAggregateSpec() plan.ProcedureSpec {
+	return new(SumProcedureSpec)
+}
+
 func (s *SumProcedureSpec) PushDownRules() []plan.PushDownRule {
 	return []plan.PushDownRule{{
 		Root:    FromKind,
@@ -67,11 +74,11 @@ func (s *SumProcedureSpec) PushDown(root *plan.Procedure, dup func() *plan.Proce
 		root = dup()
 		selectSpec = root.Spec.(*FromProcedureSpec)
 		selectSpec.AggregateSet = false
-		selectSpec.AggregateType = ""
+		selectSpec.AggregateMethod = ""
 		return
 	}
 	selectSpec.AggregateSet = true
-	selectSpec.AggregateType = SumKind
+	selectSpec.AggregateMethod = s.AggregateMethod()
 }
 
 type SumAgg struct{}
