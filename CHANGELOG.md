@@ -1,3 +1,15 @@
+## v0.0.5 [2018-02-09]
+
+### Features
+
+- [#143](https://github.com/influxdata/ifql/issues/143) Add yield function
+- [#193](https://github.com/influxdata/ifql/issues/193) Add pipe forward expressions
+- [#229](https://github.com/influxdata/ifql/pull/229) Add top/bottom functions
+- [#230](https://github.com/influxdata/ifql/pull/230) Add state count and state duration
+- [#231](https://github.com/influxdata/ifql/pull/231) Add distinct function
+- [#234](https://github.com/influxdata/ifql/pull/234) Add percentile function with exact and approx implementations
+- [#243](https://github.com/influxdata/ifql/pull/243) Add support for pushing down group by with aggregates
+
 ## v0.0.4 [2018-01-12]
 
 ### Features
@@ -37,3 +49,4 @@ Release after some initial community feedback.
 
 ## v0.0.1 [2017-11-13]
 Initial release of ifqld
+
