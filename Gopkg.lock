@@ -193,9 +193,10 @@
     "array",
     "internal/bitutil",
     "internal/cpu",
+    "internal/debug",
     "memory"
   ]
-  revision = "67131a5397eb5337be2c429c5d91f2c914f57d08"
+  revision = "ab7b6cc6c6c840b5a6835fce52864e6b4e12c279"
 
 [[projects]]
   name = "github.com/influxdata/influxdb"
@@ -428,6 +429,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a7deb7039500ef615c52906accd19280fc42008713bc6e3a92793e7f3e7e8569"
+  inputs-digest = "680aa3ec8e7a2463963b57a1206ed446b1852d1895a202368bac634c309b109a"
   solver-name = "gps-cdcl"
   solver-version = 1

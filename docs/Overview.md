@@ -134,7 +134,8 @@ type ErrorState interface {
 ifql makes limited use of reference counting so that it can track when objects are no longer used. This allows 
 ifql to update resource accounting, such as memory usage as objects are created and released. The `Block` type 
 exposes two methods to deal with this pattern. `Retain` will increase the reference count by 1 and `Release` 
-will reduce the count by 1. Once the reference count of a `Block` is zero, the object will be freed.
+will reduce the count by 1. Once the reference count of a `Block` is zero, the object will be freed. It is
+safe to call `Retain` or `Release` simultaneously from multiple goroutines.
 
 ### When to call `Retain` / `Release`?
 

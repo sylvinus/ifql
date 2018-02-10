@@ -34,10 +34,12 @@ type Block interface {
 	Values() (ValueIterator, error)
 
 	// Retain increases the reference count of the Block by 1.
+	// Retain may be called simultaneously from multiple goroutines.
 	Retain()
 
 	// Release decreases the reference count of the Block by 1.
 	// When the reference count goes to zero, the block is freed.
+	// Release may be called simultaneously from multiple goroutines.
 	Release()
 }
 
@@ -543,11 +545,12 @@ func (d *blockBuilderCache) BlockBuilder(meta BlockMetadata) (BlockBuilder, bool
 	key := ToBlockKey(meta)
 	b, ok := d.blocks[key]
 	if !ok {
-		builder := NewColListBlockBuilder(&ColListAllocator{d.alloc})
-		builder.SetBounds(meta.Bounds())
+		bb := NewColListBlockBuilder(&ColListAllocator{d.alloc})
+		//bb := NewArrowBlockBuilder(d.alloc)
+		bb.SetBounds(meta.Bounds())
 		t := NewTriggerFromSpec(d.triggerSpec)
 		b = blockState{
-			builder: builder,
+			builder: bb,
 			trigger: t,
 		}
 		d.blocks[key] = b

@@ -11,6 +11,7 @@ import (
 type Assert struct{}
 
 func (Assert) Equal(t *testing.T, exp, got interface{}) {
+	t.Helper()
 	if !cmp.Equal(exp, got) {
 		t.Errorf("unexpected value -want/+got\n%s", cmp.Diff(exp, got))
 	}
@@ -19,7 +20,6 @@ func (Assert) Equal(t *testing.T, exp, got interface{}) {
 func getFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
-
 
 func (Assert) PanicsWithValue(t *testing.T, exp interface{}, f PanicTestFunc) {
 	funcDidPanic, panicValue := didPanic(f)
