@@ -42,9 +42,8 @@ func (s *resultSink) RetractBlock(DatasetID, BlockMetadata) error {
 
 func (s *resultSink) Process(id DatasetID, b Block) error {
 	select {
-	case s.blocks <- resultMessage{
-		block: b,
-	}:
+	case s.blocks <- resultMessage{block: b}:
+		b.Retain()
 	case <-s.aborted:
 	}
 	return nil
@@ -66,7 +65,9 @@ func (s *resultSink) Do(f func(Block) error) error {
 			if msg.err != nil {
 				return msg.err
 			}
-			if err := f(msg.block); err != nil {
+			err := f(msg.block)
+			msg.block.Release()
+			if err != nil {
 				return err
 			}
 		}
